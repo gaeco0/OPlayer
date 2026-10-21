@@ -37,6 +37,7 @@ jobs:
       - run: node test/browser_interactions_test.cjs
       - run: node test/web_sniffer_test.cjs
       - run: node .github/scripts/publish-release.test.cjs
+      - run: python .github/scripts/package-release.test.py
       - run: flutter build windows --release --no-pub
       - name: Package complete application
         if: github.event_name != 'pull_request'
