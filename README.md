@@ -30,8 +30,8 @@ flutter run -d windows   # 또는 macos / android / ios
 ## GitHub Actions 빌드와 릴리스
 
 - `devel`·`main`에 push하면 Windows, Android(mobile), Android TV(tv), Linux(x64), macOS(Apple Silicon 러너)의 릴리스를 빌드한다. Android·TV는 같은 배포 키로 각각 서명한다. Windows에서 정적 분석·Dart 테스트·브라우저 JavaScript 테스트도 실행한다. PR의 Android·TV 빌드는 서명 Secrets 없이 디버그 빌드로 검증한다.
-- `main`의 다섯 빌드와 검증이 모두 성공하면 `pubspec.yaml` 버전으로 `v0.1.0` 형태의 태그·GitHub Release를 Actions에서 생성한다. 같은 버전의 릴리스는 덮어쓰지 않으므로 다음 릴리스 전에는 버전을 올린다. Actions 탭의 수동 실행도 지원한다.
-- APK·ZIP 등 배포 파일은 GitHub Release와 Actions 아티팩트에 첨부하지 않는다. GitHub가 자동 제공하는 소스 코드 압축 파일만 표시된다.
+- `main`의 다섯 빌드와 검증이 모두 성공하면 `pubspec.yaml` 버전으로 `v0.1.0` 형태의 태그·GitHub Release를 Actions에서 생성한다. 기존 소스 전용 릴리스에는 같은 앱 소스의 배포 파일을 추가할 수 있으며, 앱 소스가 변경되면 버전을 올린다. 기존 첨부 파일은 덮어쓰지 않는다. Actions 탭의 수동 실행도 지원한다.
+- GitHub Release에 Android·Android TV의 ABI별 서명 APK 6개, Windows x64 ZIP, Linux x64 tar.gz, macOS Apple Silicon ZIP과 SHA256SUMS.txt를 첨부한다. 데스크톱 압축 파일은 실행 파일·라이브러리·데이터를 포함하므로 전체를 풀어 사용한다. 빌드 작업 간 전달용 Actions 아티팩트는 7일 동안 보관한다.
 - 저장소 Actions Secrets에 `ANDROID_KEYSTORE_BASE64`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_PASSWORD`, `ANDROID_KEY_ALIAS`를 등록한다. 키와 비밀번호는 빌드 중 임시 복원 후 삭제하며, 저장소·릴리스에 커밋하거나 업로드하지 않는다.
 - 기본 `main`의 `LICENSE`는 `devel`과 `main`에서 그대로 유지한다. `third_party/`의 외부 구성요소는 각 디렉터리의 라이선스도 함께 적용된다.
 
