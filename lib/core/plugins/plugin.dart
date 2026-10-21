@@ -143,7 +143,7 @@ class OPlugin {
         throw const FormatException('잘못된 복귀 주소 안내');
       }
     }
-    if (plugin.cloud && plugin.authType != 'oauth' && (meta['api'] as int) < 2) {
+    if (plugin.cloud && plugin.authType != 'oauth' && ![2, 3].contains(meta['api'])) {
       throw const FormatException('이 인증 방식에는 확장앱 API 2 이상이 필요합니다');
     }
     if (plugin.cloud && plugin.authType == 'oauth') {

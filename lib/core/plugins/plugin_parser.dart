@@ -94,8 +94,14 @@ class PluginParser {
     }
     final result = matches.take(2001).toList();
     if (result.length > 2000) throw StateError('파서 조회 결과는 2000개 이하여야 합니다');
-    final snapshots = result.map((value) => _snapshot(value, entry.document)).toList();
-    if (jsonEncode(snapshots).length > 2 * 1024 * 1024) throw StateError('파서 조회 결과 크기 한도 초과');
+    final snapshots = <Map<String, Object?>>[];
+    var size = 2;
+    for (final value in result) {
+      final snapshot = _snapshot(value, entry.document);
+      size += jsonEncode(snapshot).length + (snapshots.isEmpty ? 0 : 1);
+      if (size > 2 * 1024 * 1024) throw StateError('파서 조회 결과 크기 한도 초과');
+      snapshots.add(snapshot);
+    }
     return method == 'querySelector' ? snapshots.firstOrNull : snapshots;
   }
 
@@ -216,8 +222,14 @@ function createOPlayerPageParser() {
         (args.namespace === '*' || n.namespaceURI === args.namespace) && (args.name === '*' || n.localName === args.name));
     } else throw new Error('지원하지 않는 파서 메서드');
     if (result.length > 2000) throw new Error('파서 조회 결과는 2000개 이하여야 합니다');
-    const values = result.map(n => snapshot(n,document));
-    if (JSON.stringify(values).length > 2097152) throw new Error('파서 조회 결과 크기 한도 초과');
+    const values = [];
+    let size = 2;
+    for (const n of result) {
+      const value = snapshot(n,document);
+      size += JSON.stringify(value).length + (values.length ? 1 : 0);
+      if (size > 2097152) throw new Error('파서 조회 결과 크기 한도 초과');
+      values.push(value);
+    }
     return method === 'querySelector' ? values[0] || null : values;
   });
 }

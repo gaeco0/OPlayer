@@ -93,14 +93,15 @@ void main() {
         () => OPlayer.parse.json('{bad}'),
         () => OPlayer.parse.html('x'.repeat(1048577)),
         () => OPlayer.parse.xml('<a>'.repeat(130) + '</a>'.repeat(130)),
-        async () => (await OPlayer.parse.html('<p>x</p>'.repeat(2001))).querySelectorAll('p')
+        async () => (await OPlayer.parse.html('<p>x</p>'.repeat(2001))).querySelectorAll('p'),
+        async () => (await OPlayer.parse.html('<div>'.repeat(100)+'x'.repeat(40000)+'</div>'.repeat(100))).querySelectorAll('div')
       ]) { try { await f(); errors.push(false); } catch(e) { errors.push(true); } }
       return errors;
     '''),
       'resolveDownload',
       {},
     );
-    expect(result, List.filled(6, true));
+    expect(result, List.filled(7, true));
   });
 
   test('parser example resolves fetched HTML through the common plugin runtime', () async {
