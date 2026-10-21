@@ -8,7 +8,8 @@ module.exports = async ({github, context, core}) => {
   if (!match) throw new Error('Invalid pubspec.yaml version');
   const tag = `v${match[1]}`;
   const repository = {owner: context.repo.owner, repo: context.repo.repo};
-  const files = fs.readdirSync('release-assets').sort();
+  const replace = context.eventName === 'workflow_dispatch' && context.payload?.inputs?.replace_release === 'true';
+  const files = fs.readdirSync('release-assets').filter(name => name !== 'SHA256SUMS.txt').sort();
   if (files.filter(name => name.endsWith('.apk')).length !== 6 ||
       files.filter(name => name.endsWith('.zip')).length !== 2 ||
       files.filter(name => name.endsWith('.tar.gz')).length !== 1 || files.length !== 9) {
@@ -25,7 +26,10 @@ module.exports = async ({github, context, core}) => {
     release = (await github.rest.repos.getReleaseByTag({...repository, tag})).data;
     // Permit filling the initial source-only release when only CI/docs changed.
     const changed = execFileSync('git', ['diff', `${tag}..HEAD`, '--', '.', ':!.github', ':!README.md'], {encoding: 'utf8'});
-    if (changed.trim()) throw new Error(`Application source changed since ${tag}; bump pubspec.yaml first`);
+    if (changed.trim() && !replace) {
+      core.notice(`Application source changed since ${tag}; bump the version or dispatch with replace_release to replace it.`);
+      return;
+    }
   } catch (error) {
     if (error.status !== 404) throw error;
     release = (await github.rest.repos.createRelease({
@@ -39,13 +43,17 @@ module.exports = async ({github, context, core}) => {
     const previous = assets.find(asset => asset.name === name);
     if (previous) {
       const digest = `sha256:${crypto.createHash('sha256').update(data).digest('hex')}`;
-      if (previous.digest !== digest) throw new Error(`Existing asset differs: ${name}; publish a new version`);
-      continue;
+      if (previous.digest === digest) continue;
+      if (!replace) throw new Error(`Existing asset differs: ${name}; publish a new version or explicitly replace it`);
+      await github.rest.repos.deleteReleaseAsset({...repository, asset_id: previous.id});
     }
     await github.rest.repos.uploadReleaseAsset({
       ...repository, release_id: release.id, name, data,
       headers: {'content-type': 'application/octet-stream', 'content-length': data.length},
     });
+  }
+  if (replace) {
+    await github.rest.git.updateRef({...repository, ref: `tags/${tag}`, sha: context.sha, force: true});
   }
   await github.rest.repos.updateRelease({
     ...repository, release_id: release.id, draft: false,

@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [devel, main]
   workflow_dispatch:
+    inputs:
+      replace_release:
+        description: Replace this version's release files and move its tag to the built commit
+        type: boolean
+        default: false
 
 permissions:
   contents: read

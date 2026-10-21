@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../core/mouse_nav.dart';
-import '../../core/settings.dart';
 import '../cast/cast_controller.dart';
 import 'media_session.dart';
 import 'pip_controller.dart';
@@ -96,7 +95,7 @@ class PlaybackSession extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _notifyMedia() async {
     final c = controller;
     if (c == null || !minimized || CastController.instance.active) return;
-    final allowBackground = forceBackground || AppSettings.instance.backgroundAudio;
+    final allowBackground = forceBackground || c.allowsBackgroundPlayback;
     await NativeMediaSession.instance.update(
       enabled: !_backgrounded || allowBackground,
       playing: c.player.state.playing,
@@ -120,7 +119,7 @@ class PlaybackSession extends ChangeNotifier with WidgetsBindingObserver {
     if (minimized &&
         _backgrounded &&
         !forceBackground &&
-        !AppSettings.instance.backgroundAudio &&
+        !(controller?.allowsBackgroundPlayback ?? false) &&
         Platform.isAndroid) {
       controller?.player.pause();
     }

@@ -82,7 +82,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     _pip.onBackground = () {
       if (_session.minimized || _session.controller != c) return;
       _backgrounded = true;
-      if (!AppSettings.instance.backgroundAudio) c.player.pause();
+      if (!c.allowsBackgroundPlayback && !_pip.active) c.player.pause();
       _syncMediaSession();
     };
     _mediaSession.onLocalCommand = (command, argument) async {
@@ -147,12 +147,12 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     if (_cast.active || _session.controller != c || _session.minimized) return;
     final state = c.player.state;
     _mediaSession.update(
-      enabled: !_hideNotification && (!_backgrounded || AppSettings.instance.backgroundAudio),
+      enabled: !_hideNotification && (!_backgrounded || c.allowsBackgroundPlayback || _pip.active),
       playing: state.playing,
       title: c.title,
       position: state.position,
       duration: state.duration,
-      foreground: AppSettings.instance.backgroundAudio,
+      foreground: c.allowsBackgroundPlayback || _pip.active,
       rate: c.baseRate,
     );
   }
@@ -164,12 +164,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       _backgrounded = false;
       _syncMediaSession();
     } else if (state == AppLifecycleState.paused && !_pip.active) {
-      if (Platform.isAndroid && c.audioOnly) {
-        _minimize(background: true);
-        return;
-      }
       _backgrounded = true;
-      if (!AppSettings.instance.backgroundAudio && !_cast.active) {
+      if (!c.allowsBackgroundPlayback && !_cast.active) {
         c.player.pause();
       }
       _syncMediaSession();
@@ -216,6 +212,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       _panel = PanelKind.none;
       c.hideControls();
     }
+    _syncMediaSession();
     setState(() {});
   }
 
@@ -455,6 +452,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       controls: NoVideoControls,
       fit: fit,
       fill: Colors.black,
+      // Playback lifecycle is owned by this screen and PlaybackSession, including PiP.
+      pauseUponEnteringBackgroundMode: false,
       subtitleViewConfiguration: subtitleCfg,
     );
 
