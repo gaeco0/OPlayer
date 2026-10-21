@@ -338,7 +338,6 @@ class WebBrowserPage extends StatefulWidget {
 }
 
 class _WebBrowserPageState extends State<WebBrowserPage> {
-  static const _kLast = 'web_last_url';
   static const _kBookmarks = 'web_bookmarks';
   static const _home = 'https://www.google.com';
 
@@ -358,7 +357,6 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
   bool _canBack = false;
   bool _canForward = false;
   List<String> _bookmarks = [];
-  String? _initial;
 
   @override
   void initState() {
@@ -392,8 +390,8 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
       });
     }
     SharedPreferences.getInstance().then((p) {
+      if (!mounted) return;
       setState(() {
-        _initial = p.getString(_kLast) ?? _home;
         _bookmarks = p.getStringList(_kBookmarks) ?? [];
       });
     });
@@ -1129,12 +1127,12 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                   : const SizedBox(height: 2),
             ),
           ),
-          body: (_initial == null || !_envReady)
+          body: !_envReady
               ? const SizedBox.shrink()
               : InAppWebView(
                   webViewEnvironment: _env,
                   pullToRefreshController: _pullToRefresh,
-                  initialUrlRequest: URLRequest(url: WebUri(_initial!)),
+                  initialUrlRequest: URLRequest(url: WebUri(_home)),
                   initialSettings: InAppWebViewSettings(
                     javaScriptEnabled: true,
                     useOnLoadResource: true,
@@ -1248,10 +1246,6 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     await c.evaluateJavascript(source: browserInteractionScript);
                     final back = await c.canGoBack();
                     final fwd = await c.canGoForward();
-                    final prefs = await SharedPreferences.getInstance();
-                    if (url != null) {
-                      await prefs.setString(_kLast, url.toString());
-                    }
                     if (mounted) {
                       setState(() {
                         _canBack = back;
