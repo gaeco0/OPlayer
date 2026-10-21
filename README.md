@@ -28,7 +28,7 @@ flutter run -d windows   # 또는 macos / android / ios
 ## GitHub Actions 빌드와 릴리스
 
 - `devel`·`main`에 push하면 Android 서명 릴리스 APK와 Windows 릴리스를 빌드한다. Windows에서 정적 분석·Dart 테스트·브라우저 JavaScript 테스트도 실행한다. PR의 Android 빌드는 서명 Secrets 없이 디버그 빌드로 검증한다.
-- `main`의 모든 검증과 빌드가 성공하면 `pubspec.yaml` 버전으로 `v1.0.0` 형태의 태그·GitHub Release를 Actions에서 생성한다. 같은 버전의 릴리스는 덮어쓰지 않으므로 다음 릴리스 전에는 버전을 올린다. Actions 탭의 수동 실행도 지원한다.
+- `main`의 모든 검증과 빌드가 성공하면 `pubspec.yaml` 버전으로 `v0.1.0` 형태의 태그·GitHub Release를 Actions에서 생성한다. 같은 버전의 릴리스는 덮어쓰지 않으므로 다음 릴리스 전에는 버전을 올린다. Actions 탭의 수동 실행도 지원한다.
 - APK·ZIP 등 배포 파일은 GitHub Release와 Actions 아티팩트에 첨부하지 않는다. GitHub가 자동 제공하는 소스 코드 압축 파일만 표시된다.
 - 저장소 Actions Secrets에 `ANDROID_KEYSTORE_BASE64`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_PASSWORD`, `ANDROID_KEY_ALIAS`를 등록한다. 키와 비밀번호는 빌드 중 임시 복원 후 삭제하며, 저장소·릴리스에 커밋하거나 업로드하지 않는다.
 - 기본 `main`의 `LICENSE`는 `devel`과 `main`에서 그대로 유지한다. `third_party/`의 외부 구성요소는 각 디렉터리의 라이선스도 함께 적용된다.
