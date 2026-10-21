@@ -1,19 +1,16 @@
 name: Build and release
 
 on:
-  workflow_dispatch:
-    inputs:
-      replace_release:
-        description: Replace this version's release files and move its tag to the built commit
-        type: boolean
-        default: false
+  push:
+    tags:
+      - 'v*'
 
 permissions:
   contents: read
 
 concurrency:
   group: build-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: false
 
 env:
   FLUTTER_VERSION: '3.47.7'
@@ -202,7 +199,7 @@ jobs:
 
   release:
     name: Publish release downloads
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     needs: [windows, android, linux, macos]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
