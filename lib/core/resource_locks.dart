@@ -13,6 +13,7 @@ import 'secure_store.dart';
 import 'settings.dart';
 
 const privacyChannel = MethodChannel('oplayer/privacy');
+const recentResourceKey = 'oplayer://recent';
 
 String resourceKey(String value) {
   final uri = Uri.tryParse(value);

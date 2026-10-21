@@ -46,6 +46,17 @@ void main() {
     expect(find.text('최근 재생'), findsOneWidget);
     expect(find.text('UPnP / DLNA 검색'), findsOneWidget);
     expect(find.text('Google Drive / OneDrive / Dropbox'), findsOneWidget);
+    final home = find.widgetWithText(ListTile, '홈 폴더');
+    await t.tap(find.descendant(of: home, matching: find.byType(PopupMenuButton<int>)));
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 400));
+    await t.tap(find.text('이 리소스 잠금'));
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.text('공통 잠금 방식 선택'), findsOneWidget);
+    t.state<NavigatorState>(find.byType(Navigator).first).pop();
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 400));
     await t.tap(find.text(p.basename(folder.path)));
     for (var i = 0; i < 20 && find.text('nested-test').evaluate().isEmpty; i++) {
       await t.pump(const Duration(milliseconds: 20));
