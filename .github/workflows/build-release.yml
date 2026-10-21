@@ -1,10 +1,6 @@
 name: Build and release
 
 on:
-  push:
-    branches: [devel, main]
-  pull_request:
-    branches: [devel, main]
   workflow_dispatch:
     inputs:
       replace_release:
