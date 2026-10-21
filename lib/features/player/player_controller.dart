@@ -75,11 +75,18 @@ class PlayerController extends ChangeNotifier {
   }
 
   final List<MediaItem> playlist;
+  int? _playbackPermit;
   void _enforceResourceLock() {
     final locks = ResourceLocks.instance;
-    if (locks.isLocked(current.key) ||
-        locks.isLocked(current.localPath ?? current.uri) ||
-        (resolved != null && locks.isLocked(resolved!.localPath ?? resolved!.uri))) {
+    _playbackPermit =
+        locks.authorizePlayback([
+          current.key,
+          current.localPath ?? current.uri,
+          if (resolved != null) resolved!.key,
+          if (resolved != null) resolved!.localPath ?? resolved!.uri,
+        ]) ??
+        _playbackPermit;
+    if (!locks.canContinuePlayback(_playbackPermit)) {
       player.pause();
     }
   }
@@ -155,6 +162,7 @@ class PlayerController extends ChangeNotifier {
   Duration? pendingResume;
 
   Future<void> open({bool askResume = true}) async {
+    _playbackPermit = null;
     final generation = ++_openGeneration;
     _startWatchdog?.cancel();
     if (current.browserMedia) {

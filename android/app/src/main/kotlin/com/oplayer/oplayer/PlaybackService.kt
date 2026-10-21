@@ -13,7 +13,6 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Build
 import android.os.IBinder
-import android.os.Bundle
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
@@ -30,8 +29,6 @@ class PlaybackService : Service() {
     private lateinit var session: MediaSessionCompat
     private var foreground = false
     private var remote = false
-    private var controlsPage = 0
-    private var lastUpdate: Intent? = null
     private var hasAudioFocus = false
     private var focusRequest: AudioFocusRequest? = null
     private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
@@ -58,9 +55,8 @@ class PlaybackService : Service() {
                 override fun onSeekTo(pos: Long) { events?.invokeMethod("seek", pos) }
                 override fun onRewind() { events?.invokeMethod("rewind", null) }
                 override fun onFastForward() { events?.invokeMethod("forward", null) }
-                override fun onCustomAction(action: String?, extras: Bundle?) {
-                    if (action == "more") onStartCommand(Intent(this@PlaybackService, PlaybackService::class.java).putExtra("command", "more"), 0, 0)
-                    else if (action in listOf("rewind", "forward", "audioOnly", "previous", "next", "stop")) events?.invokeMethod(action!!, null)
+                override fun onCustomAction(action: String?, extras: android.os.Bundle?) {
+                    if (action == "rewind" || action == "forward") events?.invokeMethod(action, null)
                 }
             })
             isActive = true
@@ -74,35 +70,20 @@ class PlaybackService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent == null) { stopSelf(); return START_NOT_STICKY }
-        val requestedCommand = intent.getStringExtra("command")
-        if (requestedCommand != null && requestedCommand != "more") {
-            events?.invokeMethod(requestedCommand, null)
-            return START_NOT_STICKY
-        }
-        val update = if (requestedCommand == "more") {
-            controlsPage++
-            lastUpdate ?: return START_NOT_STICKY
-        } else {
-            if (lastUpdate?.getStringExtra("title") != intent.getStringExtra("title")) controlsPage = 0
-            Intent(intent).also { lastUpdate = it }
-        }
-        val title = update.getStringExtra("title") ?: "OPlayer"
-        val subtitle = update.getStringExtra("subtitle") ?: ""
-        val playing = update.getBooleanExtra("playing", false)
-        remote = update.getBooleanExtra("remote", false)
-        val position = update.getLongExtra("position", 0L)
-        val duration = update.getLongExtra("duration", 0L)
+        intent.getStringExtra("command")?.let { events?.invokeMethod(it, null); return START_NOT_STICKY }
+        val title = intent.getStringExtra("title") ?: "OPlayer"
+        val subtitle = intent.getStringExtra("subtitle") ?: ""
+        val playing = intent.getBooleanExtra("playing", false)
+        remote = intent.getBooleanExtra("remote", false)
+        val position = intent.getLongExtra("position", 0L)
+        val duration = intent.getLongExtra("duration", 0L)
         session.setMetadata(MediaMetadataCompat.Builder().putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, subtitle).putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration).build())
-        val commands = buildList {
+        val visible = buildList {
             add("rewind"); add("forward")
-            if (!remote && update.getBooleanExtra("canAudioOnly", false)) add("audioOnly")
-            if (update.getBooleanExtra("canPrevious", true)) add("previous")
-            if (update.getBooleanExtra("canNext", true)) add("next")
-            add("stop")
+            if (intent.getBooleanExtra("canPrevious", true)) add("previous")
+            if (intent.getBooleanExtra("canNext", true)) add("next")
         }
-        // Android 13+ reserves one of five media slots for play/pause.
-        val visible = playbackActionPage(commands, 4, controlsPage)
         var supported = PlaybackStateCompat.ACTION_PLAY or PlaybackStateCompat.ACTION_PAUSE or
             PlaybackStateCompat.ACTION_PLAY_PAUSE or PlaybackStateCompat.ACTION_SEEK_TO or
             PlaybackStateCompat.ACTION_REWIND or PlaybackStateCompat.ACTION_FAST_FORWARD or PlaybackStateCompat.ACTION_STOP
@@ -110,7 +91,7 @@ class PlaybackService : Service() {
         if ("next" in visible) supported = supported or PlaybackStateCompat.ACTION_SKIP_TO_NEXT
         val state = PlaybackStateCompat.Builder().setActions(supported)
             .setState(if (playing) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED,
-                position, if (playing) update.getFloatExtra("rate", 1f) else 0f)
+                position, if (playing) intent.getFloatExtra("rate", 1f) else 0f)
         for (action in visible.filter { it != "previous" && it != "next" }) {
             state.addCustomAction(action, playbackActionTitle(action, playing), playbackActionIcon(action, playing))
         }
@@ -130,7 +111,7 @@ class PlaybackService : Service() {
         }
         val notification = builder.setStyle(androidx.media.app.NotificationCompat.MediaStyle()
             .setMediaSession(session.sessionToken).setShowActionsInCompactView(*displayed.indices.take(3).toIntArray())).build()
-        if (update.getBooleanExtra("foreground", false)) { startForeground(NOTIFICATION, notification); foreground = true }
+        if (intent.getBooleanExtra("foreground", false)) { startForeground(NOTIFICATION, notification); foreground = true }
         else {
             if (foreground) { stopForeground(STOP_FOREGROUND_DETACH); foreground = false }
             getSystemService(NotificationManager::class.java).notify(NOTIFICATION, notification)

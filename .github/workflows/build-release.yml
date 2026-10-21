@@ -66,10 +66,8 @@ jobs:
         include:
           - name: Android
             flavor: mobile
-            unitTestTask: testMobileReleaseUnitTest
           - name: Android TV
             flavor: tv
-            unitTestTask: testTvReleaseUnitTest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -129,10 +127,6 @@ jobs:
           for apk in build/app/outputs/flutter-apk/*-release.apk; do
             "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$apk"
           done
-      - name: Test native playback action paging
-        if: github.event_name != 'pull_request'
-        working-directory: android
-        run: ./gradlew ":app:${{ matrix.unitTestTask }}"
       - name: Build pull request without signing secrets
         if: github.event_name == 'pull_request'
         run: flutter build apk --debug --flavor "${{ matrix.flavor }}" --no-pub

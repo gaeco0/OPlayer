@@ -79,6 +79,7 @@ class ResourceLocks extends ChangeNotifier {
   bool _authorized = false;
   final _unlockedResources = <String>{};
   int _generation = 0;
+  int _playbackGeneration = 0;
   bool _verifying = false;
   bool shielded = false;
   bool _background = false;
@@ -93,12 +94,14 @@ class ResourceLocks extends ChangeNotifier {
   bool get hasPattern => _patternHash != null;
   static bool get supportsSystemAuthentication => Platform.isAndroid || Platform.isWindows;
   bool get appLockEnabled => _appLockEnabled;
+  bool get inBackground => _background;
   bool get forcesCaptureProtection => _appLockEnabled || _changingAppLock || shielded || unavailable;
   Map<String, String> get resources => Map.unmodifiable(_resources);
   int get retrySeconds =>
       _retryAt == null ? 0 : max(0, (_retryAt!.difference(DateTime.now()).inMilliseconds / 1000).ceil());
 
   Future<void> init() async {
+    _playbackGeneration++;
     try {
       final raw = await SecureStore.instance.readRequired(storageKey);
       if (raw != null) {
@@ -187,6 +190,12 @@ class ResourceLocks extends ChangeNotifier {
     final scope = _resourceScope(value);
     return unavailable || (_appLockEnabled && !_authorized) || (scope != null && !_unlockedResources.contains(scope));
   }
+
+  /// A permit keeps an already authorized player alive without unlocking browsing.
+  int? authorizePlayback(Iterable<String> resources) =>
+      resources.every((value) => !isLocked(value)) ? _playbackGeneration : null;
+
+  bool canContinuePlayback(int? permit) => !unavailable && permit != null && permit == _playbackGeneration;
 
   bool hasExact(String value) => _resources.containsKey(resourceKey(value));
 
@@ -318,6 +327,7 @@ class ResourceLocks extends ChangeNotifier {
       rethrow;
     }
     _generation++;
+    _playbackGeneration++;
     _unlockedResources.clear();
     _unlock();
   }
@@ -367,6 +377,7 @@ class ResourceLocks extends ChangeNotifier {
       rethrow;
     }
     _generation++;
+    _playbackGeneration++;
     _unlockedResources.clear();
     _unlock();
   }
@@ -394,6 +405,7 @@ class ResourceLocks extends ChangeNotifier {
       rethrow;
     }
     _generation++;
+    _playbackGeneration++;
     _unlockedResources.clear();
     notifyListeners();
   }
@@ -468,10 +480,16 @@ class ResourceLocks extends ChangeNotifier {
       rethrow;
     }
     _unlockedResources.remove(key);
+    _playbackGeneration++;
     notifyListeners();
   }
 
   void relock() {
+    _playbackGeneration++;
+    _lockInterface();
+  }
+
+  void _lockInterface() {
     _authorized = false;
     _unlockedResources.clear();
     _generation++;
@@ -481,7 +499,7 @@ class ResourceLocks extends ChangeNotifier {
 
   void background(bool value) {
     _background = value;
-    if (value) relock();
+    if (value) _lockInterface();
   }
 
   Future<void> _save() => !configured

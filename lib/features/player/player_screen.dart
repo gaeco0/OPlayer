@@ -86,12 +86,6 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
           await c.seekRelative(const Duration(seconds: -10));
         case 'forward':
           await c.seekRelative(const Duration(seconds: 10));
-        case 'previous':
-          await c.prev();
-        case 'next':
-          await c.next();
-        case 'audioOnly':
-          await _minimize(background: true);
       }
       _syncPip();
     };
@@ -121,8 +115,6 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
           await c.seekRelative(const Duration(seconds: -10));
         case 'forward':
           await c.seekRelative(const Duration(seconds: 10));
-        case 'audioOnly':
-          await _minimize(background: true);
       }
       _syncMediaSession();
     };
@@ -160,8 +152,6 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       enabled: !_castingCurrent && !c.audioOnly && (s.width ?? 0) > 0 && (s.height ?? 0) > 0,
       playing: s.playing,
       aspect: ratio,
-      canPrevious: c.hasPrev || s.position > Duration.zero,
-      canNext: c.hasNext,
     );
     if (s.playing) _hideNotification = false;
     _syncMediaSession();
@@ -177,7 +167,6 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       position: state.position,
       duration: state.duration,
       foreground: c.allowsBackgroundPlayback || _pip.active,
-      canAudioOnly: !c.audioOnly && !c.preparing,
       canPrevious: c.hasPrev || state.position > Duration.zero,
       canNext: c.hasNext,
       rate: c.baseRate,
