@@ -12,20 +12,25 @@ import 'cloud_config.dart';
 import 'oauth.dart';
 
 /// 공급자별 OAuth 클라이언트
-OAuthClient oauthClientFor(CloudProvider provider, {String? clientId}) {
+OAuthClient oauthClientFor(CloudProvider provider, {String? clientId, String? accountEmail}) {
   final desktop = Platform.isWindows || Platform.isMacOS || Platform.isLinux;
   switch (provider) {
     case CloudProvider.gdrive:
-      final mobileId = CloudConfig.googleMobileClientId;
+      if (Platform.isAndroid) {
+        return GoogleAndroidOAuthClient(
+          clientId: clientId ?? CloudConfig.googleAndroidClientId,
+          accountEmail: accountEmail,
+        );
+      }
+      if (!desktop) throw '이 플랫폼의 Google Drive 로그인은 지원하지 않습니다';
+      final id = clientId ?? CloudConfig.googleDesktopClientId;
       return OAuthClient(
         authEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
         tokenEndpoint: 'https://oauth2.googleapis.com/token',
-        clientId: desktop ? CloudConfig.googleDesktopClientId : mobileId,
-        clientSecret: desktop ? CloudConfig.googleDesktopClientSecret : null,
+        clientId: id,
+        clientSecretKey: CloudConfig.googleSecretKey(id),
         scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-        mobileScheme: mobileId.isEmpty
-            ? 'oplayer'
-            : 'com.googleusercontent.apps.${mobileId.replaceAll('.apps.googleusercontent.com', '')}',
+        mobileScheme: CloudConfig.mobileScheme,
         extraAuthParams: {'access_type': 'offline', 'prompt': 'consent'},
       );
     case CloudProvider.dropbox:
@@ -86,7 +91,11 @@ abstract class CloudSource extends MediaSource {
   CloudSource(this.account)
     : tokens = TokenHolder(
         account.tokenKey,
-        oauthClientFor(account.provider, clientId: account.oauthClientId),
+        oauthClientFor(
+          account.provider,
+          clientId: account.oauthClientId,
+          accountEmail: account.name.contains('@') ? account.name : null,
+        ),
       );
   final CloudAccount account;
   final TokenHolder tokens;
@@ -108,9 +117,7 @@ abstract class CloudSource extends MediaSource {
   Future<({String url, Map<String, String>? headers})> streamFor(String path);
 
   Future<Map<String, dynamic>> getJson(String url) async {
-    var r = await http
-        .get(Uri.parse(url), headers: await tokens.authHeader())
-        .timeout(const Duration(seconds: 30));
+    var r = await http.get(Uri.parse(url), headers: await tokens.authHeader()).timeout(const Duration(seconds: 30));
     if (r.statusCode == 401) {
       r = await http
           .get(Uri.parse(url), headers: await tokens.authHeader(forceRefresh: true))
@@ -210,12 +217,20 @@ class GoogleDriveSource extends CloudSource {
     final out = <RemoteEntry>[];
     String? page;
     do {
-      final q = Uri.encodeQueryComponent("'$path' in parents and trashed=false");
-      final url =
-          '$_api/files?q=$q&pageSize=1000&orderBy=folder,name'
-          '&supportsAllDrives=true&includeItemsFromAllDrives=true'
-          '&fields=nextPageToken,files(id,name,mimeType,size,modifiedTime,thumbnailLink)'
-          '${page == null ? '' : '&pageToken=$page'}';
+      final escapedPath = path.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
+      final url = Uri.parse('$_api/files')
+          .replace(
+            queryParameters: {
+              'q': "'$escapedPath' in parents and trashed=false",
+              'pageSize': '1000',
+              'orderBy': 'folder,name',
+              'supportsAllDrives': 'true',
+              'includeItemsFromAllDrives': 'true',
+              'fields': 'nextPageToken,files(id,name,mimeType,size,modifiedTime,thumbnailLink)',
+              if (page != null) 'pageToken': page,
+            },
+          )
+          .toString();
       final j = await getJson(url);
       for (final f in (j['files'] as List).cast<Map<String, dynamic>>()) {
         final mime = f['mimeType'] as String? ?? '';
@@ -238,8 +253,10 @@ class GoogleDriveSource extends CloudSource {
   }
 
   @override
-  Future<({String url, Map<String, String>? headers})> streamFor(String path) async =>
-      (url: '$_api/files/$path?alt=media&supportsAllDrives=true', headers: await tokens.authHeader());
+  Future<({String url, Map<String, String>? headers})> streamFor(String path) async => (
+    url: '$_api/files/${Uri.encodeComponent(path)}?alt=media&supportsAllDrives=true',
+    headers: await tokens.authHeader(),
+  );
 }
 
 // ---------------------------------------------------------------- Dropbox
@@ -327,9 +344,7 @@ class OneDriveSource extends CloudSource {
             isDir: e['folder'] != null,
             size: (e['size'] as num?)?.toInt() ?? 0,
             modified: DateTime.tryParse(e['lastModifiedDateTime'] as String? ?? ''),
-            thumbnailUrl: (thumbs != null && thumbs.isNotEmpty)
-                ? (thumbs.first['medium']?['url'] as String?)
-                : null,
+            thumbnailUrl: (thumbs != null && thumbs.isNotEmpty) ? (thumbs.first['medium']?['url'] as String?) : null,
           ),
         );
       }

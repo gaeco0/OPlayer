@@ -2,9 +2,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:oplayer/core/media_utils.dart';
 import 'package:oplayer/core/open_media.dart';
+import 'package:oplayer/app/media_shell.dart';
+import 'package:oplayer/core/mouse_nav.dart';
+import 'package:oplayer/core/resource_locks.dart';
+import 'package:oplayer/core/settings.dart';
 import 'package:oplayer/features/photos/photo_viewer.dart';
 import 'package:oplayer/features/player/player_controller.dart';
 
@@ -20,10 +26,7 @@ void main() {
     expect(audioOnlyTracks(const Tracks(audio: [AudioTrack('1', null, null)])), true);
     expect(
       audioOnlyTracks(
-        const Tracks(
-          audio: [AudioTrack('1', null, null)],
-          video: [VideoTrack('2', null, null, albumart: true)],
-        ),
+        const Tracks(audio: [AudioTrack('1', null, null)], video: [VideoTrack('2', null, null, albumart: true)]),
       ),
       true,
     );
@@ -80,5 +83,47 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(PhotoViewer), findsNothing);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('startup file waits for app unlock and opens only once', (tester) async {
+    final locks = ResourceLocks.instance;
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(privacyChannel, (_) async => null);
+    SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
+    await tester.runAsync(() async {
+      await AppSettings.instance.init();
+      await locks.init();
+      await locks.setPin('123456');
+      locks.onAuthenticate = (_) => locks.verifyPin('123456');
+      await locks.setAppLockEnabled(true);
+      locks.relock();
+    });
+    final file = File('assets/branding/oplayer.png').absolute.path;
+    await tester.pumpWidget(
+      MaterialApp(
+        navigatorKey: MouseNav.navigatorKey,
+        builder: (_, child) => MediaShell(initialFiles: [file], child: child!),
+        home: const Scaffold(body: Text('Files')),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(PhotoViewer), findsNothing);
+    await tester.runAsync(() => locks.verifyPin('123456'));
+    await tester.pump();
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 40)));
+    await tester.pumpAndSettle();
+    expect(find.byType(PhotoViewer), findsOneWidget);
+    MouseNav.navigatorKey.currentState!.pop();
+    await tester.pumpAndSettle();
+    locks.relock();
+    await tester.runAsync(() => locks.verifyPin('123456'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PhotoViewer), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    locks.onAuthenticate = null;
+    FlutterSecureStorage.setMockInitialValues({});
+    await locks.init();
+    messenger.setMockMethodCallHandler(privacyChannel, null);
   });
 }

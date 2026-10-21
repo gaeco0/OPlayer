@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'dart:io';
 
 import '../../app/theme.dart';
 import '../../core/ffmpeg.dart';
@@ -13,6 +14,7 @@ import '../web/download_manager.dart';
 import 'network_settings.dart';
 import 'cloud_settings.dart';
 import 'privacy_settings.dart';
+import '../player/desktop_window.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key, required this.onOpenDrawer});
@@ -38,6 +40,23 @@ class SettingsPage extends StatelessWidget {
             const CloudSettings(),
             const PrivacySettings(),
             const _Header('재생'),
+            if (Platform.isWindows)
+              ListTile(
+                title: const Text('Windows 기본 미디어 플레이어로 설정'),
+                subtitle: const Text('Windows 설정에서 OPlayer를 선택해 동영상·음악 파일을 연결하세요.'),
+                leading: const Icon(Icons.video_file_outlined),
+                onTap: () async {
+                  try {
+                    await DesktopWindow.openDefaultApps();
+                  } catch (_) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(const SnackBar(content: Text('Windows 기본 앱 설정을 열지 못했습니다. 다시 시도해 주세요.')));
+                    }
+                  }
+                },
+              ),
             _choice<ResumeMode>(
               context,
               title: '이어보기',

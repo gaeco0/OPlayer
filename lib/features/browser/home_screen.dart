@@ -194,13 +194,7 @@ class _HomeScreenState extends State<HomeScreen> {
               title: Text('클라우드 연결', style: TextStyle(fontWeight: FontWeight.w700)),
             ),
             for (final pr in CloudProvider.values)
-              ListTile(
-                leading: Icon(cloudIcon(pr)),
-                title: Text(pr.label),
-                subtitle: pr == CloudProvider.gdrive ? const Text('추후 지원 예정') : null,
-                enabled: pr != CloudProvider.gdrive,
-                onTap: pr == CloudProvider.gdrive ? null : () => Navigator.pop(c, pr),
-              ),
+              ListTile(leading: Icon(cloudIcon(pr)), title: Text(pr.label), onTap: () => Navigator.pop(c, pr)),
           ],
         ),
       ),
@@ -623,7 +617,7 @@ class _Sidebar extends StatelessWidget {
             ListTile(
               dense: true,
               leading: const Icon(Icons.add_circle_outline, size: 22),
-              title: const Text('OneDrive / Dropbox'),
+              title: const Text('Google Drive / OneDrive / Dropbox'),
               onTap: onConnectCloud,
             ),
           header('도구'),

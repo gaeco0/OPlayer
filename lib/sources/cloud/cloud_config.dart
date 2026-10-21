@@ -7,9 +7,9 @@ import '../../core/settings.dart';
 ///
 /// ■ Google Drive  — https://console.cloud.google.com/apis/credentials
 ///   · Drive API 사용 설정, OAuth 동의 화면 → 범위 drive.readonly
-///   · 데스크톱(Windows/macOS): "데스크톱 앱" 클라이언트 → [googleDesktopClientId], [googleDesktopClientSecret]
+///   · 데스크톱: "데스크톱 앱" Client ID와 Secret을 앱 설정에 입력 (Secret은 보안 저장소).
 ///     리디렉션은 http://127.0.0.1:53682/callback (루프백, 자동 허용)
-///   · Google 모바일 로그인은 추후 별도 구현한다.
+///   · Android: Android 클라이언트에 패키지 이름과 서명 SHA-1 등록 (Google Play services 필요).
 ///
 /// ■ Dropbox — https://www.dropbox.com/developers/apps
 ///   · Scoped access, Full Dropbox, files.metadata.read + files.content.read + account_info.read
@@ -21,9 +21,9 @@ import '../../core/settings.dart';
 ///     com.oplayer.oplayer://oauth/onedrive 를 custom redirect URI로 등록
 ///   · API 권한: Files.Read, User.Read, offline_access
 class CloudConfig {
-  static const googleDesktopClientId = '';
-  static const googleDesktopClientSecret = '';
-  static const googleMobileClientId = '';
+  static String get googleDesktopClientId => AppSettings.instance.googleDesktopClientId;
+  static String get googleAndroidClientId => AppSettings.instance.googleAndroidClientId;
+  static String googleSecretKey(String clientId) => 'google_oauth_secret_$clientId';
 
   static String get dropboxAppKey => AppSettings.instance.dropboxAppKey.isNotEmpty
       ? AppSettings.instance.dropboxAppKey

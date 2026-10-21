@@ -9,8 +9,9 @@ import '../features/player/playback_session.dart';
 import 'theme.dart';
 
 class MediaShell extends StatefulWidget {
-  const MediaShell({super.key, required this.child});
+  const MediaShell({super.key, required this.child, this.initialFiles = const []});
   final Widget child;
+  final List<String> initialFiles;
   @override
   State<MediaShell> createState() => _MediaShellState();
 }
@@ -18,6 +19,34 @@ class MediaShell extends StatefulWidget {
 class _MediaShellState extends State<MediaShell> {
   bool _dragging = false;
   bool _opening = false;
+  bool _initialOpened = false;
+
+  @override
+  void initState() {
+    super.initState();
+    ResourceLocks.instance.addListener(_openInitialFiles);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _openInitialFiles());
+  }
+
+  void _openInitialFiles() {
+    if (!mounted || _initialOpened || widget.initialFiles.isEmpty) return;
+    final locks = ResourceLocks.instance;
+    if (locks.shielded || locks.unavailable || locks.inBackground) return;
+    _initialOpened = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final context = MouseNav.navigatorKey.currentContext;
+      if (!mounted || context == null) return;
+      await openLocalMedia(context, widget.initialFiles, waitForClose: false);
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  @override
+  void dispose() {
+    ResourceLocks.instance.removeListener(_openInitialFiles);
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = PlaybackSession.instance;

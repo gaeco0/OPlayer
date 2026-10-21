@@ -45,7 +45,7 @@ void main() {
     expect(find.text('OPlayer'), findsOneWidget);
     expect(find.text('최근 재생'), findsOneWidget);
     expect(find.text('UPnP / DLNA 검색'), findsOneWidget);
-    expect(find.text('OneDrive / Dropbox'), findsOneWidget);
+    expect(find.text('Google Drive / OneDrive / Dropbox'), findsOneWidget);
     await t.tap(find.text(p.basename(folder.path)));
     for (var i = 0; i < 20 && find.text('nested-test').evaluate().isEmpty; i++) {
       await t.pump(const Duration(milliseconds: 20));
