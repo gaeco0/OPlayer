@@ -12,6 +12,8 @@ Future<Object?> callPlugin(
   String method,
   Map<String, dynamic> input, {
   PluginRequest? request,
+  Map<String, dynamic> config = const {},
+  bool Function(String)? allowsRequest,
   bool validateOnly = false,
 }) async {
   if (!RegExp(r'^[a-zA-Z]+$').hasMatch(method)) throw ArgumentError.value(method);
@@ -30,6 +32,7 @@ Future<Object?> callPlugin(
       globalThis.console = {log(){},warn(){},error(){}};
       globalThis.__queue = []; globalThis.__waiting = {}; globalThis.__seq = 0;
       globalThis.OPlayer = Object.freeze({
+        config: Object.freeze(${jsonEncode(config)}),
         request: (url, options = {}) => new Promise((resolve, reject) => {
           const id = ++__seq; __waiting[id] = {resolve, reject}; __queue.push({id,url,options});
         })
@@ -74,7 +77,9 @@ Future<Object?> callPlugin(
         if (++requests > 200) throw StateError('확장앱 요청 횟수 제한 초과');
         final url = item['url'] as String;
         final options = (item['options'] as Map).cast<String, dynamic>();
-        if (!plugin.allows(url) || request == null) throw StateError('허용되지 않은 확장앱 요청: ${Uri.tryParse(url)?.host}');
+        if (!(allowsRequest?.call(url) ?? plugin.allows(url)) || request == null) {
+          throw StateError('허용되지 않은 확장앱 요청: ${Uri.tryParse(url)?.host}');
+        }
         final id = item['id'] as int;
         try {
           final remaining = deadline.difference(DateTime.now());

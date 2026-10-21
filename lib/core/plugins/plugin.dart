@@ -13,13 +13,14 @@ class OPlugin {
   List<String> get authHosts => (manifest['authHosts'] as List? ?? []).cast<String>();
   List<String> get sites => (manifest['sites'] as List? ?? []).cast<String>();
   Map<String, dynamic> get oauth => (manifest['oauth'] as Map? ?? {}).cast<String, dynamic>();
+  String get authType => (manifest['auth'] as Map?)?['type'] as String? ?? 'oauth';
 
   static OPlugin parse(String source) {
     if (utf8.encode(source).length > 1024 * 1024) throw const FormatException('확장앱 파일은 1MB 이하여야 합니다');
     final first = source.trimLeft().split('\n').first;
     if (!first.startsWith('// @oplayer ')) throw const FormatException('확장앱 메타데이터가 없습니다');
     final meta = jsonDecode(first.substring(12)) as Map<String, dynamic>;
-    if (meta['api'] != 1 ||
+    if (![1, 2].contains(meta['api']) ||
         !RegExp(r'^[a-z][a-z0-9._-]{1,79}$').hasMatch('${meta['id']}') ||
         meta['name'] is! String ||
         '${meta['name']}'.isEmpty ||
@@ -49,7 +50,16 @@ class OPlugin {
       }
       RegExp(rule['urlFilter'] as String);
     }
-    if (plugin.cloud) {
+    if (plugin.cloud && !['oauth', 'bearer', 's3'].contains(plugin.authType)) {
+      throw const FormatException('지원하지 않는 클라우드 인증 방식');
+    }
+    for (final section in [plugin.oauth, (meta['auth'] as Map? ?? {})]) {
+      if (section['consoleUrl'] != null) repositoryUri(section['consoleUrl'] as String);
+    }
+    if (plugin.cloud && plugin.authType != 'oauth' && meta['api'] != 2) {
+      throw const FormatException('이 인증 방식에는 확장앱 API 2가 필요합니다');
+    }
+    if (plugin.cloud && plugin.authType == 'oauth') {
       for (final key in ['authEndpoint', 'tokenEndpoint']) {
         repositoryUri('${plugin.oauth[key]}');
       }

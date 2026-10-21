@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -22,6 +23,9 @@ void main() {
     await AppSettings.instance.init();
     await PluginStore.instance.init();
     PluginStore.instance.repositories.clear(); // No remote repository requests in widget tests.
+    for (final id in ['box', 'mybox', 's3']) {
+      await PluginStore.instance.load(await File('plugins/cloud.$id.js').readAsString());
+    }
   });
 
   testWidgets('cloud setup validates and saves provider IDs and securely stores Google desktop secret', (tester) async {
@@ -152,5 +156,45 @@ void main() {
     expect(store.oauthClientId(first), 'first-client');
     await store.remove(first.id);
     await store.remove(second.id);
+  });
+
+  testWidgets('MYBOX token and Box secret are configured inside their own extension and stored securely', (
+    tester,
+  ) async {
+    final store = PluginStore.instance;
+    await tester.pumpWidget(const MaterialApp(home: CloudPluginSettingsPage(pluginId: 'cloud.mybox')));
+    await tester.tap(find.text('연결 설정'));
+    await tester.pumpAndSettle();
+    expect(find.text('OAuth Client ID'), findsNothing);
+    expect(tester.widget<TextField>(find.byType(TextField).last).obscureText, true);
+    await tester.enterText(find.byType(TextFormField).last, 'test-mybox-pat');
+    await tester.tap(find.text('저장'));
+    await tester.pumpAndSettle();
+    expect(store.hasCredentials('cloud.mybox'), true);
+    expect((await store.credentials('cloud.mybox'))['accessToken'], 'test-mybox-pat');
+    expect(find.text('설정됨'), findsOneWidget);
+
+    await tester.pumpWidget(const MaterialApp(home: CloudPluginSettingsPage(pluginId: 'cloud.box')));
+    await tester.tap(find.text('앱 등록 정보'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('http://localhost:53682/callback'), findsOneWidget);
+    expect(find.textContaining('com.oplayer.oplayer://oauth/box'), findsNothing);
+    await tester.enterText(find.byType(TextFormField).first, 'test-box-client');
+    await tester.tap(find.text('저장'));
+    await tester.pumpAndSettle();
+    expect(find.text('Client Secret을 입력해 주세요'), findsOneWidget);
+    await tester.enterText(find.byType(TextFormField).last, 'test-box-client-secret');
+    await tester.tap(find.text('저장'));
+    await tester.pumpAndSettle();
+    expect(store.oauthClientId(store.installed['cloud.box']!), 'test-box-client');
+    expect(
+      await SecureStore.instance.readRequired(PluginStore.oauthSecretKey('cloud.box', 'test-box-client')),
+      'test-box-client-secret',
+    );
+    final prefs = await SharedPreferences.getInstance();
+    for (final key in prefs.getKeys()) {
+      expect(jsonEncode(prefs.get(key)), isNot(contains('test-box-client-secret')));
+      expect(jsonEncode(prefs.get(key)), isNot(contains('test-mybox-pat')));
+    }
   });
 }

@@ -11,19 +11,23 @@ import '../../core/plugins/plugin_store.dart';
 import '../../sources/cloud/cloud_config.dart';
 import '../../sources/cloud/oauth.dart';
 import '../../sources/server_store.dart';
+import 'cloud_credentials_dialog.dart';
 
 CloudProvider cloudPluginProvider(OPlugin plugin) =>
     CloudProvider.values.firstWhere((p) => plugin.id == 'cloud.${p.name}', orElse: () => CloudProvider.plugin);
 
-bool cloudPluginConfigured(OPlugin plugin) => switch (cloudPluginProvider(plugin)) {
-  CloudProvider.plugin => PluginStore.instance.oauthClientId(plugin).isNotEmpty,
-  CloudProvider.dropbox => CloudConfig.dropboxAppKey.isNotEmpty,
-  CloudProvider.onedrive => CloudConfig.oneDriveClientId.isNotEmpty,
-  CloudProvider.gdrive =>
-    Platform.isAndroid
-        ? CloudConfig.googleAndroidClientId.isNotEmpty
-        : (Platform.isWindows || Platform.isMacOS || Platform.isLinux) && CloudConfig.googleDesktopClientId.isNotEmpty,
-};
+bool cloudPluginConfigured(OPlugin plugin) => plugin.authType != 'oauth'
+    ? PluginStore.instance.hasCredentials(plugin.id)
+    : switch (cloudPluginProvider(plugin)) {
+        CloudProvider.plugin => PluginStore.instance.oauthClientId(plugin).isNotEmpty,
+        CloudProvider.dropbox => CloudConfig.dropboxAppKey.isNotEmpty,
+        CloudProvider.onedrive => CloudConfig.oneDriveClientId.isNotEmpty,
+        CloudProvider.gdrive =>
+          Platform.isAndroid
+              ? CloudConfig.googleAndroidClientId.isNotEmpty
+              : (Platform.isWindows || Platform.isMacOS || Platform.isLinux) &&
+                    CloudConfig.googleDesktopClientId.isNotEmpty,
+      };
 
 Future<bool> _showCloudSetup(BuildContext context, CloudProvider provider) async {
   if (provider == CloudProvider.gdrive) return _showGoogleSetup(context);
@@ -258,7 +262,9 @@ class CloudPluginSettingsPage extends StatelessWidget {
   Future<void> _configure(BuildContext context, OPlugin plugin) async {
     try {
       final provider = cloudPluginProvider(plugin);
-      final saved = provider == CloudProvider.plugin
+      final saved = plugin.authType != 'oauth'
+          ? await showCloudCredentialsDialog(context, plugin)
+          : provider == CloudProvider.plugin
           ? await _showClientIdSetup(context, plugin)
           : await _showCloudSetup(context, provider);
       if (saved && forConnection && context.mounted) Navigator.pop(context, true);
@@ -288,13 +294,13 @@ class CloudPluginSettingsPage extends StatelessWidget {
             if (store.disabled.contains(pluginId))
               const ListTile(subtitle: Text('꺼진 확장앱입니다. 설정은 보관되며, 연결하려면 확장앱을 켜 주세요.')),
             ListTile(
-              title: const Text('앱 등록 정보'),
-              subtitle: Text(cloudPluginConfigured(plugin) ? '앱 등록 정보 설정됨' : '앱 등록 정보 필요'),
+              title: Text(plugin.authType == 'oauth' ? '앱 등록 정보' : '연결 설정'),
+              subtitle: Text(cloudPluginConfigured(plugin) ? '설정됨' : '설정 필요'),
               trailing: const Icon(Icons.edit_outlined),
               enabled: supported,
               onTap: () => _configure(context, plugin),
             ),
-            const ListTile(subtitle: Text('등록 정보를 저장한 뒤 사이드바의 클라우드 연결에서 로그인하세요. 기존 연결 계정은 유지됩니다.')),
+            const ListTile(subtitle: Text('설정을 저장한 뒤 사이드바의 클라우드 연결에서 계정을 추가하세요. 기존 연결 계정은 유지됩니다.')),
             if (forConnection)
               Padding(
                 padding: const EdgeInsets.all(16),
@@ -314,6 +320,11 @@ class CloudPluginSettingsPage extends StatelessWidget {
 
 Future<bool> _showClientIdSetup(BuildContext context, OPlugin plugin) async {
   var value = PluginStore.instance.oauthClientId(plugin);
+  final needsSecret = plugin.oauth['requiresClientSecret'] == true;
+  var secret = needsSecret
+      ? await SecureStore.instance.readRequired(PluginStore.oauthSecretKey(plugin.id, value)) ?? ''
+      : '';
+  if (!context.mounted) return false;
   final form = GlobalKey<FormState>();
   var saving = false;
   String? error;
@@ -322,21 +333,49 @@ Future<bool> _showClientIdSetup(BuildContext context, OPlugin plugin) async {
         builder: (c) => StatefulBuilder(
           builder: (c, setState) => AlertDialog(
             title: Text('${plugin.name} 앱 등록'),
-            content: Form(
-              key: form,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    initialValue: value,
-                    enabled: !saving,
-                    autocorrect: false,
-                    decoration: const InputDecoration(labelText: 'OAuth Client ID'),
-                    onChanged: (text) => value = text.trim(),
-                    validator: (text) => (text ?? '').trim().isEmpty ? 'Client ID를 입력해 주세요' : null,
-                  ),
-                  if (error != null) Text(error!, style: TextStyle(color: Theme.of(c).colorScheme.error)),
-                ],
+            content: SingleChildScrollView(
+              child: Form(
+                key: form,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (plugin.oauth['help'] is String) Text(plugin.oauth['help'] as String),
+                    SelectableText(
+                      '로그인 복귀 주소\n'
+                      '${plugin.oauth['loopbackOnMobile'] == true ? '' : '${plugin.oauth['mobileRedirectUri'] ?? '${CloudConfig.mobileScheme}:/oauth'}\n'}'
+                      'http://${plugin.oauth['loopbackHost'] ?? '127.0.0.1'}:${CloudConfig.loopbackPort}/callback',
+                    ),
+                    TextFormField(
+                      initialValue: value,
+                      enabled: !saving,
+                      autocorrect: false,
+                      decoration: const InputDecoration(labelText: 'OAuth Client ID'),
+                      onChanged: (text) => value = text.trim(),
+                      validator: (text) => (text ?? '').trim().isEmpty ? 'Client ID를 입력해 주세요' : null,
+                    ),
+                    if (needsSecret)
+                      TextFormField(
+                        initialValue: secret,
+                        enabled: !saving,
+                        obscureText: true,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        decoration: const InputDecoration(labelText: 'Client Secret'),
+                        onChanged: (v) => secret = v.trim(),
+                        validator: (v) => (v ?? '').trim().isEmpty ? 'Client Secret을 입력해 주세요' : null,
+                      ),
+                    if (plugin.oauth['consoleUrl'] is String)
+                      TextButton.icon(
+                        icon: const Icon(Icons.open_in_new),
+                        label: const Text('개발자 콘솔'),
+                        onPressed: () => launchUrl(
+                          repositoryUri(plugin.oauth['consoleUrl'] as String),
+                          mode: LaunchMode.externalApplication,
+                        ),
+                      ),
+                    if (error != null) Text(error!, style: TextStyle(color: Theme.of(c).colorScheme.error)),
+                  ],
+                ),
               ),
             ),
             actions: [
@@ -351,6 +390,12 @@ Future<bool> _showClientIdSetup(BuildContext context, OPlugin plugin) async {
                           error = null;
                         });
                         try {
+                          if (needsSecret) {
+                            await SecureStore.instance.writeRequired(
+                              PluginStore.oauthSecretKey(plugin.id, value),
+                              secret,
+                            );
+                          }
                           await PluginStore.instance.setOAuthClientId(plugin.id, value);
                           if (c.mounted) Navigator.pop(c, true);
                         } catch (_) {

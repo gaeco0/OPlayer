@@ -43,6 +43,8 @@ class OAuthClient {
     this.mobileRedirectUri,
     this.extraAuthParams = const {},
     this.loopbackHost = '127.0.0.1',
+    this.usePkce = true,
+    this.loopbackOnMobile = false,
   });
 
   final String authEndpoint;
@@ -57,10 +59,13 @@ class OAuthClient {
   final String? mobileRedirectUri;
   final Map<String, String> extraAuthParams;
   final String loopbackHost;
+  final bool usePkce;
+  final bool loopbackOnMobile;
 
   static bool get _desktop => Platform.isWindows || Platform.isMacOS || Platform.isLinux;
+  bool get _useLoopback => _desktop || loopbackOnMobile;
 
-  String get redirectUri => _desktop
+  String get redirectUri => _useLoopback
       ? 'http://$loopbackHost:${CloudConfig.loopbackPort}/callback'
       : mobileRedirectUri ??
             (mobileScheme.startsWith('msal')
@@ -99,16 +104,16 @@ class OAuthClient {
         'client_id': clientId,
         'redirect_uri': redirectUri,
         'response_type': 'code',
-        'scope': scopes.join(' '),
-        'code_challenge': challenge,
-        'code_challenge_method': 'S256',
+        if (scopes.isNotEmpty) 'scope': scopes.join(' '),
+        if (usePkce) 'code_challenge': challenge,
+        if (usePkce) 'code_challenge_method': 'S256',
         'state': state,
         ...extraAuthParams,
       },
     );
 
     final Uri callback;
-    if (_desktop) {
+    if (_useLoopback) {
       callback = await _loopback(url);
     } else {
       final result = await FlutterWebAuth2.authenticate(url: url.toString(), callbackUrlScheme: mobileScheme);
@@ -116,7 +121,7 @@ class OAuthClient {
     }
     final expected = Uri.parse(redirectUri);
     if (callback.path != expected.path ||
-        (!_desktop && (callback.scheme != expected.scheme || callback.host != expected.host))) {
+        (!_useLoopback && (callback.scheme != expected.scheme || callback.host != expected.host))) {
       throw '잘못된 로그인 복귀 주소입니다';
     }
     if (callback.queryParameters['state'] != state) throw '잘못된 응답(state 불일치)';
@@ -129,7 +134,7 @@ class OAuthClient {
       'grant_type': 'authorization_code',
       'code': code,
       'redirect_uri': redirectUri,
-      'code_verifier': verifier,
+      if (usePkce) 'code_verifier': verifier,
     });
   }
 
@@ -179,12 +184,22 @@ class OAuthClient {
 
   Future<OAuthTokens> _token(Map<String, String> params) async {
     final secret = clientSecretKey == null ? clientSecret : await SecureStore.instance.readRequired(clientSecretKey!);
-    final res = await http
-        .post(
-          Uri.parse(tokenEndpoint),
-          body: {'client_id': clientId, if (secret != null && secret.isNotEmpty) 'client_secret': secret, ...params},
-        )
-        .timeout(const Duration(seconds: 30));
+    final client = http.Client();
+    final http.Response res;
+    try {
+      final request = http.Request('POST', Uri.parse(tokenEndpoint))
+        ..followRedirects = false
+        ..bodyFields = {
+          'client_id': clientId,
+          if (secret != null && secret.isNotEmpty) 'client_secret': secret,
+          ...params,
+        };
+      res = await http.Response.fromStream(
+        await client.send(request).timeout(const Duration(seconds: 30)),
+      ).timeout(const Duration(seconds: 30));
+    } finally {
+      client.close();
+    }
     final Map<String, dynamic> j;
     try {
       j = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;

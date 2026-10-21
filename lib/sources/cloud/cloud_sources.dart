@@ -3,20 +3,25 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
+import 'package:xml/xml.dart';
 
 import '../../core/media_item.dart';
 import '../../core/plugins/plugin.dart';
 import '../../core/plugins/plugin_store.dart';
 import '../../core/plugins/plugin_runtime.dart';
 import '../../core/secure_store.dart';
+import '../../core/network/network_service.dart';
+import '../../core/stream_proxy.dart';
 import '../media_source.dart';
 import '../server_store.dart';
 import 'cloud_config.dart';
 import 'oauth.dart';
+import 's3_credentials.dart';
 
 /// OAuth/transport remain native; provider endpoints and behavior live in JS.
 OAuthClient oauthClientFor(CloudProvider provider, {String? clientId, String? accountEmail, String? pluginId}) {
   final definition = PluginStore.instance.require(pluginId ?? 'cloud.${provider.name}');
+  if (definition.authType != 'oauth') throw StateError('OAuth 확장앱이 아닙니다');
   final oauth = definition.oauth;
   if (provider == CloudProvider.gdrive && Platform.isAndroid) {
     return GoogleAndroidOAuthClient(
@@ -36,7 +41,11 @@ OAuthClient oauthClientFor(CloudProvider provider, {String? clientId, String? ac
     authEndpoint: oauth['authEndpoint'] as String,
     tokenEndpoint: oauth['tokenEndpoint'] as String,
     clientId: id,
-    clientSecretKey: provider == CloudProvider.gdrive ? CloudConfig.googleSecretKey(id) : null,
+    clientSecretKey: provider == CloudProvider.gdrive
+        ? CloudConfig.googleSecretKey(id)
+        : oauth['requiresClientSecret'] == true
+        ? PluginStore.oauthSecretKey(definition.id, id)
+        : null,
     scopes: (oauth['scopes'] as List).cast<String>(),
     mobileScheme: CloudConfig.mobileScheme,
     mobileRedirectUri: switch (provider) {
@@ -46,29 +55,49 @@ OAuthClient oauthClientFor(CloudProvider provider, {String? clientId, String? ac
     },
     extraAuthParams: (oauth['extraAuthParams'] as Map? ?? {}).cast<String, String>(),
     loopbackHost: oauth['loopbackHost'] as String? ?? '127.0.0.1',
+    usePkce: oauth['pkce'] != false,
+    loopbackOnMobile: oauth['loopbackOnMobile'] == true,
   );
 }
 
 /// 로그인 → 계정 이름 조회 → 저장
 Future<CloudAccount> connectCloudAccount(CloudProvider provider, {String? pluginId, String? clientId}) async {
-  final client = oauthClientFor(provider, pluginId: pluginId, clientId: clientId);
-  final tokens = await client.authorize();
+  final definition = PluginStore.instance.require(pluginId ?? 'cloud.${provider.name}');
+  final client = definition.authType == 'oauth'
+      ? oauthClientFor(provider, pluginId: pluginId, clientId: clientId)
+      : null;
+  final tokens = await client?.authorize();
+  final credentials = client == null ? await PluginStore.instance.credentials(definition.id) : null;
+  if (definition.authType == 's3') S3Credentials(credentials!);
+  if (definition.authType == 'bearer' && '${credentials?['accessToken'] ?? ''}'.isEmpty) {
+    throw StateError('확장앱 설정에 개인 액세스 토큰을 입력해 주세요');
+  }
   final account = CloudAccount(
     id: ServerStore.newId(),
     provider: provider,
-    name: PluginStore.instance.require(pluginId ?? 'cloud.${provider.name}').name,
+    name: definition.name,
     pluginId: pluginId,
-    oauthClientId: client.clientId,
+    oauthClientId: client?.clientId,
   );
-  final holder = TokenHolder(account.tokenKey, client);
-  await holder.save(tokens);
+  if (client != null) {
+    await TokenHolder(account.tokenKey, client).save(tokens!);
+  } else {
+    await SecureStore.instance.writeRequired(
+      account.tokenKey,
+      jsonEncode({...credentials!, 'authType': definition.authType, 'pluginId': definition.id}),
+    );
+  }
   final src = cloudSourceFor(account);
   try {
-    account.name = await src.accountName();
+    final name = await src.accountName();
+    final chosenName = '${credentials?['displayName'] ?? ''}'.trim();
+    account.name = chosenName.isEmpty ? name : chosenName;
     await ServerStore.instance.saveAccount(account);
   } catch (_) {
     await SecureStore.instance.writeRequired(account.tokenKey, null);
     rethrow;
+  } finally {
+    await src.close();
   }
   return account;
 }
@@ -76,21 +105,35 @@ Future<CloudAccount> connectCloudAccount(CloudProvider provider, {String? plugin
 CloudSource cloudSourceFor(CloudAccount a) => CloudSource(a);
 
 class CloudSource extends MediaSource {
-  CloudSource(this.account)
-    : tokens = TokenHolder(
-        account.tokenKey,
-        oauthClientFor(
-          account.provider,
-          pluginId: account.pluginId,
-          clientId: account.oauthClientId,
-          accountEmail: account.name.contains('@') ? account.name : null,
-        ),
-      );
+  CloudSource(this.account);
+  TokenHolder? _tokens;
+  TokenHolder get tokens {
+    if (_tokens != null) return _tokens!;
+    if (_closed) throw StateError('계정 연결이 해제되었습니다');
+    return _tokens ??= TokenHolder(
+      account.tokenKey,
+      oauthClientFor(
+        account.provider,
+        pluginId: account.pluginId,
+        clientId: account.oauthClientId,
+        accountEmail: account.name.contains('@') ? account.name : null,
+      ),
+    );
+  }
+
   final CloudAccount account;
-  final TokenHolder tokens;
+  bool _closed = false;
+  final _proxyUrls = <String>{};
 
   @override
-  Future<void> close() async => tokens.close();
+  Future<void> close() async {
+    _closed = true;
+    _tokens?.close();
+    for (final url in _proxyUrls) {
+      StreamProxy.instance.unregister(url);
+    }
+    _proxyUrls.clear();
+  }
 
   @override
   String get id => account.id;
@@ -105,19 +148,46 @@ class CloudSource extends MediaSource {
   @override
   String get rootTitle => definition.manifest['rootTitle'] as String? ?? definition.name;
 
-  Future<Object?> _call(String method, Map<String, dynamic> input) => callPlugin(
-    definition,
-    method,
-    input,
-    request: (url, options) async {
-      if (!definition.allows(url, auth: true)) throw StateError('인증이 허용되지 않은 클라우드 도메인');
-      return switch (options['method'] ?? 'GET') {
-        'GET' => getJson(url),
-        'POST' => postJson(url, options['body']),
-        _ => throw StateError('지원하지 않는 클라우드 요청 방식'),
-      };
-    },
-  );
+  Future<Map<String, dynamic>> _credentials() async {
+    if (_closed) throw StateError('계정 연결이 해제되었습니다');
+    final raw = await SecureStore.instance.readRequired(account.tokenKey);
+    if (raw == null) throw StateError('확장앱 설정에서 인증 정보를 등록하고 계정을 다시 연결해 주세요');
+    final values = (jsonDecode(raw) as Map).cast<String, dynamic>();
+    if (values['pluginId'] != definition.id || values['authType'] != definition.authType) {
+      throw StateError('확장앱 인증 방식이 변경되었습니다. 계정을 다시 연결해 주세요');
+    }
+    return values;
+  }
+
+  Future<Object?> _call(String method, Map<String, dynamic> input) async {
+    if (_closed) throw StateError('계정 연결이 해제되었습니다');
+    final plugin = definition;
+    final s3 = plugin.authType == 's3' ? S3Credentials(await _credentials()) : null;
+    return callPlugin(
+      plugin,
+      method,
+      input,
+      config: s3?.publicConfig ?? const {},
+      allowsRequest: s3?.allows,
+      request: (url, options) async {
+        final verb = options['method'] as String? ?? 'GET';
+        if (!['GET', 'POST', if (s3 != null) 'HEAD'].contains(verb) || (s3 != null && verb == 'POST')) {
+          throw StateError('지원하지 않는 클라우드 요청 방식');
+        }
+        if (options['response'] == 'signedUrl') {
+          if (s3 == null || verb != 'GET') throw StateError('S3 읽기 URL만 서명할 수 있습니다');
+          return s3.presign(Uri.parse(url)).toString();
+        }
+        return _request(
+          url,
+          verb,
+          body: options['body'],
+          responseType: options['response'] as String? ?? 'json',
+          s3: s3,
+        );
+      },
+    );
+  }
 
   Future<String> accountName() async => await _call('accountName', {}) as String? ?? definition.name;
 
@@ -142,40 +212,172 @@ class CloudSource extends MediaSource {
 
   /// 파일 ID → 재생 URL + 헤더
   Future<({String url, Map<String, String>? headers})> streamFor(String path) async {
-    final result = await _call('stream', {'path': path}) as Map;
-    final url = result['url'] as String;
-    final uri = Uri.parse(url);
-    if (uri.scheme != 'https' || uri.host.isEmpty || uri.userInfo.isNotEmpty) throw StateError('잘못된 클라우드 재생 주소');
-    final auth = result['authenticated'] == true;
-    if (auth && !definition.allows(url, auth: true)) throw StateError('재생 주소에 인증을 보낼 수 없습니다');
-    return (url: url, headers: auth ? await tokens.authHeader() : null);
+    final result = await _remoteStream(path);
+    if (result['refreshEachRequest'] == true) {
+      final length = (result['size'] as num?)?.toInt() ?? -1;
+      if (length < 0) throw StateError('클라우드 파일 크기를 얻지 못했습니다');
+      Map? first = result;
+      final local = await StreamProxy.instance.register(
+        name: result['name'] as String? ?? path,
+        length: length,
+        opener: (start, end) async {
+          final initial = first;
+          first = null;
+          final remote = initial ?? await _remoteStream(path, refresh: true);
+          return _openRange(remote, start, end);
+        },
+      );
+      _proxyUrls.add(local);
+      return (url: local, headers: null);
+    }
+    return (url: result['url'] as String, headers: await _streamHeaders(result));
   }
 
-  Future<Map<String, dynamic>> getJson(String url) => _request(url, 'GET');
-  Future<Map<String, dynamic>> postJson(String url, Object? body) => _request(url, 'POST', body);
+  Future<Map> _remoteStream(String path, {bool refresh = false}) async {
+    final result = await _call('stream', {'path': path, if (refresh) 'refresh': true}) as Map;
+    final url = result['url'] as String;
+    final uri = Uri.parse(url);
+    final localS3 = definition.authType == 's3' && S3Credentials(await _credentials()).allows(url);
+    if (definition.authType == 's3' && !localS3) throw StateError('S3 재생 주소가 등록한 버킷 밖에 있습니다');
+    if ((!localS3 && uri.scheme != 'https') || uri.host.isEmpty || uri.userInfo.isNotEmpty) {
+      throw StateError('잘못된 클라우드 재생 주소');
+    }
+    final auth = result['authenticated'] == true;
+    if (auth && !definition.allows(url, auth: true)) throw StateError('재생 주소에 인증을 보낼 수 없습니다');
+    return result;
+  }
 
-  Future<Map<String, dynamic>> _request(String url, String method, [Object? body]) async {
-    if (!definition.allows(url, auth: true)) throw StateError('허용되지 않은 인증 도메인');
+  Future<Map<String, String>?> _streamHeaders(Map result) async =>
+      result['authenticated'] == true ? await _authHeader() : null;
+
+  Future<Map<String, String>> _authHeader({bool refresh = false}) async {
+    if (_closed) throw StateError('계정 연결이 해제되었습니다');
+    if (definition.authType == 'oauth') return tokens.authHeader(forceRefresh: refresh);
+    if (definition.authType != 'bearer') throw StateError('Bearer 인증을 보낼 수 없는 확장앱입니다');
+    final value = (await _credentials())['accessToken'] as String? ?? '';
+    if (value.isEmpty) throw StateError('개인 액세스 토큰을 다시 등록하고 계정을 연결해 주세요');
+    return {'Authorization': 'Bearer $value'};
+  }
+
+  Future<Stream<List<int>>> _openRange(Map result, int start, int end) async {
+    if (_closed) throw StateError('계정 연결이 해제되었습니다');
+    definition; // Check enabled/installed state for every seek, too.
+    final client = NetworkService.instance.createHttpClient();
+    try {
+      var uri = Uri.parse(result['url'] as String);
+      var headers = await _streamHeaders(result) ?? <String, String>{};
+      late HttpClientResponse response;
+      for (var redirects = 0; ; redirects++) {
+        final request = await client.getUrl(uri).timeout(const Duration(seconds: 30));
+        request.followRedirects = false;
+        headers.forEach(request.headers.set);
+        request.headers.set(HttpHeaders.acceptEncodingHeader, 'identity');
+        request.headers.set('Range', 'bytes=$start-${end - 1}');
+        response = await request.close().timeout(const Duration(seconds: 30));
+        final location = response.headers.value('location');
+        if (![301, 302, 303, 307, 308].contains(response.statusCode) || location == null) break;
+        await response.listen((_) {}).cancel();
+        final next = uri.resolve(location);
+        if (redirects >= 4 || next.scheme != 'https' || next.host.isEmpty || next.userInfo.isNotEmpty) {
+          throw StateError('지원하지 않는 클라우드 재생 리디렉션');
+        }
+        if (next.origin != uri.origin) headers = {};
+        uri = next;
+      }
+      if (response.statusCode != 206 && response.statusCode != 200) {
+        throw StateError('클라우드 재생 HTTP ${response.statusCode}');
+      }
+      if (response.statusCode == 206 && !('${response.headers.value('content-range')}'.startsWith('bytes $start-'))) {
+        throw StateError('클라우드 Range 응답이 올바르지 않습니다');
+      }
+      Stream<List<int>> body() async* {
+        var skip = response.statusCode == 200 ? start : 0;
+        var remaining = end - start;
+        try {
+          await for (final bytes in response.timeout(const Duration(seconds: 40))) {
+            final offset = skip.clamp(0, bytes.length);
+            skip -= offset;
+            final count = (bytes.length - offset).clamp(0, remaining);
+            if (count > 0) {
+              yield bytes.sublist(offset, offset + count);
+              remaining -= count;
+            }
+            if (remaining == 0) break;
+          }
+          if (remaining != 0) throw StateError('클라우드 미디어 수신이 중단되었습니다');
+        } finally {
+          client.close(force: true);
+        }
+      }
+
+      return body();
+    } catch (_) {
+      client.close(force: true);
+      rethrow;
+    }
+  }
+
+  void _release(String url) {
+    if (_proxyUrls.remove(url)) StreamProxy.instance.unregister(url);
+  }
+
+  Future<Map<String, dynamic>> getJson(String url) async => await _request(url, 'GET') as Map<String, dynamic>;
+  Future<Map<String, dynamic>> postJson(String url, Object? body) async =>
+      await _request(url, 'POST', body: body) as Map<String, dynamic>;
+
+  Future<Object?> _request(
+    String url,
+    String method, {
+    Object? body,
+    String responseType = 'json',
+    S3Credentials? s3,
+  }) async {
+    if (_closed) throw StateError('계정 연결이 해제되었습니다');
+    if (!(s3?.allows(url) ?? definition.allows(url, auth: true))) throw StateError('허용되지 않은 인증 도메인');
     final client = http.Client();
     try {
       Future<http.Response> send(bool refresh) async {
-        final request = http.Request(method, Uri.parse(url))..followRedirects = false;
-        request.headers.addAll(await tokens.authHeader(forceRefresh: refresh));
+        final request = http.Request(method, s3?.presign(Uri.parse(url), method: method) ?? Uri.parse(url))
+          ..followRedirects = false;
+        if (s3 == null) request.headers.addAll(await _authHeader(refresh: refresh));
         if (method == 'POST') {
           request.headers['Content-Type'] = 'application/json';
           request.body = jsonEncode(body);
         }
         final response = await client.send(request).timeout(const Duration(seconds: 30));
+        if (responseType == 'redirect' || responseType == 'headers') {
+          await response.stream.listen((_) {}).cancel();
+          return http.Response.bytes([], response.statusCode, headers: response.headers);
+        }
         final bytes = <int>[];
         await for (final chunk in response.stream.timeout(const Duration(seconds: 30))) {
           bytes.addAll(chunk);
           if (bytes.length > 8 * 1024 * 1024) throw StateError('클라우드 응답 크기 제한 초과');
         }
-        return http.Response.bytes(bytes, response.statusCode);
+        return http.Response.bytes(bytes, response.statusCode, headers: response.headers);
       }
 
       var response = await send(false);
-      if (response.statusCode == 401) response = await send(true);
+      if (response.statusCode == 401 && definition.authType == 'oauth') response = await send(true);
+      if (responseType == 'redirect') {
+        if (response.statusCode < 300 || response.statusCode > 399 || response.headers['location'] == null) {
+          throw StateError('파일 다운로드 주소가 준비되지 않았습니다 (HTTP ${response.statusCode}). 잠시 후 다시 시도해 주세요');
+        }
+        final location = Uri.parse(url).resolve(response.headers['location']!);
+        if (location.scheme != 'https' || location.host.isEmpty || location.userInfo.isNotEmpty) {
+          throw StateError('잘못된 클라우드 다운로드 주소');
+        }
+        return {'url': location.toString()};
+      }
+      if (responseType == 'headers' && response.statusCode < 300) return response.headers;
+      if (responseType == 'xml' && response.statusCode < 300) {
+        Map<String, dynamic> node(XmlElement e) => {
+          'name': e.name.local,
+          if (e.childElements.isEmpty) 'text': e.innerText,
+          'children': e.childElements.map(node).toList(),
+        };
+        return node(XmlDocument.parse(utf8.decode(response.bodyBytes)).rootElement);
+      }
       return _decode(response);
     } finally {
       client.close();
@@ -213,8 +415,16 @@ class CloudSource extends MediaSource {
           final ss = await streamFor(sub.path);
           final r = await MediaSource.downloadSubtitle(ss.url, sub.name, headers: ss.headers);
           if (r != null) refs.add(r);
+          _release(ss.url);
         }
-        return MediaItem(key: key, uri: s.url, title: title, headers: s.headers, subtitles: refs);
+        return MediaItem(
+          key: key,
+          uri: s.url,
+          title: title,
+          headers: s.headers,
+          subtitles: refs,
+          onRelease: () async => _release(s.url),
+        );
       },
     );
   }
@@ -228,7 +438,13 @@ class CloudSource extends MediaSource {
       title: title,
       resolver: () async {
         final s = await streamFor(path);
-        return MediaItem(key: key, uri: s.url, title: title, headers: s.headers);
+        return MediaItem(
+          key: key,
+          uri: s.url,
+          title: title,
+          headers: s.headers,
+          onRelease: () async => _release(s.url),
+        );
       },
     );
   }

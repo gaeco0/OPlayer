@@ -2,7 +2,7 @@
 
 설정 → **확장앱**에서 저장소를 추가하고 목록을 확인한 뒤 설치합니다.
 확장앱은 `.js` 파일이며 APK·앱 재설치 없이 로드합니다. JS 파일 직접 가져오기도 지원합니다.
-현재 SDK는 JavaScript API 1이며 Dart 소스·Flutter 위젯·네이티브 코드를 동적으로 로드하지 않습니다.
+현재 SDK는 JavaScript API 1·2이며 Dart 소스·Flutter 위젯·네이티브 코드를 동적으로 로드하지 않습니다.
 
 공식 저장소 JSON:
 https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/repository.json
@@ -11,6 +11,37 @@ Google Drive·Dropbox·OneDrive는 공식 확장앱으로 제공됩니다. 기�
 기존 동작을 유지하도록 첫 시작에 기본 클라우드 확장앱을 포함하며 삭제 후 저장소에서 다시 설치할 수 있습니다.
 확장앱의 앱 등록 정보는 **설정 → 확장앱 → 해당 확장앱의 설정(톱니바퀴)** 안에서 관리합니다.
 끄거나 삭제해도 등록 정보와 계정은 보관되며, 삭제된 확장앱의 설정 항목은 표시하지 않습니다.
+
+S3 호환 스토리지·Box·네이버 MYBOX도 공식 저장소에서 선택 설치할 수 있습니다.
+세 확장앱은 새 인증 방식을 사용하는 **API 2** 확장앱이므로 API 2 지원 앱으로 먼저 업데이트해야 합니다.
+기존 API 1 확장앱도 계속 사용할 수 있습니다. 저장소 목록의 형식은 그대로 `api: 1`입니다.
+
+| 확장앱 | 해당 확장앱 설정에서 입력할 정보 | 지원 범위 |
+| --- | --- | --- |
+| S3 호환 스토리지 | Endpoint·버킷·리전·Access Key ID·Secret Access Key, 선택적 Session Token | AWS S3·R2·MinIO 등, 경로/가상 호스트 방식, ListObjects V1/V2, 목록 조회·재생 |
+| Box | 사용자 OAuth 앱의 Client ID·Client Secret, 표시된 복귀 주소 등록 | 로그인·토큰 자동 갱신·폴더 탐색·재생 |
+| 네이버 MYBOX | MYBOX 웹에서 생성한 개인 액세스 토큰(PAT) | 일반 폴더 탐색·재생, 암호 폴더·공유받은 폴더는 API 미지원 |
+
+S3 Endpoint는 HTTPS를 사용합니다(로컬 개발용 localhost·127.0.0.1 HTTP 허용). 리전은 서버가 요구하는 값으로
+지정하세요. 예: AWS `ap-northeast-2`, R2 `auto`, MinIO 기본값 `us-east-1`.
+네이버 클라우드 Object Storage는 **MYBOX와 다른 서비스**이며 S3 확장앱에서 `ListObjects V1`을 켭니다.
+버킷 목록 읽기 및 객체 읽기 권한이 필요하며, 업로드·삭제는 지원하지 않습니다.
+접속 정보를 바꿔 다시 연결하면 별도 계정으로 추가됩니다. 기존 계정은 연결 당시의 인증 정보를 계속 사용합니다.
+
+Box는 Developer Console에서 OAuth 2.0 앱과 파일·폴더 읽기 권한을 설정한 뒤 확장앱에 표시되는
+`http://localhost:53682/callback` 복귀 주소를 등록합니다. 모바일도 같은 localhost 방식을 사용하며 로그인 후
+앱으로 돌아오면 연결을 이어갑니다. 조직 정책에 따라 관리자의 앱 승인이 필요할 수 있습니다.
+Client Secret은 Client ID에 연결해 보안 저장소에 보관하므로 새 앱 등록으로 바꿔도 기존 연결의 등록 정보를 덮어쓰지 않습니다.
+
+MYBOX는 PC 웹 설정 → 계정 및 개인 액세스 토큰 관리에서 토큰을 생성합니다. 토큰 만료·폐기 시 새 토큰으로
+재연결해야 합니다. 다운로드 URL이 1회용이므로 앱의 로컬 Range 프록시가 탐색 요청마다 새 URL을 발급받습니다.
+S3와 Box도 재생 중 탐색 시 새 임시 URL을 얻습니다. 서비스별 권한·요금제·API 호출 제한은 해당 서비스 정책을 따릅니다.
+
+공식 API 문서: [AWS SigV4](https://docs.aws.amazon.com/AmazonS3/latest/developerguide/sigv4-query-string-auth.html),
+[Box OAuth](https://developer.box.com/reference/post-oauth2-token),
+[Box 다운로드](https://developer.box.com/guides/downloads/get-url),
+[MYBOX 시작하기](https://developers.mybox.naver.com/getting-started),
+[MYBOX 다운로드](https://developers.mybox.naver.com/docs/files_download).
 
 ## 저장소 JSON
 
@@ -53,7 +84,7 @@ python tools/update_plugin_repository.py
 ## JS 파일 규약
 
 첫 줄은 `// @oplayer `와 JSON 메타데이터이며 나머지는 `globalThis.plugin = {...}`입니다.
-`id`, `name`, `version`, `api: 1`, `kind: "site" | "cloud"`를 지정합니다.
+`id`, `name`, `version`, `api: 1 | 2`, `kind: "site" | "cloud"`를 지정합니다.
 도메인은 정확한 호스트 또는 `*.example.com` 형식입니다. 와일드카드는 하위 호스트만 포함합니다.
 
 ### 사이트 기능
@@ -91,6 +122,25 @@ Android는 WebView 요청 콜백, Windows는 DevTools 요청 차단, Apple WebVi
 - `OPlayer.request(url, {method, body})`: 앱이 Bearer 인증을 붙이고 401 시 한 번 갱신합니다.
   플러그인에 토큰 문자열을 전달하지 않으며, 인증 리디렉션은 따라가지 않습니다.
 - Android Google 계정 선택·인증은 기존 네이티브 브리지를 재사용합니다.
+
+API 2 클라우드 인증·응답 확장:
+
+- `auth: {"type":"s3" | "bearer", "help":"설정 안내", "consoleUrl":"https://..."}`는 해당 확장앱의
+  접속 설정 화면을 제공합니다. `oauth`와 함께 지정하지 않습니다. OAuth 공급자는 기존 `oauth` 메타데이터를 사용합니다.
+- `oauth.requiresClientSecret: true`는 보안 저장소의 Secret을 네이티브 토큰 교환·갱신에 사용합니다.
+  `oauth.pkce: false`는 PKCE 미지원 공급자용입니다. 기본값은 PKCE 사용입니다. OAuth state 검사는 항상 유지합니다.
+  `oauth.loopbackOnMobile: true`는 Box처럼 커스텀 스킴 복귀를 허용하지 않는 공급자용입니다.
+  이 경우 모바일에서도 임시 localhost 서버를 열고 시스템 브라우저에서 로그인합니다.
+- S3 스크립트의 `OPlayer.config`에는 `bucketUrl`, `bucket`, `listV1`만 전달합니다. 개인 토큰·Secret Access Key는
+  JS에 전달하지 않습니다. 사용자 지정 Endpoint의 등록한 버킷 범위만 요청·서명하며 GET·HEAD만 지원합니다.
+- `OPlayer.request(url, {response:"xml"})`는 XML을 `{name, children, text?}` 트리로 반환합니다.
+  `{method:"HEAD",response:"headers"}`는 응답 헤더만 반환합니다.
+  S3의 `{response:"signedUrl"}`는 GET URL만 서명합니다. 키를 반환하거나 임의 호스트를 서명하지 않습니다.
+- `{response:"redirect"}`는 API의 다운로드 리디렉션을 따라가지 않고 `{url}`을 반환합니다.
+  API용 Bearer 헤더는 이 URL로 전송하지 않습니다.
+- `stream()` 결과의 `{url,name,size,refreshEachRequest:true}`는 로컬 Range 프록시를 사용합니다.
+  새 Range 연결에는 `stream({path,refresh:true})`을 다시 호출하므로 만료·1회용 URL을 재발급할 수 있습니다.
+  `refresh:true` 호출은 크기 조회를 생략해도 됩니다. 플레이어 해제·계정 연결 해제 시 로컬 URL을 폐기합니다.
 
 앱 측 실행은 호출마다 새 QuickJS 런타임을 사용합니다. 한 번의 JS 실행·Promise 루프는 200ms,
 힙은 32MB, 호출 전체는 60초·최대 200개 요청으로 제한합니다. 로컬 파일·네이티브 API는 노출하지 않습니다.

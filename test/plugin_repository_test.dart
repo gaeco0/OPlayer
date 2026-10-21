@@ -61,7 +61,10 @@ void main() {
   );
   test('public catalog hashes match checked-in scripts', () async {
     final catalog = jsonDecode(await File('plugins/repository.json').readAsString()) as Map;
-    expect((catalog['plugins'] as List).length, 3);
+    expect(
+      (catalog['plugins'] as List).map((p) => p['id']),
+      containsAll(['cloud.gdrive', 'cloud.dropbox', 'cloud.onedrive', 'cloud.s3', 'cloud.box', 'cloud.mybox']),
+    );
     for (final item in (catalog['plugins'] as List).cast<Map>()) {
       final fileName = Uri.parse(item['downloadUrl'] as String).pathSegments.last;
       expect(sha256.convert(await File('plugins/$fileName').readAsBytes()).toString(), item['sha256']);
