@@ -7,6 +7,7 @@ nPlayer의 UI/UX를 기준으로, 로컬·네트워크·클라우드 재생과 �
 - 다운로드 목록도 공통 PIN·패턴·생체인증으로 잠글 수 있으며, 보호된 작업의 파일명은 알림에서 숨깁니다.
 - 클라우드·사이트 다운로드 보완·광고 차단을 앱 내 확장앱으로 제공합니다. 저장소 JSON URL 추가와 JS 파일 가져오기를 지원합니다.
   공식 저장소 형식과 개발 API는 [확장앱 문서](plugins/README.md)를 참고하세요.
+- v0.1.3: 확장앱 공통 설정·인증 SDK와 HTML·XML·JSON 파서(API 3)를 제공합니다. 같은 SDK로 새 공급자를 추가할 때 앱을 다시 빌드할 필요가 없습니다.
 
 ## 실행
 
@@ -47,7 +48,7 @@ flutter run -d windows   # 또는 macos / android / ios
 |---|---|
 | 로컬 | 폴더 탐색, 폴더 추가, 정렬(이름·날짜·크기, 자연 정렬), 목록/격자, **썸네일 캐시**, 이어보기 진행바 |
 | 네트워크 | **SMB**(Dart SMB 클라이언트 → 로컬 HTTP Range 프록시), **FTP/FTPS**(ftp:// 직접), **SFTP**(비밀번호/개인 키, 호스트 키 고정 → 프록시), **WebDAV**(http(s)+Basic 인증), **UPnP/DLNA** 자동 검색 |
-| 클라우드 | **Google Drive / Dropbox / OneDrive** — 앱 등록 설정, 로그인, 토큰 자동 갱신, 폴더 탐색, 스트리밍 재생 |
+| 클라우드 | **Google Drive / Dropbox / OneDrive / S3 호환 / Box / 네이버 MYBOX** 확장앱 — 자체 설정, 계정 연결, 폴더 탐색, 스트리밍 재생 |
 | 웹 | 내장 브라우저(북마크), 페이지 내 동영상 자동 감지(video 태그·fetch/XHR·리소스 로드), 바로 재생 / 다운로드 |
 | 다운로드 | mp4·webm 등 직접 파일 이어받기, **HLS(m3u8)** 최고 화질 선택·병렬 조각 받기·AES-128 복호화·병합(.ts / fMP4는 .mp4), 일시정지/재개 |
 | 플레이어 | 제스처(탐색·밝기·볼륨·핀치·더블탭·길게 눌러 2배속), 잠금, 화면비, 배속, A-B 반복, 자막 트랙/싱크/크기, 오디오 트랙, 재생목록, 단축키 |
@@ -59,7 +60,7 @@ DRM(Widevine/FairPlay, SAMPLE-AES)으로 보호된 스트림은 재생·다운�
 
 - 로컬·네트워크·클라우드 폴더는 경로별로 정렬 기준(이름·날짜·크기), 오름차순/내림차순, ‘폴더 먼저 표시’를 기억한다. 정렬 메뉴에서 변경하면 즉시 저장되어 폴더 재방문과 앱 재시작 후에도 복원되며, 서버와 하위 폴더별로 독립 적용된다.
 - 앱 복귀 후 현재 폴더 목록은 자동 재조회한다. 앱 잠금이 있으면 해제를 기다리고, 리소스 잠금은 재조회 전에 별도로 인증한다. 네트워크 목록은 캐시를 건너뛰며, 잠긴 리소스를 수동 해제한 뒤에도 목록을 다시 불러온다. 다른 화면 뒤에 가려진 폴더는 해당 화면으로 돌아올 때 갱신한다.
-- Android 8 이상 PiP: 플레이어 버튼 또는 재생 중 홈으로 이동. 작은 창에는 `10초 뒤로 · 재생/일시정지 · 10초 앞으로` 세 버튼만 표시한다.
+- Android 8 이상 PiP: 플레이어 버튼 또는 재생 중 홈으로 이동. 작은 창에는 `뒤로 · 재생/일시정지 · 앞으로` 세 버튼만 표시하며 탐색 숫자·간격은 더블탭 탐색 설정을 따른다.
 - Android 미디어 알림과 잠금 화면에서는 10초 탐색·재생/일시정지·이전/다음 파일 조작을 제공한다. 헤드셋 버튼과 조작 묶음 전환은 사용하지 않는다. 오디오 전용 파일은 앨범 표지 유무와 관계없이 홈 이동 후에도 재생하고, 영상은 PiP 또는 백그라운드 설정을 따른다. 이어폰 분리 시에는 일시정지한다.
 - Android 다운로드는 진행 알림이 있는 dataSync 포그라운드 서비스와 CPU 절전 방지 잠금으로 홈 이동·화면 꺼짐 중 작업을 유지한다. Android 13 이상은 첫 다운로드 때 알림 권한을 요청한다. 알림에서 다운로드 목록 열기·전체 일시정지를 지원하고 완료·실패도 표시한다. 앱 강제 종료·최근 앱에서 작업 제거 시에는 계속 실행하지 않으며, Android의 서비스 시간 제한 시 안전하게 일시정지한다. 실제 기기와 제조사별 절전 정책 검증은 별도로 필요하다.
 - Android에는 FFmpeg를 내장하여 HLS 수신 후 MP4로 스트림 복사하고 분리된 영상·음성을 병합한다. 별도 설치는 필요 없다. Windows/macOS/Linux는 설정에서 외부 FFmpeg를 자동 탐색하거나 지정한다.
@@ -68,13 +69,14 @@ DRM(Widevine/FairPlay, SAMPLE-AES)으로 보호된 스트림은 재생·다운�
 - 브라우저 휠 이동량 40% 적용(파일 목록 휠은 유지), Android/iOS 브라우저와 로컬·네트워크 파일 목록에서 당겨서 새로고침.
 - Android·Windows 설정 → 앱 네트워크: DoH와 ByeDPI 각각 켜기/끄기, HTTPS DoH 쿼리 URL 지정·저장. 내장 브라우저와 HTTP(S) 다운로드·재생에 적용하며, NAS 등 내부 주소와 FTP/SMB/SFTP·외부 출력 기기 자체 통신에는 적용하지 않는다. 설정을 바꾸면 웹페이지를 새로고침하고 영상을 다시 연다.
 - DoH는 RFC 8484 `application/dns-message` POST를 사용한다. DoH 서버의 최초 주소 조회에는 시스템 DNS를 사용하고, 조회 실패 시 일반 DNS로 재시도하지 않는다. ByeDPI v0.17.3 엔진은 앱이 실행·종료를 관리하며 TLS 인증서 검증은 그대로 유지한다. Android는 프록시 설정을 지원하는 System WebView가 필요하다.
+- ‘등록한 리소스에도 DoH·ByeDPI 적용’은 기본 OFF이며 DoH 또는 ByeDPI가 켜져야 선택할 수 있다. 둘 다 끄면 리소스 적용도 자동 OFF·비활성화되고, 다시 켜도 리소스 적용은 사용자가 직접 선택한다. 기존 설정에 명시적으로 저장된 ON은 둘 중 하나가 켜져 있을 때 유지한다.
 - HLS 요청 헤더 재사용, 브라우저에서 받은 재생목록 보존, identity AES-128 키 교체 구간을 페이지의 기존 키 로더로 미리 준비. 사이트 전용 JSON의 암호화된 필드를 원시 AES 키로 사용하지 않는다.
 
 Chromecast·DLNA·PiP는 실제 Android/TV 기기 검증이 필요하다. nPlayer의 모든 기능과 일치하는 구현은 아니며 AirPlay 송신·NFS는 포함하지 않는다.
 
 ## 클라우드 설정 (필수)
 
-설정 → 클라우드 계정 연결에서 OneDrive의 Application (client) ID 또는 Dropbox의 App Key를 입력한다. 첫 연결 시에도 등록 안내가 열린다. 앱 비밀키나 사용자 비밀번호를 APK에 넣지 않는다. 앱 개발자가 공통 키를 지정하려면 `--dart-define=ONEDRIVE_CLIENT_ID=...` / `--dart-define=DROPBOX_APP_KEY=...`로 빌드할 수도 있다.
+설정 → 확장앱 → 해당 확장앱의 설정(톱니바퀴)에서 앱 등록·접속 정보를 입력한다. 첫 연결 시에도 해당 확장앱의 등록 안내가 열린다. Google Drive·Dropbox·OneDrive는 기본 제공하고 S3 호환 스토리지·Box·네이버 MYBOX는 공식 저장소에서 선택 설치한다. 확장앱별 설정·검증·인증 흐름은 JS가 정의하며 비밀값은 기기 보안 저장소에 보관한다. 확장앱을 꺼도 연결 정보는 보관한다. 아래 등록 정보와 [확장앱별 안내](plugins/README.md)를 참고한다.
 
 - OneDrive: Microsoft Entra 앱 등록에서 개인 Microsoft 계정을 포함하는 계정 유형과 모바일 및 데스크톱 플랫폼을 선택한다. 권한은 Files.Read, User.Read, offline_access. 커스텀 복귀 주소 `com.oplayer.oplayer://oauth/onedrive`와 데스크톱 `http://localhost:53682/callback`을 등록한다.
 - Dropbox: Scoped access / Full Dropbox 앱을 만들고 files.metadata.read, files.content.read, account_info.read 권한을 켠다. `com.oplayer.oplayer://oauth/dropbox`와 `http://localhost:53682/callback`을 등록한다.
@@ -103,7 +105,7 @@ Windows 버전을 실행하면 현재 실행 파일 경로를 사용자별 기�
 
 ## Android WebView와 HTTPS 필터링
 
-Android는 시스템 인증서와 사용자가 기기에 설치한 CA 인증서를 신뢰한다. AdGuard HTTPS 필터링을 사용하려면 AdGuard CA가 기기의 사용자 인증서 저장소에 설치되어 있어야 한다. 이 신뢰 설정은 WebView 외 Android 네트워크 API에도 적용될 수 있으며, 호스트명·유효기간·인증서 체인 검증은 유지한다. 내장 브라우저의 감지된 동영상 → 요청 기록에서 리소스 로드 실패·HTTP 오류를 확인할 수 있다.
+Android는 시스템 인증서와 사용자가 기기에 설치한 CA 인증서를 신뢰한다. AdGuard HTTPS 필터링을 사용하려면 AdGuard CA가 기기의 사용자 인증서 저장소에 설치되어 있어야 한다. WebView·Android 네트워크 API뿐 아니라 Dart의 확장앱 저장소·클라우드·다운로드 요청도 Android의 신뢰 저장소를 사용하고 앱 복귀 시 CA 변경을 확인한다. 호스트명·유효기간·인증서 체인 검증은 유지한다. 내장 브라우저의 감지된 동영상 → 요청 기록에서 리소스 로드 실패·HTTP 오류를 확인할 수 있다.
 
 ## 구조
 
@@ -114,6 +116,7 @@ lib/
   core/
     media_item.dart        재생 항목(URI·헤더·자막·지연 resolve)
     settings.dart          앱 설정 (SharedPreferences)
+    plugins/               확장앱 저장소·공통 설정/인증·HTTP·암호·HTML/XML/JSON 파서
     resume_store.dart      이어보기·최근 재생·추가 폴더
     secure_store.dart      비밀번호/토큰 (flutter_secure_storage)
     stream_proxy.dart      127.0.0.1 HTTP Range 프록시 (SMB 재생용)

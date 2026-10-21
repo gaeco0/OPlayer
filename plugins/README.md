@@ -2,7 +2,7 @@
 
 설정 → **확장앱**에서 저장소를 추가하고 목록을 확인한 뒤 설치합니다.
 확장앱은 `.js` 파일이며 APK·앱 재설치 없이 로드합니다. JS 파일 직접 가져오기도 지원합니다.
-현재 SDK는 JavaScript API 1·2이며 Dart 소스·Flutter 위젯·네이티브 코드를 동적으로 로드하지 않습니다.
+v0.1.3은 JavaScript API 1·2·3을 지원하며 Dart 소스·Flutter 위젯·네이티브 코드를 동적으로 로드하지 않습니다.
 
 공식 저장소 JSON:
 https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/repository.json
@@ -16,7 +16,8 @@ S3 호환 스토리지·Box·네이버 MYBOX도 공식 저장소에서 선택 �
 이 문서의 공통 SDK를 포함한 앱으로 한 번 업데이트하면, 이후 같은 SDK를 사용하는 공급자는 JS 파일·저장소 목록만
 추가하면 됩니다. 공급자별 설정·서버 주소·인증 흐름을 추가할 때 앱을 다시 빌드하지 않습니다.
 새 OS 네이티브 기능처럼 SDK 자체에 없는 기능을 추가할 때만 호스트 앱 변경이 필요합니다.
-기존 API 1 확장앱도 계속 사용할 수 있습니다. 저장소 목록의 형식은 그대로 `api: 1`입니다.
+기존 API 1·2 확장앱도 계속 사용할 수 있습니다. 새 파서 API가 필요한 확장앱은 `api: 3`을 선언해
+미지원 앱에서 설치되지 않게 합니다. 저장소 목록 자체의 형식은 그대로 `api: 1`입니다.
 
 | 확장앱 | 해당 확장앱 설정에서 입력할 정보 | 지원 범위 |
 | --- | --- | --- |
@@ -86,7 +87,7 @@ python tools/update_plugin_repository.py
 ## JS 파일 규약
 
 첫 줄은 `// @oplayer `와 JSON 메타데이터이며 나머지는 `globalThis.plugin = {...}`입니다.
-`id`, `name`, `version`, `api: 1 | 2`, `kind: "site" | "cloud"`를 지정합니다.
+`id`, `name`, `version`, `api: 1 | 2 | 3`, `kind: "site" | "cloud"`를 지정합니다.
 도메인은 정확한 호스트 또는 `*.example.com` 형식입니다. 와일드카드는 하위 호스트만 포함합니다.
 
 ### 사이트 기능
@@ -195,6 +196,49 @@ HMAC 인증·세션 갱신·목록·재생 주소를 구현하는 가상 서비�
 - `stream()` 결과의 `{url,name,size,refreshEachRequest:true}`는 로컬 Range 프록시를 사용합니다.
   새 Range 연결에는 `stream({path,refresh:true})`을 다시 호출하므로 만료·1회용 URL을 재발급할 수 있습니다.
   `refresh:true` 호출은 크기 조회를 생략해도 됩니다. 플레이어 해제·계정 연결 해제 시 로컬 URL을 폐기합니다.
+
+### HTML·XML·JSON 파서 (API 3, v0.1.3 이상)
+
+클라우드 함수·사이트의 `resolveDownload`·WebView `page`에서 같은 `OPlayer.parse` 인터페이스를 사용합니다.
+앱 측 HTML 파서는 Dart 공식 [html](https://pub.dev/packages/html), XML은 기존
+[xml](https://pub.dev/packages/xml), JSON은 JS 표준 `JSON.parse`를 사용합니다.
+페이지 훅은 WebView의 `DOMParser`를 사용하며 파싱한 노드를 현재 페이지에 삽입하지 않습니다.
+앱 측 파서는 스크립트를 실행하거나 외부 주소·DTD·엔티티를 읽지 않습니다.
+
+```javascript
+const text = await OPlayer.request('https://example.com/files', {response:'text'});
+const html = await OPlayer.parse.html(text);
+const links = await html.querySelectorAll('a.media[href]');
+const files = links.map(a => ({name:a.textContent.trim(), url:a.getAttribute('href')}));
+const first = await html.querySelector('#featured'); // 없으면 null
+await html.dispose();
+
+const xml = await OPlayer.parse.xml('<feed xmlns:m="urn:media"><m:item id="1"><![CDATA[A < B]]></m:item></feed>');
+const items = await xml.findAllElements('item', 'urn:media');
+const name = items[0].textContent;
+const id = items[0].getAttribute('id');
+await xml.dispose();
+
+const json = OPlayer.parse.json('{"files":[{"name":"video.mp4"}]}');
+const fileName = json.files[0].name;
+```
+
+- `html(text)`·`xml(text)`와 모든 노드 조회는 `await`합니다. `json(text)`는 동기 함수이며 객체·배열·원시 값을 반환합니다.
+- 문서·노드는 읽기 전용입니다. `name`, `localName`, `namespaceUri`, `attributes`, `textContent`,
+  `getAttribute(name)`을 제공합니다. 없는 속성은 `null`입니다. 상대 URL은 자동으로 절대 URL로 바꾸지 않습니다.
+- HTML: `querySelector(css)`·`querySelectorAll(css)`로 하위 요소를 찾습니다. 태그·ID·클래스·속성·자식/후손
+  선택자를 지원합니다. 브라우저의 모든 최신 CSS 의사 선택자가 앱 측 파서에 구현되어 있지는 않습니다.
+- XML: `findElements(name, namespace = null)`는 직접 자식, `findAllElements(name, namespace = null)`는 모든
+  하위 요소를 찾습니다. namespace 생략 시 `m:item` 같은 한정 이름으로, URI 지정 시 로컬 이름+URI로 찾습니다.
+  이름·namespace의 `'*'`는 와일드카드입니다. CDATA·표준 엔티티·네임스페이스를 보존하며 DTD 선언은 거부합니다.
+- 공통: `children()`은 직접 자식 요소 배열을 반환합니다. `dispose()`는 해당 문서와 모든 자식의 핸들을 폐기합니다.
+  앱 측 문서는 JS 호출 종료 시에도 자동으로 정리됩니다. 페이지 훅은 조회를 마친 뒤 직접 폐기하세요.
+- 입력은 문서당 1Mi UTF-16 코드 단위, HTML/XML은 호출당 최대 16문서·총 8Mi 코드 단위·문서당 20,000노드·깊이 128입니다.
+  조회 결과는 최대 2,000개·직렬화 JSON 2Mi 코드 단위, 선택자는 1,024자입니다. 초과·문법 오류는 예외로 처리합니다.
+  앱 측 파서 호출도 HTTP·암호 연산과 합쳐 최대 200회·60초 제한을 따릅니다.
+- 기존 `response:'xml'`의 `{name,children,text?}` 응답은 그대로 유지합니다. 새 조회 API를 쓰려면
+  `response:'text'`로 받은 뒤 파싱하세요. [실행 가능한 예제](examples/site.parser.example.js)와
+  `test/plugin_parser_test.dart`에서 HTML 다운로드 보완·XML·JSON·실패 처리를 확인할 수 있습니다.
 
 앱 측 실행은 호출마다 새 QuickJS 런타임을 사용합니다. 한 번의 JS 실행·Promise 루프는 200ms,
 힙은 32MB, 호출 전체는 60초·최대 200개 요청으로 제한합니다. 로컬 파일·네이티브 API는 노출하지 않습니다.

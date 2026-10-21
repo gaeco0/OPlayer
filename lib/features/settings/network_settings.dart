@@ -43,9 +43,11 @@ class NetworkSettings extends StatelessWidget {
             ),
             SwitchListTile(
               title: const Text('등록한 리소스에도 DoH·ByeDPI 적용'),
-              subtitle: const Text('브라우저·다운로드는 한 묶음으로 적용합니다. 켜면 등록한 WebDAV·클라우드 등의 HTTP(S) 연결에도 적용합니다.'),
+              subtitle: const Text(
+                'DoH 또는 ByeDPI를 켜면 선택할 수 있습니다. 브라우저·다운로드는 한 묶음이며, 켜면 등록한 WebDAV·클라우드 등의 HTTP(S) 연결에도 적용합니다.',
+              ),
               value: settings.networkForResources,
-              onChanged: available ? (value) => apply(resources: value) : null,
+              onChanged: available && settings.networkEnabled ? (value) => apply(resources: value) : null,
             ),
             SwitchListTile(
               title: const Text('DNS over HTTPS (DoH)'),

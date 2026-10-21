@@ -47,7 +47,7 @@ class OPlugin {
     final first = source.trimLeft().split('\n').first;
     if (!first.startsWith('// @oplayer ')) throw const FormatException('확장앱 메타데이터가 없습니다');
     final meta = jsonDecode(first.substring(12)) as Map<String, dynamic>;
-    if (![1, 2].contains(meta['api']) ||
+    if (![1, 2, 3].contains(meta['api']) ||
         !RegExp(r'^[a-z][a-z0-9._-]{1,79}$').hasMatch('${meta['id']}') ||
         meta['name'] is! String ||
         '${meta['name']}'.isEmpty ||
@@ -143,8 +143,8 @@ class OPlugin {
         throw const FormatException('잘못된 복귀 주소 안내');
       }
     }
-    if (plugin.cloud && plugin.authType != 'oauth' && meta['api'] != 2) {
-      throw const FormatException('이 인증 방식에는 확장앱 API 2가 필요합니다');
+    if (plugin.cloud && plugin.authType != 'oauth' && (meta['api'] as int) < 2) {
+      throw const FormatException('이 인증 방식에는 확장앱 API 2 이상이 필요합니다');
     }
     if (plugin.cloud && plugin.authType == 'oauth') {
       for (final key in ['authEndpoint', 'tokenEndpoint']) {

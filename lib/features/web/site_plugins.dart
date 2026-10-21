@@ -9,6 +9,7 @@ import '../../core/plugins/plugin_runtime.dart';
 import '../../core/plugins/plugin_store.dart';
 import '../../core/plugins/plugin_values.dart';
 import '../../core/plugins/plugin_http.dart';
+import '../../core/plugins/plugin_parser.dart';
 import 'request_headers.dart';
 
 String sitePluginScript(OPlugin p) =>
@@ -20,14 +21,16 @@ String sitePluginScript(OPlugin p) =>
   if (window[marker]) return; window[marker] = true;
   try {
     const config = Object.freeze(${jsonEncode(PluginStore.instance.publicSettings(p))});
-    const sandbox = {OPlayer:Object.freeze({config})};
+    $pluginParserFactory
+    $pluginPageParser
+    const sandbox = {OPlayer:Object.freeze({config,parse:createOPlayerPageParser()})};
     (function(globalThis,OPlayer) { ${p.source}\n }).call(sandbox, sandbox, sandbox.OPlayer);
     const api = Object.freeze({
       config,
       reportMedia: (url, hint = '') => window.flutter_inappwebview?.callHandler('oplayerMedia',
         new URL(url, location.href).href, document.title, hint, 0, location.href)
     });
-    if (typeof sandbox.plugin?.page === 'function') sandbox.plugin.page(api);
+    if (typeof sandbox.plugin?.page === 'function') Promise.resolve(sandbox.plugin.page(api)).catch(e => console.warn('OPlayer extension error', e));
   } catch(e) { console.warn('OPlayer extension error', e); }
 })();''';
 
