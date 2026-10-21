@@ -9,12 +9,14 @@ import 'bye_dpi.dart';
 import 'doh_resolver.dart';
 import 'local_proxy.dart';
 import 'tunnel_socket.dart';
+import 'android_trust_store.dart';
 
 class NetworkService extends ChangeNotifier with WidgetsBindingObserver {
   NetworkService._();
   static final instance = NetworkService._();
   static bool get supported => Platform.isAndroid || Platform.isWindows;
   final _engine = ByeDpi();
+  final _trust = AndroidTrustStore();
   LocalProxy? _proxy;
   DohResolver? _resolver;
   String? error;
@@ -27,12 +29,11 @@ class NetworkService extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> init() async {
     if (!supported || _proxy != null) return;
-    final bootstrap = HttpClient()..findProxy = (_) => 'DIRECT';
-    bootstrap.connectionTimeout = const Duration(seconds: 10);
+    await _refreshTrust();
+    final bootstrap = _bootstrapClient();
     _resolver = DohResolver(Uri.parse(AppSettings.instance.dohUrl), bootstrap);
     _proxy = LocalProxy(_connect);
     await _proxy!.start();
-    bootstrap.findProxy = (_) => _bye ? 'PROXY 127.0.0.1:$port' : 'DIRECT';
     HttpOverrides.global = _ProxyOverrides(this);
     WidgetsBinding.instance.addObserver(this);
     _engine.onExit = () {
@@ -60,7 +61,28 @@ class NetworkService extends ChangeNotifier with WidgetsBindingObserver {
       : 'DIRECT';
 
   HttpClient createHttpClient({bool browser = false}) =>
-      HttpClient()..findProxy = (uri) => findProxy(uri, browser: browser);
+      HttpClient(context: _trust.context)..findProxy = (uri) => findProxy(uri, browser: browser);
+
+  HttpClient _bootstrapClient() => HttpClient(context: _trust.context)
+    ..connectionTimeout = const Duration(seconds: 10)
+    ..findProxy = (_) => _bye && port != null ? 'PROXY 127.0.0.1:$port' : 'DIRECT';
+
+  Future<void> _refreshTrust() async {
+    final before = _trust.context;
+    try {
+      await _trust.refresh();
+    } catch (e) {
+      error = 'Android 인증서 저장소 확인 실패: $e';
+      notifyListeners();
+    } finally {
+      if (!identical(before, _trust.context) && _resolver != null) {
+        final previous = _resolver!;
+        _resolver = DohResolver(previous.endpoint, _bootstrapClient());
+        previous.clear();
+        previous.client.close();
+      }
+    }
+  }
 
   String? proxyFor(Uri uri, {bool browser = false}) => findProxy(uri, browser: browser) == 'DIRECT' ? null : proxyUrl;
 
@@ -147,6 +169,7 @@ class NetworkService extends ChangeNotifier with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_refreshTrust());
     if (state == AppLifecycleState.detached) unawaited(_engine.stop());
   }
 }
@@ -159,5 +182,5 @@ class _ProxyOverrides extends HttpOverrides {
   final NetworkService network;
   @override
   HttpClient createHttpClient(SecurityContext? context) =>
-      super.createHttpClient(context)..findProxy = network.findProxy;
+      super.createHttpClient(context ?? network._trust.context)..findProxy = network.findProxy;
 }
