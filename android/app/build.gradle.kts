@@ -90,6 +90,7 @@ flutter {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     implementation("io.github.jamaismagic.ffmpeg:ffmpeg-kit-main-min-16kb:6.1.4")
     implementation("com.google.android.gms:play-services-cast-framework:22.3.1")
     implementation("androidx.appcompat:appcompat:1.7.1")

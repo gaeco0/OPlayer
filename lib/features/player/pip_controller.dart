@@ -9,7 +9,7 @@ class PlayerPip extends ChangeNotifier {
   static const _channel = MethodChannel('oplayer/pip');
   bool available = false;
   bool active = false;
-  VoidCallback? onPlayPause;
+  Future<void> Function(String command)? onCommand;
   VoidCallback? onBackground;
   String? _lastState;
 
@@ -21,7 +21,12 @@ class PlayerPip extends ChangeNotifier {
           active = call.arguments == true;
           notifyListeners();
         case 'playPause':
-          onPlayPause?.call();
+        case 'rewind':
+        case 'forward':
+        case 'audioOnly':
+        case 'previous':
+        case 'next':
+          await onCommand?.call(call.method);
         case 'backgrounded':
           onBackground?.call();
       }
@@ -34,13 +39,25 @@ class PlayerPip extends ChangeNotifier {
     }
   }
 
-  Future<void> update({required bool enabled, required bool playing, double aspect = 16 / 9}) async {
+  Future<void> update({
+    required bool enabled,
+    required bool playing,
+    double aspect = 16 / 9,
+    bool canPrevious = false,
+    bool canNext = false,
+  }) async {
     if (!available) return;
-    final state = '$enabled/$playing/$aspect';
+    final state = '$enabled/$playing/$aspect/$canPrevious/$canNext';
     if (_lastState == state) return;
     _lastState = state;
     try {
-      await _channel.invokeMethod<void>('update', {'active': enabled, 'playing': playing, 'aspect': aspect});
+      await _channel.invokeMethod<void>('update', {
+        'active': enabled,
+        'playing': playing,
+        'aspect': aspect,
+        'canPrevious': canPrevious,
+        'canNext': canNext,
+      });
     } on PlatformException {
       _lastState = null;
     }

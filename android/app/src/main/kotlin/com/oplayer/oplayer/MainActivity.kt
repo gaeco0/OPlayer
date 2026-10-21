@@ -39,12 +39,22 @@ class MainActivity : FlutterActivity() {
     private var exitToast: Toast? = null
     private var playerActive = false
     private var playing = false
+    private var pipActionsPage = 0
+    private var canPrevious = false
+    private var canNext = false
     private var aspect = 16.0 / 9.0
     private var receiverRegistered = false
     private val toggleAction = "com.oplayer.oplayer.PIP_TOGGLE"
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == toggleAction) pipChannel.invokeMethod("playPause", null)
+            if (intent?.action != toggleAction || !playerActive) return
+            val command = intent.getStringExtra("command") ?: "playPause"
+            if (command == "more") {
+                pipActionsPage++
+                if (supportsPip()) setPictureInPictureParams(pipParams())
+            } else if (command in listOf("rewind", "forward", "playPause", "audioOnly", "previous", "next")) {
+                pipChannel.invokeMethod(command, null)
+            }
         }
     }
 
@@ -148,6 +158,9 @@ class MainActivity : FlutterActivity() {
                         .putExtra("playing", call.argument<Boolean>("playing") ?: false)
                         .putExtra("foreground", call.argument<Boolean>("foreground") ?: false)
                         .putExtra("remote", call.argument<Boolean>("remote") ?: false)
+                        .putExtra("canAudioOnly", call.argument<Boolean>("canAudioOnly") ?: false)
+                        .putExtra("canPrevious", call.argument<Boolean>("canPrevious") ?: false)
+                        .putExtra("canNext", call.argument<Boolean>("canNext") ?: false)
                         .putExtra("position", call.argument<Number>("position")?.toLong() ?: 0L)
                         .putExtra("duration", call.argument<Number>("duration")?.toLong() ?: 0L)
                         .putExtra("rate", call.argument<Number>("rate")?.toFloat() ?: 1f)
@@ -163,8 +176,11 @@ class MainActivity : FlutterActivity() {
                 "available" -> result.success(supportsPip())
                 "background" -> { moveTaskToBack(true); result.success(null) }
                 "update" -> {
+                    if (!playerActive) pipActionsPage = 0
                     playerActive = call.argument<Boolean>("active") ?: false
                     playing = call.argument<Boolean>("playing") ?: false
+                    canPrevious = call.argument<Boolean>("canPrevious") ?: false
+                    canNext = call.argument<Boolean>("canNext") ?: false
                     aspect = (call.argument<Number>("aspect")?.toDouble() ?: aspect).coerceIn(0.42, 2.39)
                     if (supportsPip()) setPictureInPictureParams(pipParams())
                     result.success(null)
@@ -192,17 +208,23 @@ class MainActivity : FlutterActivity() {
 
     @RequiresApi(26)
     private fun pipParams(): PictureInPictureParams {
-        val intent = Intent(toggleAction).setPackage(packageName)
-        val pending = PendingIntent.getBroadcast(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val action = RemoteAction(
-            Icon.createWithResource(this, if (playing) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play),
-            if (playing) "일시정지" else "재생", "재생/일시정지", pending
-        )
+        val commands = playbackActionPage(
+            listOf("rewind", "forward", "playPause", "audioOnly", "previous", "next"),
+            maxNumPictureInPictureActions, pipActionsPage)
+        val actions = commands.map { command ->
+            val intent = Intent(toggleAction).setPackage(packageName).putExtra("command", command)
+            val pending = PendingIntent.getBroadcast(this, command.hashCode(), intent,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            val title = playbackActionTitle(command, playing)
+            RemoteAction(Icon.createWithResource(this, playbackActionIcon(command, playing)), title, title, pending).apply {
+                isEnabled = when (command) { "previous" -> canPrevious; "next" -> canNext; else -> true }
+            }
+        }
         val rect = Rect()
         window.decorView.getGlobalVisibleRect(rect)
         val builder = PictureInPictureParams.Builder()
             .setAspectRatio(Rational((aspect * 1000).toInt(), 1000))
-            .setActions(listOf(action))
+            .setActions(actions)
         if (!rect.isEmpty) builder.setSourceRectHint(rect)
         if (Build.VERSION.SDK_INT >= 31) builder.setAutoEnterEnabled(playerActive && playing)
         return builder.build()
