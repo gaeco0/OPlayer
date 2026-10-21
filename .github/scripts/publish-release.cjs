@@ -9,6 +9,10 @@ module.exports = async ({github, context, core}) => {
   if (context.eventName !== 'push' || context.ref !== `refs/tags/${tag}`) {
     throw new Error(`Release requires a pushed ${tag} tag matching pubspec.yaml`);
   }
+  const section = fs.readFileSync('CHANGELOG.md', 'utf8').split(/^## /m)
+    .find(value => value.split(/\r?\n/, 1)[0].trim() === `[${match[1]}]`);
+  const releaseNotes = section?.split(/\r?\n/).slice(1).join('\n').trim();
+  if (!releaseNotes) throw new Error(`Missing release notes for ${tag} in CHANGELOG.md`);
   const repository = {owner: context.repo.owner, repo: context.repo.repo};
   const files = fs.readdirSync('release-assets').filter(name => name !== 'SHA256SUMS.txt').sort();
   if (files.filter(name => name.endsWith('.apk')).length !== 6 ||
@@ -49,6 +53,7 @@ module.exports = async ({github, context, core}) => {
   await github.rest.repos.updateRelease({
     ...repository, release_id: release.id, draft: false,
     body: [
+      releaseNotes, '', '---', '',
       'Windows · Android · Android TV · Linux · macOS 배포 빌드입니다.', '',
       '- Android: mobile APK / Android TV: tv APK (arm64-v8a, armeabi-v7a, x86_64)',
       '- Windows x64: ZIP을 풀고 oplayer.exe 실행',

@@ -10,6 +10,8 @@ const publish = require('./publish-release.cjs');
   try {
     process.chdir(temporary);
     fs.writeFileSync('pubspec.yaml', 'version: 0.1.0+2\n');
+    const changelog = '# 변경 내역\n\n## [0.1.0]\n\n### 추가\n\n- 새 기능 설명\n\n## [0.0.9]\n\n- 이전 변경\n';
+    fs.writeFileSync('CHANGELOG.md', changelog);
     fs.mkdirSync('release-assets');
     const calls = [];
     const github = {paginate: async () => [], rest: {repos: {
@@ -17,7 +19,12 @@ const publish = require('./publish-release.cjs');
       createRelease: async args => {assert.equal(args.draft, true); return {data: {id: 1, html_url: 'test'}};},
       listReleaseAssets: () => {},
       uploadReleaseAsset: async args => calls.push(args.name),
-      updateRelease: async args => {assert.equal(args.draft, false); calls.push('published');},
+      updateRelease: async args => {
+        assert.equal(args.draft, false);
+        assert.ok(args.body.includes('새 기능 설명'));
+        assert.ok(!args.body.includes('이전 변경'));
+        calls.push('published');
+      },
     }}};
     const args = {github, context: {repo: {owner: 'test', repo: 'test'}, sha: 'commit', eventName: 'push', ref: 'refs/tags/v0.1.0'}, core: {summary: {addLink: () => ({write: async () => {}})}}};
     args.context.ref = 'refs/heads/main';
@@ -28,6 +35,11 @@ const publish = require('./publish-release.cjs');
     args.context.eventName = 'workflow_dispatch';
     await assert.rejects(() => publish(args), /requires a pushed/);
     args.context.eventName = 'push';
+    fs.writeFileSync('CHANGELOG.md', '## [Unreleased]\n\n- 아직 배포하지 않은 변경\n');
+    await assert.rejects(() => publish(args), /Missing release notes/);
+    fs.writeFileSync('CHANGELOG.md', '## [0.1.0]');
+    await assert.rejects(() => publish(args), /Missing release notes/);
+    fs.writeFileSync('CHANGELOG.md', changelog);
     await assert.rejects(() => publish(args), /Expected six APKs/);
     for (const flavor of ['mobile', 'tv']) {
       for (const abi of ['arm64-v8a', 'armeabi-v7a', 'x86_64']) {
