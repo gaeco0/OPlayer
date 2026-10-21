@@ -39,9 +39,17 @@ jobs:
       - run: flutter build windows --release --no-pub
 
   android:
-    name: Android build
+    name: ${{ matrix.name }} build
     runs-on: ubuntu-24.04
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Android
+            flavor: mobile
+          - name: Android TV
+            flavor: tv
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -94,7 +102,7 @@ jobs:
           PY
       - name: Build signed release APKs
         if: github.event_name != 'pull_request'
-        run: flutter build apk --release --split-per-abi --no-pub
+        run: flutter build apk --release --flavor "${{ matrix.flavor }}" --split-per-abi --no-pub
       - name: Verify APK signatures
         if: github.event_name != 'pull_request'
         run: |
@@ -103,15 +111,52 @@ jobs:
           done
       - name: Build pull request without signing secrets
         if: github.event_name == 'pull_request'
-        run: flutter build apk --debug --no-pub
+        run: flutter build apk --debug --flavor "${{ matrix.flavor }}" --no-pub
       - name: Remove temporary signing files
         if: always()
         run: rm -f android/key.properties android/keystores/oplayer-release.p12
 
+  linux:
+    name: Linux build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libstdc++-12-dev libsecret-1-dev libjsoncpp-dev libmpv-dev libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libjpeg-dev libpulse-dev libasound2-dev libepoxy-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build linux --release --no-pub
+
+  macos:
+    name: macOS build
+    runs-on: macos-15
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter config --no-enable-swift-package-manager
+      - run: flutter pub get
+      - run: flutter build macos --release --no-pub
+
   release:
     name: Publish source release
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: [windows, android]
+    needs: [windows, android, linux, macos]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -143,7 +188,7 @@ jobs:
               target_commitish: context.sha,
               name: `OPlayer ${tag}`,
               body: [
-                'Android 및 Windows 빌드와 테스트를 통과한 소스 릴리스입니다.',
+                'Windows·Android·Android TV·Linux·macOS 빌드를 통과한 소스 릴리스입니다.',
                 '',
                 '사용자 요청에 따라 APK·ZIP 등 배포 파일은 첨부하지 않습니다.',
                 '빌드 방법과 기능은 README.md, 라이선스는 LICENSE를 확인하세요.',

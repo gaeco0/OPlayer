@@ -1,6 +1,6 @@
 # OPlayer
 
-Android · iOS · Windows · macOS 동영상 플레이어 (Flutter + media_kit/libmpv).
+Android · Android TV · iOS · Windows · Linux · macOS 동영상 플레이어 (Flutter + media_kit/libmpv).
 nPlayer의 UI/UX를 기준으로, 로컬·네트워크·클라우드 재생과 웹 페이지 동영상 받기를 지원한다.
 
 ## 실행
@@ -19,16 +19,18 @@ flutter run -d windows   # 또는 macos / android / ios
   - 빌드 환경(미니PC): JDK 17 `D:\Apps\jdk-17`, Android SDK `D:\Apps\Android\Sdk`
     (platform-tools, platforms 36/37, build-tools 36, NDK 28.2.13676358, cmake 3.22.1) — `flutter config`에 등록됨
   - Gradle 8.14.3 / AGP 8.11.1 / Kotlin 2.2.20, Java 17. `kotlin.incremental=false`(C:/D: 드라이브 분리 문제)
-  - `flutter build apk --release --split-per-abi` → `build/app/outputs/flutter-apk/` (배포용 키 서명)
+  - `flutter build apk --release --flavor mobile --split-per-abi` → `build/app/outputs/flutter-apk/` (배포용 키 서명)
+  - Android TV는 `--flavor tv`로 별도 빌드한다. 패키지 ID는 `com.oplayer.oplayer.tv`이고 같은 배포 키를 사용한다. TV 런처·Leanback 배너와 터치스크린 비필수 설정을 포함하며, 리모컨 조작은 실제 TV 기기에서 별도 검증이 필요하다.
   - 릴리스 서명: `android/key.properties`의 로컬 설정과 `android/keystores/oplayer-release.p12`를 사용한다. 둘 다 비공개 파일이며 저장소와 APK에 포함하지 않는다. 이 두 파일은 안전한 별도 위치에도 백업하고, 이후 업데이트마다 같은 키를 사용해야 한다. 키 또는 설정이 없으면 릴리스 빌드를 중단하며 디버그 키로 대체하지 않는다. 디버그 빌드는 기존 개발용 키를 유지한다.
   - 기존 디버그 서명 앱에는 새 배포용 서명 APK를 덮어설치할 수 없다. 최초 전환 시 데이터와 다운로드 파일을 보존한 뒤 기존 앱을 제거하고 설치해야 한다. 배포용 키는 Google Play 심사·개발자 인증 또는 Play Protect 검사 면제를 의미하지 않는다.
 - **iOS**: 앱 Documents 폴더가 기본 루트 (파일 앱 → OPlayer 폴더). Podfile `platform :ios, '13.0'` 이상.
-- **macOS**: 샌드박스 권한(네트워크 클라이언트/서버, 사용자 선택 파일, 다운로드 폴더) 설정됨.
+- **Linux**: `flutter build linux --release`. GTK 러너와 Linux 플러그인 빌드에 필요한 패키지는 Actions의 Linux 단계에 명시한다.
+- **macOS**: macOS 12 이상, CocoaPods, `flutter build macos --release`. 샌드박스 권한(네트워크 클라이언트/서버, 사용자 선택 파일, 다운로드 폴더) 설정됨. CI는 로컬 ad-hoc 서명으로 빌드를 검증하며 Apple Developer ID 서명·공증은 포함하지 않는다.
 
 ## GitHub Actions 빌드와 릴리스
 
-- `devel`·`main`에 push하면 Android 서명 릴리스 APK와 Windows 릴리스를 빌드한다. Windows에서 정적 분석·Dart 테스트·브라우저 JavaScript 테스트도 실행한다. PR의 Android 빌드는 서명 Secrets 없이 디버그 빌드로 검증한다.
-- `main`의 모든 검증과 빌드가 성공하면 `pubspec.yaml` 버전으로 `v0.1.0` 형태의 태그·GitHub Release를 Actions에서 생성한다. 같은 버전의 릴리스는 덮어쓰지 않으므로 다음 릴리스 전에는 버전을 올린다. Actions 탭의 수동 실행도 지원한다.
+- `devel`·`main`에 push하면 Windows, Android(mobile), Android TV(tv), Linux(x64), macOS(Apple Silicon 러너)의 릴리스를 빌드한다. Android·TV는 같은 배포 키로 각각 서명한다. Windows에서 정적 분석·Dart 테스트·브라우저 JavaScript 테스트도 실행한다. PR의 Android·TV 빌드는 서명 Secrets 없이 디버그 빌드로 검증한다.
+- `main`의 다섯 빌드와 검증이 모두 성공하면 `pubspec.yaml` 버전으로 `v0.1.0` 형태의 태그·GitHub Release를 Actions에서 생성한다. 같은 버전의 릴리스는 덮어쓰지 않으므로 다음 릴리스 전에는 버전을 올린다. Actions 탭의 수동 실행도 지원한다.
 - APK·ZIP 등 배포 파일은 GitHub Release와 Actions 아티팩트에 첨부하지 않는다. GitHub가 자동 제공하는 소스 코드 압축 파일만 표시된다.
 - 저장소 Actions Secrets에 `ANDROID_KEYSTORE_BASE64`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_PASSWORD`, `ANDROID_KEY_ALIAS`를 등록한다. 키와 비밀번호는 빌드 중 임시 복원 후 삭제하며, 저장소·릴리스에 커밋하거나 업로드하지 않는다.
 - 기본 `main`의 `LICENSE`는 `devel`과 `main`에서 그대로 유지한다. `third_party/`의 외부 구성요소는 각 디렉터리의 라이선스도 함께 적용된다.
