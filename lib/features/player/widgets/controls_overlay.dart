@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../app/theme.dart';
 import '../player_controller.dart';
-import 'gesture_layer.dart' show isMobile;
 import 'seek_bar.dart';
 
 enum PanelKind { none, speed, subtitle, audio, aspect, playlist, more }
@@ -32,7 +31,7 @@ class ControlsOverlay extends StatelessWidget {
   final VoidCallback onBack;
   final ValueChanged<PanelKind> onPanel;
   final ValueChanged<String> onToast;
-  final VoidCallback onRotate;
+  final VoidCallback? onRotate;
   final IconData orientationIcon;
   final VoidCallback? onPip;
   final VoidCallback? onCast;
@@ -109,8 +108,8 @@ class ControlsOverlay extends StatelessWidget {
                         const Spacer(),
                         _CenterControls(c: c),
                         const Spacer(),
-                        if (isMobile)
-                          _RoundButton(icon: orientationIcon, onTap: onRotate)
+                        if (onRotate != null)
+                          _RoundButton(icon: orientationIcon, onTap: onRotate!)
                         else
                           const SizedBox(width: 48),
                         const SizedBox(width: 16),

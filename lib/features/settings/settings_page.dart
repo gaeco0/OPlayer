@@ -16,6 +16,7 @@ import 'privacy_settings.dart';
 import 'appearance_settings.dart';
 import 'plugins_page.dart';
 import '../player/desktop_window.dart';
+import '../player/player_orientation.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key, required this.onOpenDrawer});
@@ -47,6 +48,14 @@ class SettingsPage extends StatelessWidget {
             const NetworkSettings(),
             const PrivacySettings(),
             const _Header('재생'),
+            if (PlayerOrientation.supported)
+              _choice<PlaybackOrientation>(
+                context,
+                title: '플레이어 화면 회전',
+                value: s.playbackOrientation,
+                options: {for (final mode in PlaybackOrientation.values) mode: mode.label},
+                onChanged: (v) => s.update((x) => x.playbackOrientation = v),
+              ),
             if (Platform.isWindows)
               ListTile(
                 title: const Text('Windows 기본 미디어 플레이어로 설정'),

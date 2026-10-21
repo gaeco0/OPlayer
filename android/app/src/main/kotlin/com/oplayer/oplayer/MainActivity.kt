@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.graphics.Rect
 import android.graphics.drawable.Icon
@@ -60,6 +61,32 @@ class MainActivity : FlutterActivity() {
         networkTrustBridge = NetworkTrustBridge(flutterEngine.dartExecutor.binaryMessenger)
         googleDriveBridge = GoogleDriveBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         privacyBridge = PrivacyBridge(this, flutterEngine.dartExecutor.binaryMessenger)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "oplayer/orientation")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "set") {
+                    result.notImplemented()
+                } else {
+                    val orientation = when (call.arguments as? String) {
+                        "landscape" -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                        "portrait" -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        "auto" -> ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+                        "system" -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                        else -> null
+                    }
+                    if (orientation == null) {
+                        result.error("ORIENTATION", "Unknown orientation mode", null)
+                    } else if ((resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_TELEVISION) {
+                        result.success(null)
+                    } else {
+                        try {
+                            requestedOrientation = orientation
+                            result.success(null)
+                        } catch (e: IllegalStateException) {
+                            result.error("ORIENTATION", e.message, null)
+                        }
+                    }
+                }
+            }
         downloadChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "oplayer/downloads")
         DownloadService.events = downloadChannel
         downloadChannel.setMethodCallHandler { call, result ->
