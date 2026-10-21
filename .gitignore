@@ -45,6 +45,7 @@ migrate_working_dir/
 !.env.example
 /.agents/
 /.codex/
+/.codex-remote-attachments/
 /.aws/
 /android/.kotlin/
 /packages/quickjs_engine/android/.cxx/
