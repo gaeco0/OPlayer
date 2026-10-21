@@ -62,6 +62,34 @@ abstract class MediaSource {
   /// 업로드(다운로드 저장 위치로 사용) 지원 여부
   bool get canUpload => false;
 
+  bool get canDelete => false;
+
+  bool canDeleteEntry(RemoteEntry entry) {
+    if (!canDelete) return false;
+    try {
+      deletionPath(entry);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> delete(RemoteEntry entry) => throw UnsupportedError('$scheme 는 삭제를 지원하지 않습니다');
+
+  /// Filesystem-backed sources must never delete the configured root or escape it.
+  String deletionPath(RemoteEntry entry) {
+    String normalized(String value) => p.posix.normalize('/${value.replaceFirst(RegExp(r'^/+'), '')}');
+    final path = entry.path;
+    final root = normalized(rootPath);
+    final target = normalized(path);
+    if (RegExp(r'[\\\x00-\x1f]').hasMatch(path) ||
+        path.split('/').any((part) => part == '.' || part == '..') ||
+        !p.posix.isWithin(root, target)) {
+      throw const FormatException('등록한 루트 내부의 파일·폴더만 삭제할 수 있습니다');
+    }
+    return path;
+  }
+
   /// [local] 파일을 [remoteDir] 폴더에 [name]으로 올리고 원격 경로를 돌려준다.
   Future<String> upload(
     File local,

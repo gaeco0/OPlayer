@@ -13,6 +13,8 @@ import '../player/player_screen.dart';
 import '../photos/photo_viewer.dart';
 import 'home_screen.dart';
 import 'video_tile.dart';
+import 'swipe_delete_tile.dart';
+import '../../core/file_deletion.dart';
 
 class FsItem {
   FsItem(this.entity, this.stat);
@@ -52,6 +54,7 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
   bool _asc = true;
   bool _foldersFirst = true;
   bool _grid = false;
+  int _loadGeneration = 0;
 
   String get _cwd => _stack.last;
 
@@ -75,12 +78,16 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
   }
 
   Future<void> _load() async {
+    final generation = ++_loadGeneration;
+    final path = _cwd;
     _restoreSort();
     setState(() {
       _loading = true;
       _error = null;
     });
-    if (!await widget.ensurePermission()) {
+    final permitted = await widget.ensurePermission();
+    if (!mounted || generation != _loadGeneration) return;
+    if (!permitted) {
       setState(() {
         _loading = false;
         _error = '저장소 접근 권한이 필요합니다.';
@@ -89,8 +96,8 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
     }
     final showHidden = AppSettings.instance.showHiddenFiles;
     try {
-      await ResourceLocks.instance.requireAccess(_cwd);
-      final entities = await Directory(_cwd).list(followLinks: false).toList();
+      await ResourceLocks.instance.requireAccess(path);
+      final entities = await Directory(path).list(followLinks: false).toList();
       final items = <FsItem>[];
       final files = <String>[];
       for (final e in entities) {
@@ -103,10 +110,12 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
           } catch (_) {}
         }
       }
+      if (!mounted || generation != _loadGeneration) return;
       _allFiles = files;
       _items = items;
       _applySort();
     } catch (e) {
+      if (!mounted || generation != _loadGeneration) return;
       _error = '폴더를 열 수 없습니다\n$e';
     }
     if (mounted) setState(() => _loading = false);
@@ -150,6 +159,15 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
       context,
     ).push(PlayerScreen.route(videos.map(MediaItem.local).toList(), index, folderFiles: _allFiles));
     if (mounted) setState(() {}); // 이어보기 진행바 갱신
+  }
+
+  Future<void> _delete(FsItem item) async {
+    final parent = _cwd;
+    try {
+      await deleteLocalEntry(item.path, parent: parent);
+    } finally {
+      if (mounted) await _load();
+    }
   }
 
   @override
@@ -225,7 +243,9 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
         body: ResourceAccessView(
           resources: [_cwd],
           onRefresh: _load,
-          child: RefreshIndicator(onRefresh: _load, child: _body()),
+          child: SlidableAutoCloseBehavior(
+            child: RefreshIndicator(onRefresh: _load, child: _body()),
+          ),
         ),
       ),
     );
@@ -259,7 +279,7 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
         itemCount: _items.length,
         itemBuilder: (_, i) {
           final it = _items[i];
-          return it.isDir
+          final tile = it.isDir
               ? FolderGridTile(name: it.name, resource: it.path, onTap: () => _enter(it.path))
               : VideoGridTile(
                   resumeKey: it.path,
@@ -269,6 +289,7 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
                   onTap: () => _play(it),
                   onChanged: () => setState(() {}),
                 );
+          return SwipeDeleteTile(key: ValueKey(it.path), onDelete: () => _delete(it), child: tile);
         },
       );
     }
@@ -280,17 +301,19 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
       separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
       itemBuilder: (_, i) {
         final it = _items[i];
-        if (it.isDir) return FolderListTile(name: it.name, resource: it.path, onTap: () => _enter(it.path));
-        return VideoListTile(
-          resumeKey: it.path,
-          name: it.name,
-          localPath: it.path,
-          size: it.stat.size,
-          modified: it.stat.modified,
-          hasSubtitle: siblingSubtitles(it.path, _allFiles).isNotEmpty,
-          onTap: () => _play(it),
-          onChanged: () => setState(() {}),
-        );
+        final tile = it.isDir
+            ? FolderListTile(name: it.name, resource: it.path, onTap: () => _enter(it.path))
+            : VideoListTile(
+                resumeKey: it.path,
+                name: it.name,
+                localPath: it.path,
+                size: it.stat.size,
+                modified: it.stat.modified,
+                hasSubtitle: siblingSubtitles(it.path, _allFiles).isNotEmpty,
+                onTap: () => _play(it),
+                onChanged: () => setState(() {}),
+              );
+        return SwipeDeleteTile(key: ValueKey(it.path), onDelete: () => _delete(it), child: tile);
       },
     );
   }

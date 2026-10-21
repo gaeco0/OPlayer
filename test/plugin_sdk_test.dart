@@ -15,6 +15,7 @@ import 'package:oplayer/core/settings.dart';
 import 'package:oplayer/features/settings/cloud_settings.dart';
 import 'package:oplayer/sources/cloud/cloud_sources.dart';
 import 'package:oplayer/sources/server_store.dart';
+import 'package:oplayer/sources/media_source.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -182,5 +183,48 @@ void main() {
       await callPlugin(OPlugin.parse(hashSource), 'hash', {}),
       'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
     );
+  });
+
+  test('cloud deletion is opt-in, requires a hook and acknowledges success explicitly', () async {
+    final meta = {
+      'api': 3,
+      'id': 'cloud.delete.test',
+      'name': 'Delete test',
+      'version': '1',
+      'kind': 'cloud',
+      'hosts': [],
+      'auth': {'type': 'script'},
+      'root': 'root',
+      'canDelete': true,
+    };
+    String source(String body) =>
+        '// @oplayer ${jsonEncode(meta)}\nglobalThis.plugin={'
+        'accountName(){return "Test"},list(){return []},stream(){return null},$body};';
+    await expectLater(store.load(source('')), throwsStateError);
+    await store.load(source('delete({path}){if(path==="denied")throw Error("denied");return path!=="unconfirmed"}'));
+    final account = CloudAccount(
+      id: 'delete-test',
+      provider: CloudProvider.plugin,
+      name: 'Test',
+      pluginId: meta['id'] as String,
+    );
+    await SecureStore.instance.writeRequired(
+      account.tokenKey,
+      jsonEncode({'pluginId': meta['id'], 'authType': 'script'}),
+    );
+    final cloud = cloudSourceFor(account);
+    addTearDown(cloud.close);
+    const item = RemoteEntry(name: 'file', path: 'file', isDir: false);
+    expect(cloud.canDeleteEntry(item), true);
+    expect(cloud.canDeleteEntry(const RemoteEntry(name: 'root', path: 'root', isDir: true)), false);
+    await cloud.delete(item);
+    for (final path in ['denied', 'unconfirmed']) {
+      await expectLater(cloud.delete(RemoteEntry(name: path, path: path, isDir: false)), throwsStateError);
+    }
+    meta['canDelete'] = false;
+    await store.load(source(''));
+    expect(cloud.canDeleteEntry(item), false);
+    await expectLater(cloud.delete(item), throwsUnsupportedError);
+    await store.remove(meta['id'] as String);
   });
 }
