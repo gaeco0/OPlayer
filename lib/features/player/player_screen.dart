@@ -18,11 +18,10 @@ import 'pip_controller.dart';
 import 'media_session.dart';
 import 'playback_session.dart';
 import 'desktop_window.dart';
+import 'player_orientation.dart';
 import 'widgets/controls_overlay.dart';
 import 'widgets/gesture_layer.dart';
 import 'widgets/side_panels.dart';
-
-enum _Orient { landscape, portrait, auto }
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
@@ -54,7 +53,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   final _gestureKey = GlobalKey<GestureLayerState>();
   final _focus = FocusNode();
   PanelKind _panel = PanelKind.none;
-  _Orient _orient = _Orient.landscape;
+  late PlaybackOrientation _orient;
   String? _toast;
   Timer? _toastTimer;
   Duration? _resumeOffer;
@@ -71,13 +70,14 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   @override
   void initState() {
     super.initState();
+    _orient = AppSettings.instance.playbackOrientation;
     WidgetsBinding.instance.addObserver(this);
     c =
         widget.existingController ??
         PlayerController(playlist: widget.playlist, startIndex: widget.index, folderFiles: widget.folderFiles);
     _session.attach(c);
     c.addListener(_onController);
-    AppSettings.instance.addListener(_syncPip);
+    AppSettings.instance.addListener(_onSettingsChanged);
     _pip.addListener(_onPipChanged);
     _cast.addListener(_onCastChanged);
     _pip.onCommand = (command) async {
@@ -159,6 +159,15 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     _syncMediaSession();
   }
 
+  void _onSettingsChanged() {
+    final mode = AppSettings.instance.playbackOrientation;
+    if (_orient != mode) {
+      setState(() => _orient = mode);
+      if (!_pip.active && !_backgrounded) _applyOrientation();
+    }
+    _syncPip();
+  }
+
   void _syncMediaSession() {
     if (_cast.active || _session.controller != c || _session.minimized) return;
     final state = c.player.state;
@@ -180,6 +189,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     if (_session.controller != c || _session.minimized) return;
     if (state == AppLifecycleState.resumed) {
       _backgrounded = false;
+      if (!_pip.active) _applyOrientation();
       _syncMediaSession();
     } else if (state == AppLifecycleState.paused && !_pip.active) {
       _backgrounded = true;
@@ -229,6 +239,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     if (_pip.active) {
       _panel = PanelKind.none;
       c.hideControls();
+    } else if (!_backgrounded) {
+      _applyOrientation();
     }
     _syncMediaSession();
     setState(() {});
@@ -321,7 +333,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     _toastTimer?.cancel();
     _resumeTimer?.cancel();
     _pip.removeListener(_onPipChanged);
-    AppSettings.instance.removeListener(_syncPip);
+    AppSettings.instance.removeListener(_onSettingsChanged);
     _cast.removeListener(_onCastChanged);
     WidgetsBinding.instance.removeObserver(this);
     final keepPlaying = _session.retains(c);
@@ -348,27 +360,23 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     if (ownsSession) WakelockPlus.disable();
     if (isMobile && ownsSession) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-      SystemChrome.setPreferredOrientations([]);
+      unawaited(PlayerOrientation.apply(null).catchError((Object _) {}));
     }
     super.dispose();
   }
 
   void _applyOrientation() {
-    SystemChrome.setPreferredOrientations(switch (_orient) {
-      _Orient.landscape => [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight],
-      _Orient.portrait => [DeviceOrientation.portraitUp],
-      _Orient.auto => [],
-    });
+    unawaited(
+      PlayerOrientation.apply(_orient).catchError((Object _) {
+        if (mounted) _showToast('화면 회전 설정을 적용하지 못했습니다');
+      }),
+    );
   }
 
   void _rotate() {
-    _orient = _Orient.values[(_orient.index + 1) % _Orient.values.length];
-    _applyOrientation();
-    _showToast(switch (_orient) {
-      _Orient.landscape => '가로 고정',
-      _Orient.portrait => '세로 고정',
-      _Orient.auto => '자동 회전',
-    });
+    final next = PlaybackOrientation.values[(_orient.index + 1) % PlaybackOrientation.values.length];
+    AppSettings.instance.update((s) => s.playbackOrientation = next);
+    _showToast(next.label);
   }
 
   void _showToast(String msg) {
@@ -642,15 +650,15 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                     onBack: () => Navigator.maybePop(context),
                     onPanel: _openPanel,
                     onToast: _showToast,
-                    onRotate: _rotate,
+                    onRotate: PlayerOrientation.supported ? _rotate : null,
                     onPip: _pip.available && (c.audioOnly || (c.player.state.width ?? 0) > 0) ? _enterPip : null,
                     onMinimize: _minimize,
                     onCompact: Platform.isWindows ? () => _setCompact(true) : null,
                     onCast: _openCast,
                     orientationIcon: switch (_orient) {
-                      _Orient.landscape => Icons.stay_current_landscape,
-                      _Orient.portrait => Icons.stay_current_portrait,
-                      _Orient.auto => Icons.screen_rotation,
+                      PlaybackOrientation.landscape => Icons.stay_current_landscape,
+                      PlaybackOrientation.portrait => Icons.stay_current_portrait,
+                      PlaybackOrientation.auto => Icons.screen_rotation,
                     },
                   ),
                 ),

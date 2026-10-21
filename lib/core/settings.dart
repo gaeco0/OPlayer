@@ -8,6 +8,15 @@ enum ResumeMode { auto, ask, off }
 
 enum DefaultAspect { fit, fill, stretch }
 
+enum PlaybackOrientation {
+  landscape('가로 고정'),
+  portrait('세로 고정'),
+  auto('자동 회전');
+
+  const PlaybackOrientation(this.label);
+  final String label;
+}
+
 enum AppThemeMode { system, light, dark }
 
 enum OutputQuality {
@@ -35,6 +44,7 @@ class AppSettings extends ChangeNotifier {
   bool hardwareDecoding = true;
   double defaultSpeed = 1.0;
   DefaultAspect defaultAspect = DefaultAspect.fit;
+  PlaybackOrientation playbackOrientation = PlaybackOrientation.landscape;
   bool backgroundAudio = false;
 
   // ---- 제스처 ----
@@ -109,6 +119,7 @@ class AppSettings extends ChangeNotifier {
     'hw': hardwareDecoding,
     'speed': defaultSpeed,
     'aspect': defaultAspect.index,
+    'playbackOrientation': playbackOrientation.name,
     'bgAudio': backgroundAudio,
     'dt': doubleTapSeekSeconds,
     'ks': keyboardSeekSeconds,
@@ -156,6 +167,10 @@ class AppSettings extends ChangeNotifier {
     hardwareDecoding = v('hw', true);
     defaultSpeed = (j['speed'] as num?)?.toDouble() ?? 1.0;
     defaultAspect = DefaultAspect.values[v('aspect', 0)];
+    playbackOrientation = PlaybackOrientation.values.firstWhere(
+      (e) => e.name == j['playbackOrientation'],
+      orElse: () => PlaybackOrientation.landscape,
+    );
     backgroundAudio = v('bgAudio', false);
     doubleTapSeekSeconds = v('dt', 10);
     keyboardSeekSeconds = v('ks', 5);
