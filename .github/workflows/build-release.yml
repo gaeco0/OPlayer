@@ -1,0 +1,152 @@
+name: Build and release
+
+on:
+  push:
+    branches: [devel, main]
+  pull_request:
+    branches: [devel, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  FLUTTER_VERSION: '3.47.7'
+
+jobs:
+  windows:
+    name: Windows build and tests
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze --no-pub
+      - run: flutter test --no-pub
+      - run: node test/browser_interactions_test.cjs
+      - run: node test/web_sniffer_test.cjs
+      - run: flutter build windows --release --no-pub
+
+  android:
+    name: Android build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Install Android SDK components
+        run: sdkmanager 'platforms;android-36' 'platforms;android-37' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+      - run: flutter pub get
+      - name: Restore release signing key
+        if: github.event_name != 'pull_request'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          python3 - <<'PY'
+          import base64, os
+          from pathlib import Path
+          names = ['KEYSTORE_BASE64', 'STORE_PASSWORD', 'KEY_PASSWORD', 'KEY_ALIAS']
+          if any(not os.environ.get(name) for name in names):
+              raise SystemExit('Configure all four ANDROID_* signing secrets before a release build.')
+          os.umask(0o077)
+          key = Path('android/keystores/oplayer-release.p12')
+          key.parent.mkdir(parents=True, exist_ok=True)
+          key.write_bytes(base64.b64decode(os.environ['KEYSTORE_BASE64'], validate=True))
+          def property_value(value):
+              return value.replace('\\', '\\\\').replace('\n', '\\n').replace('\r', '\\r')
+          properties = {
+              'storeFile': 'keystores/oplayer-release.p12',
+              'storePassword': os.environ['STORE_PASSWORD'],
+              'keyPassword': os.environ['KEY_PASSWORD'],
+              'keyAlias': os.environ['KEY_ALIAS'],
+          }
+          Path('android/key.properties').write_text(
+              ''.join(f'{name}={property_value(value)}\n' for name, value in properties.items()), encoding='utf-8')
+          PY
+      - name: Build signed release APKs
+        if: github.event_name != 'pull_request'
+        run: flutter build apk --release --split-per-abi --no-pub
+      - name: Verify APK signatures
+        if: github.event_name != 'pull_request'
+        run: |
+          for apk in build/app/outputs/flutter-apk/*-release.apk; do
+            "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "$apk"
+          done
+      - name: Build pull request without signing secrets
+        if: github.event_name == 'pull_request'
+        run: flutter build apk --debug --no-pub
+      - name: Remove temporary signing files
+        if: always()
+        run: rm -f android/key.properties android/keystores/oplayer-release.p12
+
+  release:
+    name: Publish source release
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: [windows, android]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Create release without binary attachments
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const fs = require('node:fs');
+            const match = fs.readFileSync('pubspec.yaml', 'utf8').match(/^version:\s*(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?:\+\d+)?\s*$/m);
+            if (!match) throw new Error('Invalid pubspec.yaml version');
+            const tag = `v${match[1]}`;
+            const repository = {owner: context.repo.owner, repo: context.repo.repo};
+            try {
+              const existing = await github.rest.repos.getReleaseByTag({...repository, tag});
+              core.notice(`${tag} already exists; bump pubspec.yaml to publish another release.`);
+              await core.summary.addLink('Existing release', existing.data.html_url).write();
+              return;
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+            const result = await github.rest.repos.createRelease({
+              ...repository,
+              tag_name: tag,
+              target_commitish: context.sha,
+              name: `OPlayer ${tag}`,
+              body: [
+                'Android 및 Windows 빌드와 테스트를 통과한 소스 릴리스입니다.',
+                '',
+                '사용자 요청에 따라 APK·ZIP 등 배포 파일은 첨부하지 않습니다.',
+                '빌드 방법과 기능은 README.md, 라이선스는 LICENSE를 확인하세요.',
+                '',
+                `검증한 커밋: ${context.sha}`,
+                `Actions: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              ].join('\n'),
+              draft: false,
+              prerelease: match[1].includes('-'),
+            });
+            await core.summary.addLink('Published release', result.data.html_url).write();

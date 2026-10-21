@@ -1,0 +1,387 @@
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+
+import '../../app/theme.dart';
+import '../../core/ffmpeg.dart';
+import '../../core/settings.dart';
+import '../../core/thumbnail_service.dart';
+import '../browser/home_screen.dart';
+import '../../sources/server_store.dart';
+import '../../sources/source_registry.dart';
+import '../network/remote_folder_picker.dart';
+import '../web/download_manager.dart';
+import 'network_settings.dart';
+import 'cloud_settings.dart';
+import 'privacy_settings.dart';
+
+class SettingsPage extends StatelessWidget {
+  const SettingsPage({super.key, required this.onOpenDrawer});
+  final VoidCallback onOpenDrawer;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSettings.instance;
+    return Scaffold(
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        leading: shouldShowDrawerButton(context)
+            ? IconButton(icon: const Icon(Icons.menu), onPressed: onOpenDrawer)
+            : null,
+        title: const Text('설정'),
+      ),
+      body: ListenableBuilder(
+        listenable: s,
+        builder: (context, _) => ListView(
+          padding: const EdgeInsets.only(bottom: 48),
+          children: [
+            const NetworkSettings(),
+            const CloudSettings(),
+            const PrivacySettings(),
+            const _Header('재생'),
+            _choice<ResumeMode>(
+              context,
+              title: '이어보기',
+              value: s.resumeMode,
+              options: const {ResumeMode.auto: '자동으로 이어서', ResumeMode.ask: '물어보기', ResumeMode.off: '사용 안 함'},
+              onChanged: (v) => s.update((x) => x.resumeMode = v),
+            ),
+            SwitchListTile(
+              title: const Text('다음 파일 자동 재생'),
+              value: s.autoPlayNext,
+              onChanged: (v) => s.update((x) => x.autoPlayNext = v),
+            ),
+            SwitchListTile(
+              title: const Text('하드웨어 디코딩'),
+              subtitle: const Text('끄면 호환성↑ 배터리↓ (다음 재생부터 적용)'),
+              value: s.hardwareDecoding,
+              onChanged: (v) => s.update((x) => x.hardwareDecoding = v),
+            ),
+            _choice<double>(
+              context,
+              title: '기본 재생 속도',
+              value: s.defaultSpeed,
+              options: {0.75: '0.75x', 1.0: '1.0x', 1.25: '1.25x', 1.5: '1.5x', 2.0: '2.0x'},
+              onChanged: (v) => s.update((x) => x.defaultSpeed = v),
+            ),
+            _choice<DefaultAspect>(
+              context,
+              title: '기본 화면 비율',
+              value: s.defaultAspect,
+              options: const {DefaultAspect.fit: '화면 맞춤', DefaultAspect.fill: '가득 채우기', DefaultAspect.stretch: '늘이기'},
+              onChanged: (v) => s.update((x) => x.defaultAspect = v),
+            ),
+            const _Header('제스처'),
+            _choice<int>(
+              context,
+              title: '더블탭 탐색 간격',
+              value: s.doubleTapSeekSeconds,
+              options: const {5: '5초', 10: '10초', 15: '15초', 30: '30초'},
+              onChanged: (v) => s.update((x) => x.doubleTapSeekSeconds = v),
+            ),
+            _choice<int>(
+              context,
+              title: '방향키 탐색 간격 (데스크톱)',
+              value: s.keyboardSeekSeconds,
+              options: const {3: '3초', 5: '5초', 10: '10초', 30: '30초'},
+              onChanged: (v) => s.update((x) => x.keyboardSeekSeconds = v),
+            ),
+            _choice<double>(
+              context,
+              title: '좌우 스와이프 감도 (화면 폭 = )',
+              value: s.swipeSeekSpanSeconds,
+              options: {60.0: '1분', 120.0: '2분', 180.0: '3분', 300.0: '5분', 600.0: '10분'},
+              onChanged: (v) => s.update((x) => x.swipeSeekSpanSeconds = v),
+            ),
+            _choice<int>(
+              context,
+              title: '마우스 휠 볼륨 단위 (데스크톱)',
+              value: s.wheelVolumeStep,
+              options: const {1: '1%', 2: '2%', 3: '3%', 5: '5%'},
+              onChanged: (v) => s.update((x) => x.wheelVolumeStep = v),
+            ),
+            SwitchListTile(
+              title: const Text('좌우 스와이프로 탐색'),
+              value: s.gestureSeek,
+              onChanged: (v) => s.update((x) => x.gestureSeek = v),
+            ),
+            SwitchListTile(
+              title: const Text('왼쪽 상하 스와이프로 밝기'),
+              value: s.gestureBrightness,
+              onChanged: (v) => s.update((x) => x.gestureBrightness = v),
+            ),
+            SwitchListTile(
+              title: const Text('오른쪽 상하 스와이프로 볼륨'),
+              value: s.gestureVolume,
+              onChanged: (v) => s.update((x) => x.gestureVolume = v),
+            ),
+            SwitchListTile(
+              title: const Text('길게 눌러 2배속'),
+              value: s.longPressSpeed,
+              onChanged: (v) => s.update((x) => x.longPressSpeed = v),
+            ),
+            const _Header('자막'),
+            SwitchListTile(
+              title: const Text('같은 이름 자막 자동 불러오기'),
+              value: s.subtitleAutoLoad,
+              onChanged: (v) => s.update((x) => x.subtitleAutoLoad = v),
+            ),
+            _choice<String>(
+              context,
+              title: '자막 인코딩',
+              value: s.subtitleEncoding,
+              options: const {
+                'auto': '자동 감지',
+                'utf-8': 'UTF-8',
+                'cp949': 'CP949 (EUC-KR, 한국어 SMI)',
+                'shift_jis': 'Shift_JIS',
+              },
+              onChanged: (v) => s.update((x) => x.subtitleEncoding = v),
+            ),
+            ListTile(
+              title: const Text('자막 크기'),
+              subtitle: Slider(
+                value: s.subtitleFontSize,
+                min: 20,
+                max: 80,
+                divisions: 30,
+                label: s.subtitleFontSize.round().toString(),
+                onChanged: (v) => s.update((x) => x.subtitleFontSize = v),
+              ),
+              trailing: Text('${s.subtitleFontSize.round()}'),
+            ),
+            _choice<int>(
+              context,
+              title: '자막 색상',
+              value: s.subtitleColor,
+              options: const {0xFFFFFFFF: '흰색', 0xFFFFEB3B: '노란색', 0xFF80DEEA: '하늘색'},
+              onChanged: (v) => s.update((x) => x.subtitleColor = v),
+            ),
+            SwitchListTile(
+              title: const Text('자막 배경'),
+              value: s.subtitleBackground,
+              onChanged: (v) => s.update((x) => x.subtitleBackground = v),
+            ),
+            const _Header('파일 목록'),
+            SwitchListTile(
+              title: const Text('썸네일 표시'),
+              value: s.showThumbnails,
+              onChanged: (v) => s.update((x) => x.showThumbnails = v),
+            ),
+            SwitchListTile(
+              title: const Text('숨김 파일 표시'),
+              value: s.showHiddenFiles,
+              onChanged: (v) => s.update((x) => x.showHiddenFiles = v),
+            ),
+            ListTile(
+              title: const Text('썸네일 캐시 지우기'),
+              onTap: () async {
+                await ThumbnailService.instance.clearCache();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('썸네일 캐시를 지웠습니다')));
+                }
+              },
+            ),
+            const _Header('다운로드'),
+            const _DownloadTargetTile(),
+            FutureBuilder<String?>(
+              future: Ffmpeg.locate(),
+              builder: (_, snap) => ListTile(
+                title: const Text('ffmpeg (HLS → MP4 변환)'),
+                subtitle: Text(
+                  snap.data ??
+                      (Ffmpeg.embedded ? '내장 FFmpeg를 확인하지 못했습니다' : '찾지 못함 — HLS는 .ts로 저장됩니다. 탭해서 ffmpeg 실행 파일 위치 지정'),
+                  style: const TextStyle(fontSize: 12),
+                ),
+                trailing: Ffmpeg.embedded
+                    ? const Icon(Icons.check_circle_outline)
+                    : IconButton(
+                        tooltip: s.ffmpegPath == null ? '다시 찾기' : '자동 탐색으로',
+                        icon: Icon(s.ffmpegPath == null ? Icons.refresh : Icons.restore),
+                        onPressed: () {
+                          Ffmpeg.reset();
+                          s.update((x) => x.ffmpegPath = null);
+                        },
+                      ),
+                onTap: Ffmpeg.embedded
+                    ? () => showLicensePage(context: context)
+                    : () async {
+                        final r = await FilePicker.pickFiles(dialogTitle: 'ffmpeg 실행 파일 선택');
+                        final path = r?.files.single.path;
+                        if (path != null) {
+                          Ffmpeg.reset();
+                          s.update((x) => x.ffmpegPath = path);
+                        }
+                      },
+              ),
+            ),
+            _choice<int>(
+              context,
+              title: '동시 다운로드',
+              value: s.maxConcurrentDownloads,
+              options: const {1: '1개', 2: '2개', 3: '3개', 5: '5개'},
+              onChanged: (v) => s.update((x) => x.maxConcurrentDownloads = v),
+            ),
+            _choice<int>(
+              context,
+              title: 'HLS 병렬 조각 수',
+              value: s.hlsParallelSegments,
+              options: const {1: '1', 4: '4', 8: '8', 16: '16'},
+              onChanged: (v) => s.update((x) => x.hlsParallelSegments = v),
+            ),
+            const _Header('정보'),
+            const ListTile(title: Text('OPlayer'), subtitle: Text('Flutter + media_kit (libmpv)')),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _choice<T>(
+    BuildContext context, {
+    required String title,
+    required T value,
+    required Map<T, String> options,
+    required ValueChanged<T> onChanged,
+  }) => ListTile(
+    title: Text(title),
+    subtitle: Text(options[value] ?? '$value', style: const TextStyle(color: OColors.accent)),
+    onTap: () async {
+      final v = await showDialog<T>(
+        context: context,
+        builder: (c) => SimpleDialog(
+          title: Text(title),
+          children: [
+            for (final e in options.entries)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(c, e.key),
+                child: Row(
+                  children: [
+                    Icon(
+                      e.key == value ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                      size: 20,
+                      color: e.key == value ? OColors.accent : null,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(child: Text(e.value)),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      );
+      if (v != null) onChanged(v);
+    },
+  );
+}
+
+class _Header extends StatelessWidget {
+  const _Header(this.text);
+  final String text;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
+    child: Text(
+      text,
+      style: const TextStyle(color: OColors.accent, fontSize: 13, fontWeight: FontWeight.w700),
+    ),
+  );
+}
+
+/// 다운로드 저장 위치: 이 기기 폴더 또는 등록된 서버(SMB/FTP/SFTP/WebDAV)의 폴더
+class _DownloadTargetTile extends StatelessWidget {
+  const _DownloadTargetTile();
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppSettings.instance;
+    final server = s.downloadServerId == null ? null : ServerStore.instance.server(s.downloadServerId!);
+    return FutureBuilder(
+      future: DownloadManager.downloadDir(),
+      builder: (_, snap) => ListTile(
+        title: const Text('저장 위치'),
+        subtitle: Text(
+          server != null
+              ? '${server.name} (${server.type.name.toUpperCase()}) : ${s.downloadServerDir ?? '/'}\n받은 뒤 서버로 올리고 기기에서는 지웁니다'
+              : '이 기기: ${snap.data?.path ?? '…'}',
+          style: const TextStyle(fontSize: 12),
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => _choose(context),
+      ),
+    );
+  }
+
+  Future<void> _choose(BuildContext context) async {
+    final s = AppSettings.instance;
+    final servers = ServerStore.instance.servers;
+    final choice = await showModalBottomSheet<Object>(
+      context: context,
+      backgroundColor: OColors.surface,
+      builder: (c) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const ListTile(
+              title: Text('저장 위치', style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.phone_android),
+              title: const Text('이 기기 — 기본 다운로드 폴더'),
+              onTap: () => Navigator.pop(c, 'default'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.folder_open),
+              title: const Text('이 기기 — 폴더 직접 선택'),
+              onTap: () => Navigator.pop(c, 'pick'),
+            ),
+            if (servers.isNotEmpty) const Divider(),
+            for (final srv in servers)
+              ListTile(
+                leading: Icon(serverIcon(srv.type)),
+                title: Text(srv.name),
+                subtitle: Text('${srv.type.name.toUpperCase()} · ${srv.host}', style: const TextStyle(fontSize: 12)),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.pop(c, srv),
+              ),
+            if (servers.isEmpty)
+              const ListTile(
+                leading: Icon(Icons.info_outline),
+                title: Text('서버에 저장하려면 사이드바에서 서버를 먼저 추가하세요', style: TextStyle(fontSize: 13)),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !context.mounted) return;
+    if (choice == 'default') {
+      s.update((x) {
+        x.downloadDir = null;
+        x.downloadServerId = null;
+        x.downloadServerDir = null;
+      });
+    } else if (choice == 'pick') {
+      final d = await FilePicker.getDirectoryPath(dialogTitle: '다운로드 폴더');
+      if (d != null) {
+        s.update((x) {
+          x.downloadDir = d;
+          x.downloadServerId = null;
+          x.downloadServerDir = null;
+        });
+      }
+    } else if (choice is ServerConfig) {
+      final src = await SourceRegistry.instance.forServer(choice);
+      if (!context.mounted) return;
+      final dir = await RemoteFolderPicker.pick(
+        context,
+        src,
+        initialPath: s.downloadServerId == choice.id ? s.downloadServerDir : null,
+      );
+      if (dir != null) {
+        s.update((x) {
+          x.downloadServerId = choice.id;
+          x.downloadServerDir = dir;
+        });
+      }
+    }
+  }
+}
