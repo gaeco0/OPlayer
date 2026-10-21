@@ -13,7 +13,9 @@ Google Drive·Dropbox·OneDrive는 공식 확장앱으로 제공됩니다. 기�
 끄거나 삭제해도 등록 정보와 계정은 보관되며, 삭제된 확장앱의 설정 항목은 표시하지 않습니다.
 
 S3 호환 스토리지·Box·네이버 MYBOX도 공식 저장소에서 선택 설치할 수 있습니다.
-세 확장앱은 새 인증 방식을 사용하는 **API 2** 확장앱이므로 API 2 지원 앱으로 먼저 업데이트해야 합니다.
+이 문서의 공통 SDK를 포함한 앱으로 한 번 업데이트하면, 이후 같은 SDK를 사용하는 공급자는 JS 파일·저장소 목록만
+추가하면 됩니다. 공급자별 설정·서버 주소·인증 흐름을 추가할 때 앱을 다시 빌드하지 않습니다.
+새 OS 네이티브 기능처럼 SDK 자체에 없는 기능을 추가할 때만 호스트 앱 변경이 필요합니다.
 기존 API 1 확장앱도 계속 사용할 수 있습니다. 저장소 목록의 형식은 그대로 `api: 1`입니다.
 
 | 확장앱 | 해당 확장앱 설정에서 입력할 정보 | 지원 범위 |
@@ -95,6 +97,7 @@ python tools/update_plugin_repository.py
 - `hosts`: 앱에서 `OPlayer.request`로 호출할 수 있는 HTTPS 도메인.
 - `blockRules: [{"urlFilter": "정규식"}]`: 해당 사이트의 네트워크 요청 차단 규칙.
 - `page(api)`: WebView에서 실행. DOM을 읽고 `api.reportMedia(url, hint)`로 미디어를 보고합니다.
+  `api.config`와 `OPlayer.config`로 비밀값을 제외한 확장앱 설정을 읽습니다.
   `hint`는 MIME 또는 `hls` 등의 감지 힌트입니다. 페이지 DOM API로 광고 요소를 숨길 수도 있습니다.
 - `resolveDownload({url, pageUrl, referer, title, kind, headers})`: 앱의 제한된 JS 엔진에서 실행.
   `null`을 반환하면 기존 동작을 유지합니다. `{url, headers, kind, title}`의 필요한 필드만 반환합니다.
@@ -123,10 +126,61 @@ Android는 WebView 요청 콜백, Windows는 DevTools 요청 차단, Apple WebVi
   플러그인에 토큰 문자열을 전달하지 않으며, 인증 리디렉션은 따라가지 않습니다.
 - Android Google 계정 선택·인증은 기존 네이티브 브리지를 재사용합니다.
 
-API 2 클라우드 인증·응답 확장:
+### 공통 설정·인증 SDK
 
-- `auth: {"type":"s3" | "bearer", "help":"설정 안내", "consoleUrl":"https://..."}`는 해당 확장앱의
-  접속 설정 화면을 제공합니다. `oauth`와 함께 지정하지 않습니다. OAuth 공급자는 기존 `oauth` 메타데이터를 사용합니다.
+설정 항목을 Dart에 등록하지 않습니다. 확장앱 첫 줄의 `settings` 배열이 자체 설정 화면을 정의합니다.
+공식 여섯 확장앱도 같은 화면 생성기를 사용하며, 구형 공식 확장앱은 앱에 포함된 설정 선언만 보완합니다.
+저장된 구형 JS 실행 코드·네트워크 권한을 자동으로 교체하지 않습니다.
+
+```json
+{
+  "settings": [
+    {"key":"endpoint","label":"서버 주소","type":"url","required":true},
+    {"key":"account","label":"사용자 이름","type":"text","required":true},
+    {"key":"password","label":"비밀번호","type":"password","required":true},
+    {"key":"collection","label":"목록 종류","type":"select","options":["media","all"],"default":"media"},
+    {"key":"includeHidden","label":"숨김 항목 포함","type":"boolean","default":false}
+  ],
+  "networkSettings":["endpoint"],
+  "authSettings":["endpoint"],
+  "auth":{"type":"script"},
+  "setup":{"help":"이 확장앱의 설정 안내","consoleUrl":"https://example.com/help"}
+}
+```
+
+- 설정은 최대 100개이며 `text`, `password`, `boolean`, `select`, `url`을 지원합니다. 선택적 `description`,
+  `default`, `required`, `platforms`를 선언합니다. 비밀번호 기본값은 허용하지 않습니다.
+- `setup`의 안내·등록 링크·`redirectUris` 목록도 확장앱이 제공합니다. `validateSettings()`는 공개 설정만
+  검사하고 오류 문자열 또는 `null`을 반환합니다. 검증 중에는 네트워크 요청을 보내지 않습니다.
+- 값은 확장앱별로 보관합니다. `password`는 보안 저장소에만 저장하며 JS 설정·WebView·일반 환경설정에 노출하지 않습니다.
+  `OPlayer.config`에는 선언된 비밀값 이외의 설정만 전달합니다. 사이트 확장앱도 동일한 설정을 사용할 수 있습니다.
+- `networkSettings`는 사용자가 지정한 URL 설정에 요청을 허용합니다. URL의 origin과 기본 경로가 범위이며
+  HTTPS를 사용합니다(개발용 localhost HTTP 허용). `authSettings`는 그중 비밀값 전송을 허용할 설정입니다.
+  고정 호스트는 기존 `hosts`·`authHosts`로 선언합니다.
+- `OPlayer.secret('password', {prefix:'', suffix:''})`는 비밀 문자열을 읽는 함수가 아니라 불투명 참조를 만듭니다.
+  허용된 인증 서버로 보내는 `headers`, `query`, `body`, `bodyFields` 안에서만 네이티브가 값을 치환합니다.
+- 앱 측 JS에서 `OPlayer.crypto.hash(algorithm,data)`, `OPlayer.crypto.hmac(algorithm,key,data,keyEncoding='utf8')`를
+  `await`합니다. 알고리즘은 `sha256`, `sha512`, `sha1`, `md5`, 결과는 hex입니다. HMAC 키에는 비밀값 참조를
+  사용할 수 있고, 앞 단계 HMAC 결과는 `keyEncoding='hex'`로 연결합니다. 입력은 1Mi 글자, 키는 64Ki 글자,
+  호출 전체는 기존 최대 200회·60초 제한을 따릅니다. 이 API는 WebView 페이지 훅에는 노출하지 않습니다.
+- HTTP는 `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, `DELETE`, 문자열/JSON `body`, 폼 `bodyFields`, `headers`, `query`를
+  지원합니다. 클라우드와 사이트 확장앱이 같은 요청 생성·응답 해석 코드를 사용하며 리디렉션을 자동으로 따라가지 않습니다.
+  `response`는 `json`(기본), `text`, `xml`, `headers`, `redirect`, `raw`입니다. `raw`는 오류 상태도
+  `{status,headers,body}`로 반환해 스크립트가 직접 판단하게 합니다.
+- 새 인증 프로토콜은 `auth.type='script'`로 작성합니다. 선택적 `authenticate()`가 연결 시 실행되고
+  반환한 세션 상태는 계정별 보안 저장소에 보관합니다. 설정·계정 식별자를 덮어쓰는 응답은 거부합니다.
+  일반 요청이 401로 실패하면 `refresh()`의 새 상태를 저장한 뒤 해당 JS 작업 전체를 한 번 다시 실행합니다.
+  세션 키도 `OPlayer.secret('sessionKey')`로 참조합니다. `raw` 응답의 상태 처리는 스크립트가 담당합니다.
+
+[cloud.custom.example.js](examples/cloud.custom.example.js)는 앱에 공급자 코드를 추가하지 않고 설정·폼 로그인·
+HMAC 인증·세션 갱신·목록·재생 주소를 구현하는 가상 서비스 예제입니다. 실제 서비스는 아닙니다.
+`test/plugin_sdk_test.dart`는 이 파일을 앱에 없는 새 ID로 설치해 위 흐름을 검증합니다.
+
+공통 OAuth·Bearer·SigV4 및 응답 기능:
+
+- `auth: {"type":"s3" | "bearer" | "script"}`로 공통 인증 방식을 선택하고 `settings`로 입력 항목을 선언합니다.
+  OAuth 공급자는 기존 `oauth` 메타데이터를 사용합니다. Bearer는 `accessToken`, SigV4는 공식 S3 확장앱의 표준
+  설정 키를 사용합니다. 다른 인증 방식은 `script`와 공통 HTTP·암호 API로 작성합니다.
 - `oauth.requiresClientSecret: true`는 보안 저장소의 Secret을 네이티브 토큰 교환·갱신에 사용합니다.
   `oauth.pkce: false`는 PKCE 미지원 공급자용입니다. 기본값은 PKCE 사용입니다. OAuth state 검사는 항상 유지합니다.
   `oauth.loopbackOnMobile: true`는 Box처럼 커스텀 스킴 복귀를 허용하지 않는 공급자용입니다.

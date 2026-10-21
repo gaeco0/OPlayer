@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:quickjs_engine/quickjs_engine.dart';
 import 'plugin.dart';
+import 'plugin_values.dart';
 
 typedef PluginRequest = Future<Object?> Function(String url, Map<String, dynamic> options);
 
@@ -13,6 +14,7 @@ Future<Object?> callPlugin(
   Map<String, dynamic> input, {
   PluginRequest? request,
   Map<String, dynamic> config = const {},
+  Map<String, dynamic> credentials = const {},
   bool Function(String)? allowsRequest,
   bool validateOnly = false,
 }) async {
@@ -31,11 +33,17 @@ Future<Object?> callPlugin(
       globalThis.sendMessage = undefined;
       globalThis.console = {log(){},warn(){},error(){}};
       globalThis.__queue = []; globalThis.__waiting = {}; globalThis.__seq = 0;
+      globalThis.__host = (op, args) => new Promise((resolve, reject) => {
+        const id = ++__seq; __waiting[id] = {resolve, reject}; __queue.push({id,op,...args});
+      });
       globalThis.OPlayer = Object.freeze({
         config: Object.freeze(${jsonEncode(config)}),
-        request: (url, options = {}) => new Promise((resolve, reject) => {
-          const id = ++__seq; __waiting[id] = {resolve, reject}; __queue.push({id,url,options});
-        })
+        secret: (name, options = {}) => ({\$secret:name, ...options}),
+        crypto: Object.freeze({
+          hash: (algorithm,data) => __host('crypto',{args:{method:'hash',algorithm,data}}),
+          hmac: (algorithm,key,data,keyEncoding='utf8') => __host('crypto',{args:{method:'hmac',algorithm,key,data,keyEncoding}})
+        }),
+        request: (url, options = {}) => __host('request',{url,options})
       });
       null
     ''');
@@ -75,12 +83,17 @@ Future<Object?> callPlugin(
       if (queue.isEmpty) throw StateError('${plugin.name}: 완료되지 않은 비동기 작업');
       for (final item in queue.cast<Map>()) {
         if (++requests > 200) throw StateError('확장앱 요청 횟수 제한 초과');
+        final id = item['id'] as int;
+        if (item['op'] == 'crypto') {
+          final value = pluginCrypto(item['args'] as Map, credentials);
+          evaluate('__waiting[$id].resolve(${jsonEncode(value)}); delete __waiting[$id]; null');
+          continue;
+        }
         final url = item['url'] as String;
         final options = (item['options'] as Map).cast<String, dynamic>();
         if (!(allowsRequest?.call(url) ?? plugin.allows(url)) || request == null) {
           throw StateError('허용되지 않은 확장앱 요청: ${Uri.tryParse(url)?.host}');
         }
-        final id = item['id'] as int;
         try {
           final remaining = deadline.difference(DateTime.now());
           if (remaining <= Duration.zero) throw TimeoutException('확장앱 실행 시간 초과');

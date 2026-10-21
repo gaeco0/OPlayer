@@ -7,6 +7,8 @@ import '../../core/network/network_service.dart';
 import '../../core/plugins/plugin.dart';
 import '../../core/plugins/plugin_runtime.dart';
 import '../../core/plugins/plugin_store.dart';
+import '../../core/plugins/plugin_values.dart';
+import '../../core/plugins/plugin_http.dart';
 import 'request_headers.dart';
 
 String sitePluginScript(OPlugin p) =>
@@ -17,9 +19,11 @@ String sitePluginScript(OPlugin p) =>
   const marker = ${jsonEncode('__oplayer_${p.id}')};
   if (window[marker]) return; window[marker] = true;
   try {
-    const sandbox = {};
-    (function(globalThis) { ${p.source}\n }).call(sandbox, sandbox);
+    const config = Object.freeze(${jsonEncode(PluginStore.instance.publicSettings(p))});
+    const sandbox = {OPlayer:Object.freeze({config})};
+    (function(globalThis,OPlayer) { ${p.source}\n }).call(sandbox, sandbox, sandbox.OPlayer);
     const api = Object.freeze({
+      config,
       reportMedia: (url, hint = '') => window.flutter_inappwebview?.callHandler('oplayerMedia',
         new URL(url, location.href).href, document.title, hint, 0, location.href)
     });
@@ -62,27 +66,33 @@ Future<Map<String, dynamic>> resolveSiteMedia(Map<String, dynamic> media) async 
       p,
       'resolveDownload',
       current,
+      config: PluginStore.instance.publicSettings(p),
+      credentials: await PluginStore.instance.credentials(p.id),
+      allowsRequest: (url) => p.allowsConfigured(url, PluginStore.instance.publicSettings(p)),
       request: (url, options) async {
         final client = IOClient(NetworkService.instance.createHttpClient(browser: true));
         try {
           final method = options['method'] as String? ?? 'GET';
-          if (!['GET', 'POST'].contains(method)) throw StateError('지원하지 않는 요청 방식');
-          final request = http.Request(method, Uri.parse(url))..followRedirects = false;
-          request.headers.addAll(
-            BrowserRequestHeaders.replay((options['headers'] as Map? ?? {}).cast<String, String>()),
-          );
-          if (options.containsKey('body')) {
-            request.body = options['body'] is String ? options['body'] as String : jsonEncode(options['body']);
+          if (usesPluginSecret(options) &&
+              !p.allowsConfigured(url, PluginStore.instance.publicSettings(p), auth: true)) {
+            throw StateError('허용되지 않은 인증 도메인');
           }
+          final request = pluginHttpRequest(method, url, options, await PluginStore.instance.credentials(p.id));
+          final replay = BrowserRequestHeaders.replay(request.headers);
+          request.headers
+            ..clear()
+            ..addAll(replay);
           final response = await client.send(request).timeout(const Duration(seconds: 20));
-          if (response.statusCode >= 300) throw StateError('HTTP ${response.statusCode}');
           final bytes = <int>[];
           await for (final chunk in response.stream.timeout(const Duration(seconds: 20))) {
             bytes.addAll(chunk);
             if (bytes.length > 8 * 1024 * 1024) throw StateError('확장앱 응답이 너무 큽니다');
           }
-          final text = utf8.decode(bytes);
-          return options['response'] == 'text' ? text : jsonDecode(text);
+          return decodePluginResponse(
+            http.Response.bytes(bytes, response.statusCode, headers: response.headers),
+            options['response'] as String? ?? 'json',
+            url,
+          );
         } finally {
           client.close();
         }

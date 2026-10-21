@@ -9,6 +9,7 @@ import '../network/network_service.dart';
 import '../secure_store.dart';
 import 'plugin.dart';
 import 'plugin_runtime.dart';
+import 'plugin_legacy_settings.dart';
 
 const defaultPluginRepository = 'https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/repository.json';
 
@@ -55,14 +56,22 @@ class PluginStore extends ChangeNotifier {
 
   static String oauthSecretKey(String id, String clientId) => 'pluginOAuthSecret:$id:$clientId';
   bool hasCredentials(String id) => _prefs?.getBool('pluginConfigured:$id') ?? false;
+  Map<String, dynamic> publicSettings(OPlugin plugin) => plugin.publicConfig(
+    (jsonDecode(_prefs?.getString('pluginSettings:${plugin.id}') ?? '{}') as Map).cast<String, dynamic>(),
+  );
   Future<Map<String, dynamic>> credentials(String id) async {
+    if (!hasCredentials(id)) return legacyPluginSettings(id);
     final raw = await SecureStore.instance.readRequired('pluginCredentials:$id');
-    return raw == null ? {} : (jsonDecode(raw) as Map).cast<String, dynamic>();
+    return {...await legacyPluginSettings(id), if (raw != null) ...(jsonDecode(raw) as Map).cast<String, dynamic>()};
   }
 
   Future<void> setCredentials(String id, Map<String, dynamic> values) async {
-    if (installed[id]?.cloud != true) throw StateError('설치된 클라우드 확장앱이 아닙니다');
+    final plugin = installed[id];
+    if (plugin == null) throw StateError('설치된 확장앱이 아닙니다');
     await SecureStore.instance.writeRequired('pluginCredentials:$id', jsonEncode(values));
+    if (!await _prefs!.setString('pluginSettings:$id', jsonEncode(plugin.publicConfig(values)))) {
+      throw StateError('확장앱 설정 저장 실패');
+    }
     if (!await _prefs!.setBool('pluginConfigured:$id', true)) throw StateError('확장앱 설정 저장 실패');
     notifyListeners();
   }
@@ -80,12 +89,34 @@ class PluginStore extends ChangeNotifier {
         ];
     for (final source in sources) {
       try {
-        final p = OPlugin.parse(source);
+        final p = await _settingsDefinition(OPlugin.parse(source));
         installed[p.id] = p;
       } catch (e) {
         errors['load'] = '$e';
       }
     }
+  }
+
+  Future<OPlugin> _settingsDefinition(OPlugin plugin) async {
+    if (plugin.manifest.containsKey('settings')) return plugin;
+    // Old installed scripts keep their executable code and permissions. Only
+    // trusted bundled UI metadata fills in their pre-schema settings screen.
+    try {
+      final bundled = OPlugin.parse(await rootBundle.loadString('plugins/${plugin.id}.js'));
+      if (bundled.id == plugin.id) {
+        plugin.manifest['settings'] = bundled.manifest['settings'];
+        plugin.manifest['setup'] = bundled.manifest['setup'];
+        if (bundled.manifest['platforms'] != null) plugin.manifest['platforms'] = bundled.manifest['platforms'];
+      }
+    } catch (_) {}
+    if (plugin.cloud && plugin.authType == 'oauth' && plugin.settings.isEmpty) {
+      plugin.manifest['settings'] = [
+        {'key': 'clientId', 'type': 'text', 'label': 'OAuth Client ID', 'required': true},
+        if (plugin.oauth['requiresClientSecret'] == true)
+          {'key': 'clientSecret', 'type': 'password', 'label': 'Client Secret', 'required': true},
+      ];
+    }
+    return plugin;
   }
 
   Future<void> _save() async {
@@ -96,7 +127,7 @@ class PluginStore extends ChangeNotifier {
   }
 
   Future<void> load(String source) async {
-    final p = OPlugin.parse(source);
+    final p = await _settingsDefinition(OPlugin.parse(source));
     await callPlugin(p, 'validate', {}, validateOnly: true);
     installed[p.id] = p;
     disabled.remove(p.id);
