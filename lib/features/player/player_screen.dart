@@ -78,7 +78,23 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     c.addListener(_onController);
     _pip.addListener(_onPipChanged);
     _cast.addListener(_onCastChanged);
-    _pip.onPlayPause = () => c.player.playOrPause();
+    _pip.onCommand = (command) async {
+      switch (command) {
+        case 'playPause':
+          await c.player.playOrPause();
+        case 'rewind':
+          await c.seekRelative(const Duration(seconds: -10));
+        case 'forward':
+          await c.seekRelative(const Duration(seconds: 10));
+        case 'previous':
+          await c.prev();
+        case 'next':
+          await c.next();
+        case 'audioOnly':
+          await _minimize(background: true);
+      }
+      _syncPip();
+    };
     _pip.onBackground = () {
       if (_session.minimized || _session.controller != c) return;
       _backgrounded = true;
@@ -101,6 +117,12 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
           await c.prev();
         case 'seek':
           await c.player.seek(Duration(milliseconds: (argument as num).toInt()));
+        case 'rewind':
+          await c.seekRelative(const Duration(seconds: -10));
+        case 'forward':
+          await c.seekRelative(const Duration(seconds: 10));
+        case 'audioOnly':
+          await _minimize(background: true);
       }
       _syncMediaSession();
     };
@@ -108,7 +130,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       c.player.stream.playing.listen((_) => _syncPip()),
       c.player.stream.width.listen((_) => _syncPip()),
       c.player.stream.height.listen((_) => _syncPip()),
-      c.player.stream.position.listen((_) => _syncMediaSession()),
+      c.player.stream.position.listen((_) => _syncPip()),
     ]);
     _pip.initialize().then((_) {
       if (mounted) _syncPip();
@@ -138,6 +160,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       enabled: !_castingCurrent && !c.audioOnly && (s.width ?? 0) > 0 && (s.height ?? 0) > 0,
       playing: s.playing,
       aspect: ratio,
+      canPrevious: c.hasPrev || s.position > Duration.zero,
+      canNext: c.hasNext,
     );
     if (s.playing) _hideNotification = false;
     _syncMediaSession();
@@ -153,6 +177,9 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       position: state.position,
       duration: state.duration,
       foreground: c.allowsBackgroundPlayback || _pip.active,
+      canAudioOnly: !c.audioOnly && !c.preparing,
+      canPrevious: c.hasPrev || state.position > Duration.zero,
+      canNext: c.hasNext,
       rate: c.baseRate,
     );
   }
@@ -232,7 +259,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   }
 
   Future<void> _minimize({bool background = false}) async {
-    if (_castingCurrent) return;
+    if (_castingCurrent || _session.minimized) return;
     if (_compactWindow) await _setCompact(false);
     await _session.minimize(c, background: background || Platform.isAndroid);
     if (!mounted) return;
@@ -315,7 +342,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       subscription.cancel();
     }
     if (ownsSession) {
-      _pip.onPlayPause = null;
+      _pip.onCommand = null;
       _pip.onBackground = null;
       _pip.update(enabled: false, playing: false);
     }

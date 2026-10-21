@@ -18,13 +18,15 @@ class NativeMediaSession {
             case 'stop':
               await cast.stop();
             case 'seek':
-              await cast.seek(
-                Duration(milliseconds: (call.arguments as num).toInt()),
-              );
+              await cast.seek(Duration(milliseconds: (call.arguments as num).toInt()));
             case 'next':
               await cast.seek(cast.position + const Duration(seconds: 30));
             case 'previous':
               await cast.seek(cast.position - const Duration(seconds: 10));
+            case 'rewind':
+              await cast.seek(cast.position - const Duration(seconds: 10));
+            case 'forward':
+              await cast.seek(cast.position + const Duration(seconds: 10));
           }
         } else {
           await onLocalCommand?.call(call.method, call.arguments);
@@ -47,14 +49,16 @@ class NativeMediaSession {
     required Duration duration,
     bool foreground = false,
     bool remote = false,
+    bool canAudioOnly = false,
+    bool canPrevious = true,
+    bool canNext = true,
     double rate = 1,
   }) async {
     if (!Platform.isAndroid) return;
     final signature =
-        '$enabled/$playing/$title/$subtitle/$foreground/$remote/$duration/$rate';
+        '$enabled/$playing/$title/$subtitle/$foreground/$remote/$duration/$rate/$canAudioOnly/$canPrevious/$canNext';
     final now = DateTime.now();
-    if (signature == _signature &&
-        now.difference(_last) < const Duration(seconds: 3)) {
+    if (signature == _signature && now.difference(_last) < const Duration(seconds: 3)) {
       return;
     }
     _signature = signature;
@@ -69,6 +73,9 @@ class NativeMediaSession {
         'duration': duration.inMilliseconds,
         'foreground': foreground,
         'remote': remote,
+        'canAudioOnly': canAudioOnly,
+        'canPrevious': canPrevious,
+        'canNext': canNext,
         'rate': rate,
       });
     } on PlatformException {

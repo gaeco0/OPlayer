@@ -54,7 +54,7 @@ class PlaybackSession extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> minimize(PlayerController player, {bool background = false}) async {
-    if (controller != player) return;
+    if (controller != player || minimized) return;
     minimized = true;
     forceBackground = background;
     player.hideControls();
@@ -80,6 +80,10 @@ class PlaybackSession extends ChangeNotifier with WidgetsBindingObserver {
           await c.prev();
         case 'seek':
           await c.player.seek(Duration(milliseconds: (argument as num).toInt()));
+        case 'rewind':
+          await c.seekRelative(const Duration(seconds: -10));
+        case 'forward':
+          await c.seekRelative(const Duration(seconds: 10));
         case 'stop':
           await stop();
         case 'open':
@@ -103,6 +107,8 @@ class PlaybackSession extends ChangeNotifier with WidgetsBindingObserver {
       position: c.player.state.position,
       duration: c.player.state.duration,
       foreground: allowBackground,
+      canPrevious: c.hasPrev || c.player.state.position > Duration.zero,
+      canNext: c.hasNext,
       rate: c.baseRate,
     );
   }
