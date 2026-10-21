@@ -9,6 +9,9 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/theme.dart';
+import '../../core/settings.dart';
+import '../../core/plugins/plugin_store.dart';
+import 'site_plugins.dart';
 import '../../core/media_utils.dart';
 import '../../core/mouse_nav.dart';
 import '../../core/media_item.dart';
@@ -339,7 +342,7 @@ class WebBrowserPage extends StatefulWidget {
 
 class _WebBrowserPageState extends State<WebBrowserPage> {
   static const _kBookmarks = 'web_bookmarks';
-  static const _home = 'https://www.google.com';
+  String get _home => AppSettings.instance.homepage;
 
   InAppWebViewController? _web;
   PullToRefreshController? _pullToRefresh;
@@ -361,11 +364,12 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
   @override
   void initState() {
     super.initState();
+    PluginStore.instance.addListener(_pluginsChanged);
     MouseNav.addForwardHandler(_forward);
     HardwareKeyboard.instance.addHandler(_onKey);
     if (Platform.isAndroid || Platform.isIOS) {
       _pullToRefresh = PullToRefreshController(
-        settings: PullToRefreshSettings(color: OColors.accent),
+        settings: PullToRefreshSettings(color: Color(AppSettings.instance.primaryColor)),
         onRefresh: () async {
           try {
             if (_web == null) {
@@ -397,6 +401,27 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     });
   }
 
+  Future<DetectedMedia> _resolvePluginMedia(DetectedMedia m) async {
+    final result = await resolveSiteMedia({
+      'url': m.url,
+      'pageUrl': m.pageUrl,
+      'referer': m.referer,
+      'title': m.pageTitle,
+      'kind': m.kind.name,
+      'headers': await _headersFor(m),
+    });
+    final url = result['url'] as String;
+    _capturedHeaders.capture(url, result['headers'] as Map?);
+    return DetectedMedia(
+      url: url,
+      kind: MediaKind.values.firstWhere((e) => e.name == result['kind'], orElse: () => m.kind),
+      pageUrl: m.pageUrl,
+      pageTitle: result['title'] as String? ?? m.pageTitle,
+      size: url == m.url ? m.size : 0,
+      referer: m.referer,
+    );
+  }
+
   bool _forward() {
     if (!_canForward) return false;
     _web?.goForward();
@@ -405,11 +430,34 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
 
   @override
   void dispose() {
+    PluginStore.instance.removeListener(_pluginsChanged);
     MouseNav.removeForwardHandler(_forward);
     HardwareKeyboard.instance.removeHandler(_onKey);
     _address.dispose();
     _addressFocus.dispose();
     super.dispose();
+  }
+
+  Future<void> _pluginsChanged() async {
+    final web = _web;
+    if (web == null) return;
+    try {
+      if (Platform.isWindows) await _configureAdBlock(web);
+      await web.setSettings(settings: InAppWebViewSettings(contentBlockers: pluginContentBlockers()));
+      await web.removeUserScriptsByGroupName(groupName: 'oplayerPlugins');
+      for (final p in PluginStore.instance.enabled.where((p) => !p.cloud)) {
+        await web.addUserScript(
+          userScript: UserScript(
+            source: sitePluginScript(p),
+            groupName: 'oplayerPlugins',
+            injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+            forMainFrameOnly: false,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('확장앱 적용 실패: $e')));
+    }
   }
 
   /// 페이지가 MediaSource(blob:)로 재생 중인지 — 받을 주소를 못 찾았을 때 안내에 사용
@@ -482,6 +530,24 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
   /// DevTools Network 이벤트로 모든 응답(iframe 포함)을 본다. Windows 전용.
   Future<void> _attachNetworkMonitor(InAppWebViewController c) async {
     if (!Platform.isWindows) return;
+    try {
+      await c.addDevToolsProtocolEventListener(
+        eventName: 'Fetch.requestPaused',
+        callback: (data) async {
+          final id = data?['requestId'];
+          if (id == null) return;
+          final url = '${data?['request']?['url'] ?? ''}';
+          final blocked = blockedBySitePlugin(_url, url);
+          try {
+            await c.callDevToolsProtocolMethod(
+              methodName: blocked ? 'Fetch.failRequest' : 'Fetch.continueRequest',
+              parameters: {'requestId': id, if (blocked) 'errorReason': 'BlockedByClient'},
+            );
+          } catch (_) {}
+        },
+      );
+      await _configureAdBlock(c);
+    } catch (_) {} // Ad blocking failure must not disable request/header capture.
     try {
       await c.addDevToolsProtocolEventListener(
         eventName: 'Network.requestWillBeSent',
@@ -584,6 +650,22 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     } catch (_) {}
   }
 
+  Future<void> _configureAdBlock(InAppWebViewController c) async {
+    final enabled = PluginStore.instance.enabled.any(
+      (p) => !p.cloud && (p.manifest['blockRules'] as List? ?? []).isNotEmpty,
+    );
+    await c.callDevToolsProtocolMethod(
+      methodName: enabled ? 'Fetch.enable' : 'Fetch.disable',
+      parameters: enabled
+          ? {
+              'patterns': [
+                {'urlPattern': '*', 'requestStage': 'Request'},
+              ],
+            }
+          : {},
+    );
+  }
+
   void _recordPlaylist(String url, String text) {
     if (text.length > 4 * 1024 * 1024 || !Hls.isPlaylist(text)) return;
     _hlsPlaylists[url] = text;
@@ -663,7 +745,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: OColors.surface,
+      backgroundColor: OColors.of(context).surface,
       builder: (c) => SafeArea(
         child: SizedBox(
           height: MediaQuery.sizeOf(context).height * 0.75,
@@ -691,7 +773,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                             ),
                             subtitle: Text(
                               '${e.type} · ${e.mime}${e.size > 0 ? ' · ${formatSize(e.size)}' : ''}',
-                              style: const TextStyle(fontSize: 11, color: OColors.textSecondary),
+                              style: TextStyle(fontSize: 11, color: OColors.of(context).textSecondary),
                             ),
                             onLongPress: () {
                               Clipboard.setData(ClipboardData(text: e.url));
@@ -764,6 +846,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     if (_preparingDownload) return;
     setState(() => _preparingDownload = true);
     try {
+      media = await _resolvePluginMedia(media);
       final hls = media.kind == MediaKind.hls || _hlsPlaylists.containsKey(media.url);
       if (hls) await _prepareDownloadKeys(media);
       final headers = await _headersFor(media);
@@ -872,7 +955,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
   Future<void> _showBookmarks() async {
     final url = await showModalBottomSheet<String>(
       context: context,
-      backgroundColor: OColors.surface,
+      backgroundColor: OColors.of(context).surface,
       builder: (c) => SafeArea(
         child: _bookmarks.isEmpty
             ? const Padding(padding: EdgeInsets.all(32), child: Text('북마크가 없습니다'))
@@ -905,7 +988,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: OColors.surface,
+      backgroundColor: OColors.of(context).surface,
       builder: (c) => StatefulBuilder(
         builder: (c, updateSheet) => TooltipVisibility(
           visible: false,
@@ -966,7 +1049,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                                 ListTile(
                                   leading: Icon(
                                     m.kind == MediaKind.file ? Icons.movie_outlined : Icons.stream,
-                                    color: OColors.accent,
+                                    color: OColors.of(context).accent,
                                   ),
                                   title: Text(m.label, maxLines: 1, overflow: TextOverflow.ellipsis),
                                   subtitle: Text(
@@ -1003,21 +1086,39 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                                                 if (_preparingDownload) return;
                                                 updateSheet(() => _preparingDownload = true);
                                                 try {
-                                                  if (m.kind == MediaKind.hls) {
-                                                    await _prepareDownloadKeys(m);
+                                                  final quality = await showDialog<OutputQuality>(
+                                                    context: context,
+                                                    builder: (dialog) => SimpleDialog(
+                                                      title: const Text('MP4 생성 옵션'),
+                                                      children: [
+                                                        for (final q in OutputQuality.values)
+                                                          SimpleDialogOption(
+                                                            onPressed: () => Navigator.pop(dialog, q),
+                                                            child: Text(
+                                                              '${q == AppSettings.instance.outputQuality ? '✓ ' : ''}${q.label}',
+                                                            ),
+                                                          ),
+                                                      ],
+                                                    ),
+                                                  );
+                                                  if (quality == null) return;
+                                                  final resolved = await _resolvePluginMedia(m);
+                                                  if (resolved.kind == MediaKind.hls) {
+                                                    await _prepareDownloadKeys(resolved);
                                                   }
-                                                  final h = await _headersFor(m);
+                                                  final h = await _headersFor(resolved);
                                                   if (!mounted || !c.mounted) {
                                                     return;
                                                   }
                                                   DownloadManager.instance.add(
-                                                    url: m.url,
+                                                    url: resolved.url,
                                                     title: m.pageTitle.isEmpty ? m.label : m.pageTitle,
                                                     headers: h,
                                                     hlsKeys: _hlsKeys,
                                                     hlsPlaylists: _hlsPlaylists,
                                                     pageUrl: m.pageUrl,
-                                                    hls: m.kind == MediaKind.hls,
+                                                    hls: resolved.kind == MediaKind.hls,
+                                                    outputQuality: quality,
                                                   );
                                                   if (c.mounted) {
                                                     Navigator.pop(c);
@@ -1090,7 +1191,10 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
             title: Container(
               height: 40,
               margin: const EdgeInsets.only(left: 8),
-              decoration: BoxDecoration(color: OColors.surfaceHigh, borderRadius: BorderRadius.circular(20)),
+              decoration: BoxDecoration(
+                color: OColors.of(context).surfaceHigh,
+                borderRadius: BorderRadius.circular(20),
+              ),
               child: TextField(
                 controller: _address,
                 focusNode: _addressFocus,
@@ -1141,8 +1245,16 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     mediaPlaybackRequiresUserGesture: false,
                     allowsInlineMediaPlayback: true,
                     isInspectable: false,
+                    contentBlockers: pluginContentBlockers(),
                   ),
                   initialUserScripts: UnmodifiableListView([
+                    for (final plugin in PluginStore.instance.enabled.where((p) => !p.cloud))
+                      UserScript(
+                        source: sitePluginScript(plugin),
+                        groupName: 'oplayerPlugins',
+                        injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+                        forMainFrameOnly: false,
+                      ),
                     UserScript(
                       source: browserInteractionScript,
                       injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
@@ -1217,6 +1329,14 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                   },
                   shouldInterceptRequest: (c, request) async {
                     _capturedHeaders.capture(request.url.toString(), request.headers);
+                    if (blockedBySitePlugin(_url, request.url.toString())) {
+                      return WebResourceResponse(
+                        data: Uint8List(0),
+                        contentType: 'text/plain',
+                        statusCode: 403,
+                        reasonPhrase: 'Blocked by extension',
+                      );
+                    }
                     return null;
                   },
                   onLoadResource: (c, r) {
@@ -1318,9 +1438,12 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                   Badge(
                     isLabelVisible: _found.isNotEmpty,
                     label: Text('${_found.length}'),
-                    backgroundColor: OColors.accent,
+                    backgroundColor: OColors.of(context).accent,
                     child: IconButton(
-                      icon: Icon(Icons.video_library_outlined, color: _found.isEmpty ? null : OColors.accent),
+                      icon: Icon(
+                        Icons.video_library_outlined,
+                        color: _found.isEmpty ? null : OColors.of(context).accent,
+                      ),
                       tooltip: '감지된 동영상',
                       onPressed: _showFound,
                     ),

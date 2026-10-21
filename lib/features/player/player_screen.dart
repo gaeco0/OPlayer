@@ -8,6 +8,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../core/media_item.dart';
+import '../../app/theme.dart';
 import '../../core/media_utils.dart';
 import '../../core/settings.dart';
 import '../cast/cast_controller.dart';
@@ -76,6 +77,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         PlayerController(playlist: widget.playlist, startIndex: widget.index, folderFiles: widget.folderFiles);
     _session.attach(c);
     c.addListener(_onController);
+    AppSettings.instance.addListener(_syncPip);
     _pip.addListener(_onPipChanged);
     _cast.addListener(_onCastChanged);
     _pip.onCommand = (command) async {
@@ -83,9 +85,9 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         case 'playPause':
           await c.player.playOrPause();
         case 'rewind':
-          await c.seekRelative(const Duration(seconds: -10));
+          await c.seekRelative(Duration(seconds: -AppSettings.instance.doubleTapSeekSeconds));
         case 'forward':
-          await c.seekRelative(const Duration(seconds: 10));
+          await c.seekRelative(Duration(seconds: AppSettings.instance.doubleTapSeekSeconds));
       }
       _syncPip();
     };
@@ -319,6 +321,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     _toastTimer?.cancel();
     _resumeTimer?.cancel();
     _pip.removeListener(_onPipChanged);
+    AppSettings.instance.removeListener(_syncPip);
     _cast.removeListener(_onCastChanged);
     WidgetsBinding.instance.removeObserver(this);
     final keepPlaying = _session.retains(c);
@@ -507,7 +510,10 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       c.current.localPath ?? c.current.uri,
       if (c.resolved != null) c.resolved!.localPath ?? c.resolved!.uri,
     ],
-    child: _buildContent(context),
+    child: Theme(
+      data: OTheme.dark(),
+      child: Builder(builder: _buildContent),
+    ),
   );
 
   Widget _buildContent(BuildContext context) {

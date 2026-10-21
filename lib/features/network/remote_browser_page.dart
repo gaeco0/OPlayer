@@ -147,7 +147,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
                   '/$crumbs',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: OColors.textSecondary),
+                  style: TextStyle(fontSize: 12, color: OColors.of(context).textSecondary),
                 ),
             ],
           ),
@@ -204,9 +204,9 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
       );
     }
     if (_items.isEmpty) {
-      return const ScrollablePlaceholder(
+      return ScrollablePlaceholder(
         child: Center(
-          child: Text('항목이 없습니다', style: TextStyle(color: OColors.textSecondary)),
+          child: Text('항목이 없습니다', style: TextStyle(color: OColors.of(context).textSecondary)),
         ),
       );
     }
@@ -216,12 +216,12 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
       if (!e.isMedia) {
         // 동영상만 표시를 끈 경우: 그 외 파일은 정보만
         return ListTile(
-          leading: const SizedBox(
+          leading: SizedBox(
             width: 96,
-            child: Icon(Icons.insert_drive_file_outlined, color: OColors.textSecondary),
+            child: Icon(Icons.insert_drive_file_outlined, color: OColors.of(context).textSecondary),
           ),
           title: Text(e.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-          subtitle: Text(formatSize(e.size), style: const TextStyle(fontSize: 12, color: OColors.textSecondary)),
+          subtitle: Text(formatSize(e.size), style: TextStyle(fontSize: 12, color: OColors.of(context).textSecondary)),
         );
       }
       final key = e.directUrl ?? src.keyFor(e.path);

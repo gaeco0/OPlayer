@@ -14,6 +14,8 @@ import '../web/download_manager.dart';
 import 'network_settings.dart';
 import 'cloud_settings.dart';
 import 'privacy_settings.dart';
+import 'appearance_settings.dart';
+import 'plugins_page.dart';
 import '../player/desktop_window.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -36,6 +38,13 @@ class SettingsPage extends StatelessWidget {
         builder: (context, _) => ListView(
           padding: const EdgeInsets.only(bottom: 48),
           children: [
+            const AppearanceSettings(),
+            ListTile(
+              leading: const Icon(Icons.extension_outlined),
+              title: const Text('확장앱'),
+              subtitle: const Text('사이트 다운로드·광고 차단·클라우드 · 저장소 JSON 추가'),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const PluginsPage())),
+            ),
             const NetworkSettings(),
             const CloudSettings(),
             const PrivacySettings(),
@@ -200,12 +209,21 @@ class SettingsPage extends StatelessWidget {
                 }
               },
             ),
+            const _Header('웹 브라우저'),
+            ListTile(title: const Text('홈페이지'), subtitle: Text(s.homepage), onTap: () => editHomepage(context)),
             const _Header('다운로드'),
+            _choice<OutputQuality>(
+              context,
+              title: 'MP4 생성 옵션',
+              value: s.outputQuality,
+              options: {for (final q in OutputQuality.values) q: q.label},
+              onChanged: (v) => s.update((x) => x.outputQuality = v),
+            ),
             const _DownloadTargetTile(),
             FutureBuilder<String?>(
               future: Ffmpeg.locate(),
               builder: (_, snap) => ListTile(
-                title: const Text('ffmpeg (HLS → MP4 변환)'),
+                title: const Text('ffmpeg (MP4 생성·화질 변환)'),
                 subtitle: Text(
                   snap.data ??
                       (Ffmpeg.embedded ? '내장 FFmpeg를 확인하지 못했습니다' : '찾지 못함 — HLS는 .ts로 저장됩니다. 탭해서 ffmpeg 실행 파일 위치 지정'),
@@ -263,7 +281,7 @@ class SettingsPage extends StatelessWidget {
     required ValueChanged<T> onChanged,
   }) => ListTile(
     title: Text(title),
-    subtitle: Text(options[value] ?? '$value', style: const TextStyle(color: OColors.accent)),
+    subtitle: Text(options[value] ?? '$value', style: TextStyle(color: OColors.of(context).accent)),
     onTap: () async {
       final v = await showDialog<T>(
         context: context,
@@ -278,7 +296,7 @@ class SettingsPage extends StatelessWidget {
                     Icon(
                       e.key == value ? Icons.radio_button_checked : Icons.radio_button_unchecked,
                       size: 20,
-                      color: e.key == value ? OColors.accent : null,
+                      color: e.key == value ? OColors.of(context).accent : null,
                     ),
                     const SizedBox(width: 12),
                     Expanded(child: Text(e.value)),
@@ -301,7 +319,7 @@ class _Header extends StatelessWidget {
     padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
     child: Text(
       text,
-      style: const TextStyle(color: OColors.accent, fontSize: 13, fontWeight: FontWeight.w700),
+      style: TextStyle(color: OColors.of(context).accent, fontSize: 13, fontWeight: FontWeight.w700),
     ),
   );
 }
@@ -335,7 +353,7 @@ class _DownloadTargetTile extends StatelessWidget {
     final servers = ServerStore.instance.servers;
     final choice = await showModalBottomSheet<Object>(
       context: context,
-      backgroundColor: OColors.surface,
+      backgroundColor: OColors.of(context).surface,
       builder: (c) => SafeArea(
         child: ListView(
           shrinkWrap: true,

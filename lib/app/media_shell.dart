@@ -63,7 +63,7 @@ class _MediaShellState extends State<MediaShell> {
                 !ResourceLocks.instance.isLocked(c.current.key) &&
                 !ResourceLocks.instance.isLocked(c.current.localPath ?? c.current.uri))
               Material(
-                color: OColors.surfaceHigh,
+                color: OColors.of(context).surfaceHigh,
                 child: SafeArea(
                   top: false,
                   child: SizedBox(
@@ -156,7 +156,7 @@ class _MediaShellState extends State<MediaShell> {
                     child: Container(
                       padding: const EdgeInsets.all(32),
                       decoration: BoxDecoration(
-                        border: Border.all(color: OColors.accent, width: 2),
+                        border: Border.all(color: OColors.of(context).accent, width: 2),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: const Text(

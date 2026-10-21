@@ -77,8 +77,8 @@ class _RecentPageState extends State<RecentPage> {
         body: ResourceAccessView(
           resources: const [recentResourceKey],
           child: items.isEmpty
-              ? const Center(
-                  child: Text('재생 기록이 없습니다', style: TextStyle(color: OColors.textSecondary)),
+              ? Center(
+                  child: Text('재생 기록이 없습니다', style: TextStyle(color: OColors.of(context).textSecondary)),
                 )
               : ListView.builder(
                   padding: const EdgeInsets.only(bottom: 96),

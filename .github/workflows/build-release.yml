@@ -31,6 +31,10 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter analyze --no-pub
+      - name: Build JavaScript engine for native runtime tests
+        run: |
+          cmake -S packages/quickjs_engine/native -B build/plugin-runtime -A x64
+          cmake --build build/plugin-runtime --config Release --parallel 4
       - run: flutter test --no-pub
       - run: node test/browser_interactions_test.cjs
       - run: node test/web_sniffer_test.cjs

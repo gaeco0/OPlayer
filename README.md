@@ -3,6 +3,11 @@
 Android · Android TV · iOS · Windows · Linux · macOS 동영상 플레이어 (Flutter + media_kit/libmpv).
 nPlayer의 UI/UX를 기준으로, 로컬·네트워크·클라우드 재생과 웹 페이지 동영상 받기를 지원한다.
 
+- 설정에서 브라우저 홈페이지, 다운로드 출력 화질, Primary·Secondary 색상, 시스템·밝은·어두운 테마를 선택합니다.
+- 다운로드 목록도 공통 PIN·패턴·생체인증으로 잠글 수 있으며, 보호된 작업의 파일명은 알림에서 숨깁니다.
+- 클라우드·사이트 다운로드 보완·광고 차단을 앱 내 확장앱으로 제공합니다. 저장소 JSON URL 추가와 JS 파일 가져오기를 지원합니다.
+  공식 저장소 형식과 개발 API는 [확장앱 문서](plugins/README.md)를 참고하세요.
+
 ## 실행
 
 ```bash

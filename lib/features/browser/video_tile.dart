@@ -96,7 +96,7 @@ class _VideoThumbState extends State<VideoThumb> {
     final ext = p.extension(widget.name).replaceFirst('.', '').toUpperCase();
     Widget image = const Center(child: Icon(Icons.movie_outlined, color: Color(0x44FFFFFF), size: 26));
     if (isAudio(widget.name)) {
-      image = const Center(child: Icon(Icons.audiotrack, color: OColors.accent, size: 28));
+      image = Center(child: Icon(Icons.audiotrack, color: OColors.of(context).accent, size: 28));
     } else if (widget.localPath != null && isImage(widget.name) && AppSettings.instance.showThumbnails) {
       image = Image.file(
         File(widget.localPath!),
@@ -114,7 +114,7 @@ class _VideoThumbState extends State<VideoThumb> {
       child: Container(
         width: widget.width,
         height: widget.height,
-        color: OColors.surfaceHigh,
+        color: OColors.of(context).surfaceHigh,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -125,7 +125,7 @@ class _VideoThumbState extends State<VideoThumb> {
                 top: 4,
                 child: Text(
                   ext,
-                  style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: OColors.textSecondary),
+                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: OColors.of(context).textSecondary),
                 ),
               ),
             if (r != null)
@@ -145,7 +145,7 @@ class _VideoThumbState extends State<VideoThumb> {
                   value: r.progress,
                   minHeight: 3,
                   backgroundColor: Colors.black38,
-                  color: r.finished ? OColors.textSecondary : OColors.accent,
+                  color: r.finished ? OColors.of(context).textSecondary : OColors.of(context).accent,
                 ),
               ),
             if (r?.finished ?? false)
@@ -171,7 +171,7 @@ Future<void> showVideoMenu(
   final r = ResumeStore.instance.get(resumeKey);
   await showModalBottomSheet<void>(
     context: context,
-    backgroundColor: OColors.surface,
+    backgroundColor: OColors.of(context).surface,
     builder: (c) => SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -273,7 +273,9 @@ class VideoListTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 14,
-                      color: (r?.finished ?? false) ? OColors.textSecondary : OColors.textPrimary,
+                      color: (r?.finished ?? false)
+                          ? OColors.of(context).textSecondary
+                          : OColors.of(context).textPrimary,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -282,12 +284,12 @@ class VideoListTile extends StatelessWidget {
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
                       if (meta.isNotEmpty)
-                        Text(meta, style: const TextStyle(fontSize: 12, color: OColors.textSecondary)),
+                        Text(meta, style: TextStyle(fontSize: 12, color: OColors.of(context).textSecondary)),
                       if (hasSubtitle) const _Badge('자막'),
                       if (r != null && !r.finished)
                         Text(
                           '${formatDuration(r.position)}부터',
-                          style: const TextStyle(fontSize: 12, color: OColors.accent),
+                          style: TextStyle(fontSize: 12, color: OColors.of(context).accent),
                         ),
                     ],
                   ),
@@ -295,7 +297,7 @@ class VideoListTile extends StatelessWidget {
               ),
             ),
             IconButton(
-              icon: const Icon(Icons.more_vert, color: OColors.textSecondary),
+              icon: Icon(Icons.more_vert, color: OColors.of(context).textSecondary),
               onPressed: menu,
             ),
           ],
@@ -312,10 +314,10 @@ class _Badge extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
     decoration: BoxDecoration(
-      border: Border.all(color: OColors.textSecondary, width: 0.8),
+      border: Border.all(color: OColors.of(context).textSecondary, width: 0.8),
       borderRadius: BorderRadius.circular(3),
     ),
-    child: Text(text, style: const TextStyle(fontSize: 10, color: OColors.textSecondary)),
+    child: Text(text, style: TextStyle(fontSize: 10, color: OColors.of(context).textSecondary)),
   );
 }
 
@@ -360,7 +362,8 @@ class VideoGridTile extends StatelessWidget {
           ),
           const SizedBox(height: 6),
           Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
-          if (size > 0) Text(formatSize(size), style: const TextStyle(fontSize: 11, color: OColors.textSecondary)),
+          if (size > 0)
+            Text(formatSize(size), style: TextStyle(fontSize: 11, color: OColors.of(context).textSecondary)),
         ],
       ),
     );
@@ -380,8 +383,8 @@ class FolderListTile extends StatelessWidget {
     title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
     subtitle: subtitle == null
         ? null
-        : Text(subtitle!, style: const TextStyle(fontSize: 12, color: OColors.textSecondary)),
-    trailing: const Icon(Icons.chevron_right, color: OColors.textSecondary),
+        : Text(subtitle!, style: TextStyle(fontSize: 12, color: OColors.of(context).textSecondary)),
+    trailing: Icon(Icons.chevron_right, color: OColors.of(context).textSecondary),
     onTap: onTap,
     onLongPress: resource == null ? null : () => toggleResourceLock(context, resource!, name),
   );
@@ -405,7 +408,7 @@ class FolderGridTile extends StatelessWidget {
           AspectRatio(
             aspectRatio: 16 / 9,
             child: Container(
-              decoration: BoxDecoration(color: OColors.surfaceHigh, borderRadius: BorderRadius.circular(4)),
+              decoration: BoxDecoration(color: OColors.of(context).surfaceHigh, borderRadius: BorderRadius.circular(4)),
               child: const Icon(Icons.folder_rounded, color: Color(0xFFF2B84B), size: 44),
             ),
           ),

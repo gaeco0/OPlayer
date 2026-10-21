@@ -33,11 +33,14 @@ class DownloadTask {
     this.hlsKeys = const {},
     this.hlsPlaylists = const {},
     this.pageUrl,
+    this.outputQuality = OutputQuality.original,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
   final String id;
   final String url;
+  final OutputQuality outputQuality;
+  bool outputDone = false;
   String fileName;
   DownloadKind kind;
   final Map<String, String> headers;
@@ -85,6 +88,8 @@ class DownloadTask {
   Map<String, dynamic> toJson() => {
     'id': id,
     'url': url,
+    'quality': outputQuality.name,
+    'outputDone': outputDone,
     'name': fileName,
     'kind': kind.index,
     'h': headers,
@@ -108,12 +113,17 @@ class DownloadTask {
       DownloadTask(
           id: j['id'] as String,
           url: j['url'] as String,
+          outputQuality: OutputQuality.values.firstWhere(
+            (e) => e.name == j['quality'],
+            orElse: () => OutputQuality.original,
+          ),
           fileName: j['name'] as String,
           kind: DownloadKind.values[j['kind'] as int],
           headers: (j['h'] as Map?)?.cast<String, String>() ?? const {},
           pageUrl: j['page'] as String?,
           createdAt: DateTime.fromMillisecondsSinceEpoch(j['c'] as int),
         )
+        ..outputDone = j['outputDone'] == true
         ..status = DownloadStatus.values[j['s'] as int]
         ..received = j['r'] as int
         ..total = j['t'] as int
@@ -191,6 +201,7 @@ class DownloadManager extends ChangeNotifier {
         },
       );
       if (await _foreground!.consumeOpen()) _openPending = true;
+      ResourceLocks.instance.addListener(() => _foreground!.schedule(downloadNotificationState(tasks)));
     }
   }
 
@@ -232,9 +243,11 @@ class DownloadManager extends ChangeNotifier {
     Map<String, String> hlsPlaylists = const {},
     String? pageUrl,
     bool? hls,
+    OutputQuality? outputQuality,
   }) {
     final isHls = hls ?? url.toLowerCase().contains('.m3u8');
-    final ext = isHls ? '.mp4' : _extOf(url);
+    final quality = outputQuality ?? AppSettings.instance.outputQuality;
+    final ext = isHls ? (quality == OutputQuality.audio ? '.m4a' : '.mp4') : _extOf(url);
     final task = DownloadTask(
       id: DateTime.now().microsecondsSinceEpoch.toRadixString(36),
       url: url,
@@ -244,6 +257,7 @@ class DownloadManager extends ChangeNotifier {
       hlsKeys: Map.of(hlsKeys),
       hlsPlaylists: Map.of(hlsPlaylists),
       pageUrl: pageUrl,
+      outputQuality: quality,
     );
     final st = AppSettings.instance;
     if (st.downloadServerId != null && ServerStore.instance.server(st.downloadServerId!) != null) {
@@ -349,6 +363,20 @@ class DownloadManager extends ChangeNotifier {
         }
         t.localDone = true;
       }
+      if (!t.outputDone &&
+          (t.outputQuality != OutputQuality.original ||
+              (t.kind == DownloadKind.direct &&
+                  ![
+                    '.mp4',
+                    '.m4a',
+                    '.mp3',
+                    '.aac',
+                    '.ogg',
+                    '.flac',
+                    '.wav',
+                  ].contains(p.extension(t.savePath!).toLowerCase())))) {
+        await _convertTask(t);
+      }
       _check(t);
       if (t.isRemote) await _upload(t);
       _check(t);
@@ -374,7 +402,11 @@ class DownloadManager extends ChangeNotifier {
       client.close();
       if (t.status == DownloadStatus.done || t.status == DownloadStatus.failed) {
         try {
-          await _foreground?.finished(id: t.id, name: t.fileName, success: t.status == DownloadStatus.done);
+          await _foreground?.finished(
+            id: t.id,
+            name: ResourceLocks.instance.protects(downloadsResourceKey) ? '다운로드' : t.fileName,
+            success: t.status == DownloadStatus.done,
+          );
         } catch (_) {} // Notification errors must not turn a saved file into a failed download.
       }
       _running.remove(t.id);
@@ -385,6 +417,37 @@ class DownloadManager extends ChangeNotifier {
 
   void _check(DownloadTask t) {
     if (_cancel.contains(t.id)) throw _Cancelled();
+  }
+
+  Future<void> _convertTask(DownloadTask t) async {
+    _check(t);
+    t.phase = '${t.outputQuality.label} 생성 중';
+    _changed(immediate: true);
+    final input = t.savePath!;
+    final ext = t.outputQuality == OutputQuality.audio ? '.m4a' : '.mp4';
+    final output = await _uniquePath(
+      File(input).parent,
+      '${p.basenameWithoutExtension(input)} (${t.outputQuality.name})$ext',
+    );
+    final (ok, error) = await Ffmpeg.createMp4(video: input, output: output, quality: t.outputQuality);
+    if (!ok) {
+      if (await File(output).exists()) await File(output).delete();
+      if (t.outputQuality == OutputQuality.original) {
+        t.note = 'MP4 컨테이너로 옮기지 못해 원본으로 저장했습니다: $error';
+        t.outputDone = true;
+        return;
+      }
+      throw '변환 실패 (받은 원본은 보관됨): $error';
+    }
+    if (_cancel.contains(t.id)) {
+      await File(output).delete();
+      throw _Cancelled();
+    }
+    t.savePath = output;
+    t.fileName = p.basename(output);
+    t.outputDone = true;
+    t.received = await File(output).length();
+    await File(input).delete();
   }
 
   Future<void> _requireDestinationAccess(String key) async {
@@ -421,7 +484,8 @@ class DownloadManager extends ChangeNotifier {
       await iter.cancel();
       if (await part.exists()) await part.delete();
       t.kind = DownloadKind.hls;
-      t.savePath = await _uniquePath(File(t.savePath!).parent, '${p.basenameWithoutExtension(t.savePath!)}.mp4');
+      final ext = t.outputQuality == OutputQuality.audio ? '.m4a' : '.mp4';
+      t.savePath = await _uniquePath(File(t.savePath!).parent, '${p.basenameWithoutExtension(t.savePath!)}$ext');
       t.fileName = p.basename(t.savePath!);
       t.received = 0;
       _changed(immediate: true);
@@ -725,11 +789,19 @@ class DownloadManager extends ChangeNotifier {
     // ---- MP4로 완성 (ffmpeg 스트림 복사, 재인코딩 없음)
     t.phase = 'MP4로 변환 중';
     _changed(immediate: true);
-    final target = t.savePath!.toLowerCase().endsWith('.mp4') ? t.savePath! : '${p.withoutExtension(t.savePath!)}.mp4';
-    final (ok, err) = await Ffmpeg.remuxToMp4(video: joinedVideo, audio: joinedAudio, output: target);
+    final extension = t.outputQuality == OutputQuality.audio ? '.m4a' : '.mp4';
+    final target = '${p.withoutExtension(t.savePath!)}$extension';
+    final (ok, err) = await Ffmpeg.createMp4(
+      video: joinedVideo,
+      audio: joinedAudio,
+      output: target,
+      quality: t.outputQuality,
+    );
+    if (!ok && t.outputQuality != OutputQuality.original) throw '변환 실패 (받은 조각은 보관됨): $err';
     if (ok) {
       t.savePath = target;
       t.note = null;
+      t.outputDone = true;
     } else if (joinedAudio == null && video.isFmp4) {
       // fMP4는 이어붙인 것 자체가 MP4
       await _move(joinedVideo, target);
@@ -828,7 +900,7 @@ Map<String, Object?> downloadNotificationState(List<DownloadTask> tasks) {
   return {
     'active': active.isNotEmpty,
     'title': active.length > 1 ? '다운로드 ${active.length}개 진행 중' : '다운로드 중',
-    'name': first?.fileName ?? '',
+    'name': ResourceLocks.instance.protects(downloadsResourceKey) ? '' : first?.fileName ?? '',
     'phase': first?.phase ?? (running.isEmpty ? '다운로드 준비 중' : '파일 받는 중'),
     'progress': progress == null ? -1 : (progress * 100).clamp(0, 100).round(),
   };

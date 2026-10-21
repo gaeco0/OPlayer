@@ -45,7 +45,7 @@ void main() {
     expect(find.text('OPlayer'), findsOneWidget);
     expect(find.text('최근 재생'), findsOneWidget);
     expect(find.text('UPnP / DLNA 검색'), findsOneWidget);
-    expect(find.text('Google Drive / OneDrive / Dropbox'), findsOneWidget);
+    expect(find.text('설치한 클라우드 확장앱'), findsOneWidget);
     final home = find.widgetWithText(ListTile, '홈 폴더');
     await t.tap(find.descendant(of: home, matching: find.byType(PopupMenuButton<int>)));
     await t.pump();

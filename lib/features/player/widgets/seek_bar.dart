@@ -46,32 +46,20 @@ class _SeekBarState extends State<SeekBar> {
     super.dispose();
   }
 
-  double _frac(Duration d) => _dur.inMilliseconds == 0
-      ? 0
-      : (d.inMilliseconds / _dur.inMilliseconds).clamp(0.0, 1.0);
+  double _frac(Duration d) => _dur.inMilliseconds == 0 ? 0 : (d.inMilliseconds / _dur.inMilliseconds).clamp(0.0, 1.0);
 
   @override
   Widget build(BuildContext context) {
     final value = _drag ?? _frac(_pos);
-    final shown = _drag != null
-        ? Duration(milliseconds: (_drag! * _dur.inMilliseconds).round())
-        : _pos;
+    final shown = _drag != null ? Duration(milliseconds: (_drag! * _dur.inMilliseconds).round()) : _pos;
     final c = widget.c;
-    const timeStyle = TextStyle(
-      color: Colors.white,
-      fontSize: 13,
-      fontFeatures: [FontFeature.tabularFigures()],
-    );
+    const timeStyle = TextStyle(color: Colors.white, fontSize: 13, fontFeatures: [FontFeature.tabularFigures()]);
 
     return Row(
       children: [
         SizedBox(
           width: 64,
-          child: Text(
-            formatDuration(shown),
-            textAlign: TextAlign.center,
-            style: timeStyle,
-          ),
+          child: Text(formatDuration(shown), textAlign: TextAlign.center, style: timeStyle),
         ),
         Expanded(
           child: LayoutBuilder(
@@ -84,11 +72,7 @@ class _SeekBarState extends State<SeekBar> {
                 top: 0,
                 child: Text(
                   t,
-                  style: const TextStyle(
-                    color: OColors.accent,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(color: OColors.of(context).accent, fontSize: 10, fontWeight: FontWeight.bold),
                 ),
               );
               return Stack(
@@ -103,11 +87,7 @@ class _SeekBarState extends State<SeekBar> {
                     },
                     onChanged: (v) => setState(() => _drag = v),
                     onChangeEnd: (v) {
-                      c.player.seek(
-                        Duration(
-                          milliseconds: (v * _dur.inMilliseconds).round(),
-                        ),
-                      );
+                      c.player.seek(Duration(milliseconds: (v * _dur.inMilliseconds).round()));
                       setState(() => _drag = null);
                       c.showControls();
                     },
@@ -124,9 +104,7 @@ class _SeekBarState extends State<SeekBar> {
           child: SizedBox(
             width: 64,
             child: Text(
-              _remaining
-                  ? '-${formatDuration(_dur - shown)}'
-                  : formatDuration(_dur),
+              _remaining ? '-${formatDuration(_dur - shown)}' : formatDuration(_dur),
               textAlign: TextAlign.center,
               style: timeStyle,
             ),
