@@ -1,0 +1,9 @@
+import 'dart:io';
+import 'package:flutter/services.dart';
+
+class DesktopWindow {
+  static const _channel = MethodChannel('oplayer/window');
+  static Future<void> compact(bool enabled) async {
+    if (Platform.isWindows) await _channel.invokeMethod<void>('compact', enabled);
+  }
+}
