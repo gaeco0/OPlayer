@@ -28,7 +28,10 @@ void main() {
     });
     await AppSettings.instance.init();
     expect(AppSettings.instance.networkForResources, false);
-    AppSettings.instance.update((s) => s.networkForResources = true);
+    AppSettings.instance.update((s) {
+      s.dohEnabled = true;
+      s.networkForResources = true;
+    });
     await Future<void>.delayed(Duration.zero);
     await AppSettings.instance.init();
     expect(AppSettings.instance.networkForResources, true);
@@ -41,6 +44,42 @@ void main() {
     );
     await ResumeStore.instance.init();
     expect((await SourceRegistry.instance.itemFromKey(url.toString()))!.browserMedia, true);
+  });
+
+  test('resource proxy is opt-in, requires either feature and resets when both turn off', () async {
+    final s = AppSettings.instance;
+    for (final saved in [
+      <String, dynamic>{},
+      {'networkForResources': true},
+      {'dohEnabled': true},
+      {'byeDpiEnabled': true},
+    ]) {
+      SharedPreferences.setMockInitialValues({'settings_v1': jsonEncode(saved)});
+      await s.init();
+      expect(s.networkForResources, false);
+    }
+    s.update((s) => s.networkForResources = true);
+    expect(s.networkForResources, true); // ByeDPI remains enabled from the last saved case.
+    s.update((s) {
+      s.dohEnabled = true;
+      s.byeDpiEnabled = false;
+    });
+    expect(s.networkForResources, true);
+    s.update((s) => s.dohEnabled = false);
+    expect(s.networkEnabled, false);
+    expect(s.networkForResources, false);
+    s.update((s) => s.networkForResources = true);
+    expect(s.networkForResources, false);
+    s.update((s) => s.dohEnabled = true);
+    expect(s.networkForResources, false);
+    s.update((s) => s.networkForResources = true);
+    await Future<void>.delayed(Duration.zero);
+    await s.init();
+    expect(s.networkForResources, true);
+    s.update((s) => s.dohEnabled = false);
+    await Future<void>.delayed(Duration.zero);
+    await s.init();
+    expect(s.networkForResources, false);
   });
 
   test('network defaults migrate once and preserve subsequently chosen DoH URLs', () async {

@@ -72,7 +72,8 @@ class AppSettings extends ChangeNotifier {
   bool dohEnabled = false;
   String dohUrl = 'https://dns.google/dns-query';
   bool byeDpiEnabled = false;
-  bool networkForResources = true;
+  bool networkForResources = false;
+  bool get networkEnabled => dohEnabled || byeDpiEnabled;
   String dropboxAppKey = '';
   String oneDriveClientId = '';
   String googleDesktopClientId = '';
@@ -97,6 +98,7 @@ class AppSettings extends ChangeNotifier {
 
   void update(void Function(AppSettings s) fn) {
     fn(this);
+    if (!networkEnabled) networkForResources = false;
     notifyListeners();
     _prefs.setString(_k, jsonEncode(_toJson()));
   }
@@ -195,7 +197,7 @@ class AppSettings extends ChangeNotifier {
       dohUrl = 'https://dns.google/dns-query';
     }
     byeDpiEnabled = v('byeDpiEnabled', false);
-    networkForResources = v('networkForResources', true);
+    networkForResources = networkEnabled && v('networkForResources', false);
     dropboxAppKey = v('dropboxAppKey', '');
     oneDriveClientId = v('oneDriveClientId', '');
     googleDesktopClientId = v('googleDesktopClientId', '');

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:quickjs_engine/quickjs_engine.dart';
 import 'plugin.dart';
 import 'plugin_values.dart';
+import 'plugin_parser.dart';
 
 typedef PluginRequest = Future<Object?> Function(String url, Map<String, dynamic> options);
 
@@ -20,6 +21,7 @@ Future<Object?> callPlugin(
 }) async {
   if (!RegExp(r'^[a-zA-Z]+$').hasMatch(method)) throw ArgumentError.value(method);
   final js = QuickJsRuntime2(timeout: 200, memoryLimit: 32 * 1024 * 1024, stackSize: 512 * 1024);
+  final parser = PluginParser();
   Object? evaluate(String code) {
     final result = js.evaluate(code);
     if (result.isError) throw StateError('${plugin.name}: ${result.stringResult}');
@@ -36,9 +38,11 @@ Future<Object?> callPlugin(
       globalThis.__host = (op, args) => new Promise((resolve, reject) => {
         const id = ++__seq; __waiting[id] = {resolve, reject}; __queue.push({id,op,...args});
       });
+      $pluginParserFactory
       globalThis.OPlayer = Object.freeze({
         config: Object.freeze(${jsonEncode(config)}),
         secret: (name, options = {}) => ({\$secret:name, ...options}),
+        parse: createOPlayerParser(args => __host('parse',{args})),
         crypto: Object.freeze({
           hash: (algorithm,data) => __host('crypto',{args:{method:'hash',algorithm,data}}),
           hmac: (algorithm,key,data,keyEncoding='utf8') => __host('crypto',{args:{method:'hmac',algorithm,key,data,keyEncoding}})
@@ -84,6 +88,15 @@ Future<Object?> callPlugin(
       for (final item in queue.cast<Map>()) {
         if (++requests > 200) throw StateError('확장앱 요청 횟수 제한 초과');
         final id = item['id'] as int;
+        if (item['op'] == 'parse') {
+          try {
+            final value = parser.call(item['args'] as Map);
+            evaluate('__waiting[$id].resolve(${jsonEncode(value)}); delete __waiting[$id]; null');
+          } catch (e) {
+            evaluate('__waiting[$id].reject(${jsonEncode('$e')}); delete __waiting[$id]; null');
+          }
+          continue;
+        }
         if (item['op'] == 'crypto') {
           final value = pluginCrypto(item['args'] as Map, credentials);
           evaluate('__waiting[$id].resolve(${jsonEncode(value)}); delete __waiting[$id]; null');
