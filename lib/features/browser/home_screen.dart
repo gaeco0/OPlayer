@@ -219,7 +219,7 @@ class _HomeScreenState extends State<HomeScreen> {
       if (ready != true || !mounted) return;
     }
     final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(SnackBar(content: Text('${provider.label} 로그인 창을 여는 중…')));
+    messenger.showSnackBar(SnackBar(content: Text('${extension.name} 연결 중…')));
     try {
       final a = await connectCloudAccount(provider, pluginId: extension.id);
       if (!mounted) return;

@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../network/network_service.dart';
+import '../secure_store.dart';
 import 'plugin.dart';
 import 'plugin_runtime.dart';
 
@@ -49,6 +50,20 @@ class PluginStore extends ChangeNotifier {
     if (!await _prefs!.setString('pluginOAuthClientId:$id', value.trim())) {
       throw StateError('확장앱 설정을 저장하지 못했습니다');
     }
+    notifyListeners();
+  }
+
+  static String oauthSecretKey(String id, String clientId) => 'pluginOAuthSecret:$id:$clientId';
+  bool hasCredentials(String id) => _prefs?.getBool('pluginConfigured:$id') ?? false;
+  Future<Map<String, dynamic>> credentials(String id) async {
+    final raw = await SecureStore.instance.readRequired('pluginCredentials:$id');
+    return raw == null ? {} : (jsonDecode(raw) as Map).cast<String, dynamic>();
+  }
+
+  Future<void> setCredentials(String id, Map<String, dynamic> values) async {
+    if (installed[id]?.cloud != true) throw StateError('설치된 클라우드 확장앱이 아닙니다');
+    await SecureStore.instance.writeRequired('pluginCredentials:$id', jsonEncode(values));
+    if (!await _prefs!.setBool('pluginConfigured:$id', true)) throw StateError('확장앱 설정 저장 실패');
     notifyListeners();
   }
 

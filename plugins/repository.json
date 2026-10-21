@@ -4,6 +4,22 @@
   "description": "OPlayer의 클라우드 연결 확장앱을 제공합니다.",
   "plugins": [
     {
+      "id": "cloud.box",
+      "name": "Box",
+      "version": "1.0.0",
+      "kind": "cloud",
+      "author": "OPlayer",
+      "features": [
+        "클라우드 연결",
+        "폴더 탐색",
+        "미디어 재생"
+      ],
+      "description": "Box 계정 연결·폴더 탐색·미디어 재생",
+      "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.box.js",
+      "sha256": "46df9cbd7235e67d2b66da4619085b0926fb10ddcebb8b769f79b9cc183764d0",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+    },
+    {
       "id": "cloud.dropbox",
       "name": "Dropbox",
       "version": "1.0.0",
@@ -36,6 +52,22 @@
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     },
     {
+      "id": "cloud.mybox",
+      "name": "네이버 MYBOX",
+      "version": "1.0.0",
+      "kind": "cloud",
+      "author": "OPlayer",
+      "features": [
+        "클라우드 연결",
+        "폴더 탐색",
+        "미디어 재생"
+      ],
+      "description": "네이버 MYBOX 계정 연결·폴더 탐색·미디어 재생",
+      "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.mybox.js",
+      "sha256": "6df5fd9bed02ff06dd1677e7dd6c4d477313ac93162f65da59d411c55861e767",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+    },
+    {
       "id": "cloud.onedrive",
       "name": "OneDrive",
       "version": "1.0.0",
@@ -49,6 +81,22 @@
       "description": "OneDrive 계정 연결·폴더 탐색·미디어 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.onedrive.js",
       "sha256": "0c1d229351afedb073f7ea8ac11b29da8ff44fcfcab2afb3b5a5fe5293d1b924",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+    },
+    {
+      "id": "cloud.s3",
+      "name": "S3 호환 스토리지",
+      "version": "1.0.0",
+      "kind": "cloud",
+      "author": "OPlayer",
+      "features": [
+        "클라우드 연결",
+        "폴더 탐색",
+        "미디어 재생"
+      ],
+      "description": "S3 호환 스토리지 계정 연결·폴더 탐색·미디어 재생",
+      "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.s3.js",
+      "sha256": "0f26904802a27cd80dc2c26801a9d4feb454eb6e086c86fd12b1587db39dd4ae",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     }
   ]
