@@ -211,42 +211,17 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
     if (extension == null || !mounted) return;
-    final provider = CloudProvider.values.firstWhere(
-      (p) => extension.id == 'cloud.${p.name}',
-      orElse: () => CloudProvider.plugin,
-    );
-    String? clientId;
-    if (provider == CloudProvider.plugin) {
-      final controller = TextEditingController(text: extension.oauth['clientId'] as String? ?? '');
-      clientId = await showDialog<String>(
-        context: context,
-        builder: (c) => AlertDialog(
-          title: Text('${extension.name} Client ID'),
-          content: TextField(
-            controller: controller,
-            decoration: const InputDecoration(labelText: 'OAuth Client ID'),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(c), child: const Text('취소')),
-            FilledButton(
-              onPressed: () {
-                if (controller.text.trim().isNotEmpty) Navigator.pop(c, controller.text.trim());
-              },
-              child: const Text('연결'),
-            ),
-          ],
-        ),
+    final provider = cloudPluginProvider(extension);
+    if (!cloudPluginConfigured(extension)) {
+      final ready = await Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(builder: (_) => CloudPluginSettingsPage(pluginId: extension.id, forConnection: true)),
       );
-      controller.dispose();
-      if (clientId == null || !mounted) return;
-    }
-    if (!cloudConfigured(provider)) {
-      if (!await showCloudSetup(context, provider) || !mounted) return;
+      if (ready != true || !mounted) return;
     }
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(SnackBar(content: Text('${provider.label} 로그인 창을 여는 중…')));
     try {
-      final a = await connectCloudAccount(provider, pluginId: extension.id, clientId: clientId);
+      final a = await connectCloudAccount(provider, pluginId: extension.id);
       if (!mounted) return;
       messenger.hideCurrentSnackBar();
       _select(Source(SourceKind.cloud, a.name, cloudIcon(a.provider), id: a.id));

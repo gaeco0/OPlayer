@@ -9,6 +9,8 @@ https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/repository.json
 
 Google Drive·Dropbox·OneDrive는 공식 확장앱으로 제공됩니다. 기존 계정·토큰·리소스 키는 유지됩니다.
 기존 동작을 유지하도록 첫 시작에 기본 클라우드 확장앱을 포함하며 삭제 후 저장소에서 다시 설치할 수 있습니다.
+확장앱의 앱 등록 정보는 **설정 → 확장앱 → 해당 확장앱의 설정(톱니바퀴)** 안에서 관리합니다.
+끄거나 삭제해도 등록 정보와 계정은 보관되며, 삭제된 확장앱의 설정 항목은 표시하지 않습니다.
 
 ## 저장소 JSON
 
@@ -76,7 +78,8 @@ Android는 WebView 요청 콜백, Windows는 DevTools 요청 차단, Apple WebVi
 ### 클라우드 기능
 
 공식 `cloud.*.js`를 참고하세요. 계정 연결 UI에는 설치·활성화된 클라우드 확장앱이 표시됩니다.
-추가 공급자는 Client ID를 연결 시 입력합니다.
+`oauth`를 선언한 클라우드 확장앱에는 자체 설정 화면을 제공합니다. 추가 공급자의 Client ID도 그 화면에
+확장앱 ID별로 저장하며 로그인 시 사용합니다. 등록 정보가 없으면 연결 과정에서 해당 확장앱 설정을 엽니다.
 
 - `oauth`: `authEndpoint`, `tokenEndpoint`, `scopes`, 선택적 `clientId`, `extraAuthParams`,
   `loopbackHost`, `mobileRedirectUri`를 지정합니다. 로그인·PKCE·갱신·보안 저장은 앱이 담당합니다.
