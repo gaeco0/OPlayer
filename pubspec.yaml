@@ -58,6 +58,8 @@ dependencies:
   url_launcher: ^6.3.2
   dartssh2: ^4.1.0
   desktop_drop: ^0.8.4
+  quickjs_engine:
+    path: packages/quickjs_engine
 
 dependency_overrides:
   # smb_connect 0.0.9가 pointycastle ^3에 묶여 있어 dartssh2 4.x(새 Dart 호환)와 충돌 → 4.x로 통일
@@ -85,9 +87,13 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
+    - plugins/cloud.gdrive.js
+    - plugins/cloud.dropbox.js
+    - plugins/cloud.onedrive.js
     - assets/branding/oplayer.png
     - assets/licenses/ffmpeg-kit.txt
     - assets/licenses/byedpi.txt
+    - assets/licenses/quickjs.txt
     - assets/native/windows/ciadpi.exe
 
   # To add assets to your application, add an assets section, like this:

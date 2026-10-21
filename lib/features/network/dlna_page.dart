@@ -76,7 +76,7 @@ class _DlnaPageState extends State<DlnaPage> {
               child: Text(
                 _searching ? '미디어 서버를 찾는 중…' : (_error ?? '찾은 서버가 없습니다\n(같은 Wi-Fi에 있는지 확인하세요)'),
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: OColors.textSecondary),
+                style: TextStyle(color: OColors.of(context).textSecondary),
               ),
             )
           : ListView(
@@ -85,15 +85,21 @@ class _DlnaPageState extends State<DlnaPage> {
                   ListTile(
                     leading: d.iconUrl == null
                         ? const Icon(Icons.dns, size: 32)
-                        : Image.network(d.iconUrl!, width: 32, height: 32,
-                            errorBuilder: (_, __, ___) => const Icon(Icons.dns, size: 32)),
+                        : Image.network(
+                            d.iconUrl!,
+                            width: 32,
+                            height: 32,
+                            errorBuilder: (_, __, ___) => const Icon(Icons.dns, size: 32),
+                          ),
                     title: Text(d.name),
-                    subtitle: Text(Uri.parse(d.controlUrl).host,
-                        style: const TextStyle(fontSize: 12, color: OColors.textSecondary)),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (_) => RemoteBrowserPage(source: DlnaSource(d))),
+                    subtitle: Text(
+                      Uri.parse(d.controlUrl).host,
+                      style: TextStyle(fontSize: 12, color: OColors.of(context).textSecondary),
                     ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.of(
+                      context,
+                    ).push(MaterialPageRoute<void>(builder: (_) => RemoteBrowserPage(source: DlnaSource(d)))),
                   ),
               ],
             ),

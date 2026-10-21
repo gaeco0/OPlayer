@@ -1,0 +1,4 @@
+# Catalog hashes must match the bytes served by GitHub on every checkout.
+plugins/*.js text eol=lf
+plugins/**/*.js text eol=lf
+plugins/*.json text eol=lf

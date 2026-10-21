@@ -180,20 +180,15 @@ class _TopBar extends StatelessWidget {
           if (onCast != null) _IconBtn(icon: Icons.cast, tooltip: '외부 기기로 재생', onTap: onCast),
           if (onPip != null) _IconBtn(icon: Icons.picture_in_picture_alt, tooltip: '화면 속 화면', onTap: onPip),
           if (!narrow)
-            _IconBtn(
-              icon: Icons.closed_caption_outlined,
-              tooltip: '자막',
-              onTap: () => onPanel(PanelKind.subtitle),
-            ),
-          if (!narrow)
-            _IconBtn(icon: Icons.audiotrack_outlined, tooltip: '오디오', onTap: () => onPanel(PanelKind.audio)),
+            _IconBtn(icon: Icons.closed_caption_outlined, tooltip: '자막', onTap: () => onPanel(PanelKind.subtitle)),
+          if (!narrow) _IconBtn(icon: Icons.audiotrack_outlined, tooltip: '오디오', onTap: () => onPanel(PanelKind.audio)),
           if (!narrow)
             TextButton(
               onPressed: () => onPanel(PanelKind.speed),
               child: Text(
                 '${fmtRate(c.baseRate)}x',
                 style: TextStyle(
-                  color: c.baseRate == 1 ? Colors.white : OColors.accent,
+                  color: c.baseRate == 1 ? Colors.white : OColors.of(context).accent,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -356,7 +351,7 @@ class _IconBtn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = onTap == null ? Colors.white30 : (active ? OColors.accent : Colors.white);
+    final color = onTap == null ? Colors.white30 : (active ? OColors.of(context).accent : Colors.white);
     final btn = IconButton(
       tooltip: tooltip,
       iconSize: size,
@@ -381,7 +376,7 @@ class _RoundButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Material(
-    color: highlighted ? OColors.accent.withValues(alpha: 0.85) : Colors.black38,
+    color: highlighted ? OColors.of(context).accent.withValues(alpha: 0.85) : Colors.black38,
     shape: const CircleBorder(),
     child: InkWell(
       customBorder: const CircleBorder(),

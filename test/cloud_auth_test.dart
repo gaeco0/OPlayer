@@ -10,6 +10,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:oplayer/core/secure_store.dart';
 import 'package:oplayer/core/settings.dart';
+import 'package:oplayer/core/plugins/plugin_store.dart';
 import 'package:oplayer/sources/cloud/cloud_config.dart';
 import 'package:oplayer/sources/cloud/cloud_sources.dart';
 import 'package:oplayer/sources/cloud/oauth.dart';
@@ -23,6 +24,7 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
     SharedPreferences.setMockInitialValues({});
     await AppSettings.instance.init();
+    await PluginStore.instance.init();
   });
 
   test('desktop authorization validates state before consuming callback and uses PKCE', () async {

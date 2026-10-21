@@ -179,7 +179,7 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
                   '/$relative',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: OColors.textSecondary),
+                  style: TextStyle(fontSize: 12, color: OColors.of(context).textSecondary),
                 ),
             ],
           ),
@@ -239,9 +239,9 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
       );
     }
     if (_items.isEmpty) {
-      return const ScrollablePlaceholder(
+      return ScrollablePlaceholder(
         child: Center(
-          child: Text('동영상이 없습니다', style: TextStyle(color: OColors.textSecondary)),
+          child: Text('동영상이 없습니다', style: TextStyle(color: OColors.of(context).textSecondary)),
         ),
       );
     }
@@ -321,12 +321,12 @@ class ErrorView extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 48, color: OColors.textSecondary),
+          Icon(icon, size: 48, color: OColors.of(context).textSecondary),
           const SizedBox(height: 12),
           Text(
             message,
             textAlign: TextAlign.center,
-            style: const TextStyle(color: OColors.textSecondary),
+            style: TextStyle(color: OColors.of(context).textSecondary),
           ),
           const SizedBox(height: 12),
           OutlinedButton(onPressed: onRetry, child: const Text('다시 시도')),

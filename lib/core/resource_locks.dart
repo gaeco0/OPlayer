@@ -14,6 +14,7 @@ import 'settings.dart';
 
 const privacyChannel = MethodChannel('oplayer/privacy');
 const recentResourceKey = 'oplayer://recent';
+const downloadsResourceKey = 'oplayer://downloads';
 
 String resourceKey(String value) {
   final uri = Uri.tryParse(value);

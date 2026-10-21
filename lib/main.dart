@@ -8,6 +8,7 @@ import 'app/media_shell.dart';
 import 'core/mouse_nav.dart';
 import 'core/resume_store.dart';
 import 'core/settings.dart';
+import 'core/plugins/plugin_store.dart';
 import 'core/resource_locks.dart';
 import 'features/settings/privacy_settings.dart';
 import 'core/network/network_service.dart';
@@ -18,6 +19,10 @@ import 'features/browser/home_screen.dart';
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   LicenseRegistry.addLicense(() async* {
+    yield LicenseEntryWithLineBreaks(const [
+      'QuickJS-NG',
+      'quickjs_engine',
+    ], await rootBundle.loadString('assets/licenses/quickjs.txt'));
     yield LicenseEntryWithLineBreaks(const ['ByeDPI'], await rootBundle.loadString('assets/licenses/byedpi.txt'));
     yield LicenseEntryWithLineBreaks(
       const ['FFmpeg', 'FFmpegKit'],
@@ -34,6 +39,7 @@ Future<void> main(List<String> args) async {
     DownloadManager.instance.init(),
   ]);
   await NetworkService.instance.init();
+  await PluginStore.instance.init();
   await ResourceLocks.instance.init();
   await ResourceLocks.instance.syncNativePrivacy();
   if (ResourceLocks.supportsSystemAuthentication) {
@@ -50,19 +56,22 @@ class OPlayerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'OPlayer',
-      navigatorKey: MouseNav.navigatorKey,
-      builder: (context, child) => MouseNavListener(
-        child: PrivacyShell(
-          child: MediaShell(initialFiles: initialFiles, child: child!),
+    return ListenableBuilder(
+      listenable: AppSettings.instance,
+      builder: (context, _) => MaterialApp(
+        title: 'OPlayer',
+        navigatorKey: MouseNav.navigatorKey,
+        builder: (context, child) => MouseNavListener(
+          child: PrivacyShell(
+            child: MediaShell(initialFiles: initialFiles, child: child!),
+          ),
         ),
+        debugShowCheckedModeBanner: false,
+        theme: OTheme.light(),
+        darkTheme: OTheme.dark(),
+        themeMode: ThemeMode.values.byName(AppSettings.instance.themeMode.name),
+        home: const HomeScreen(),
       ),
-      debugShowCheckedModeBanner: false,
-      theme: OTheme.dark(),
-      darkTheme: OTheme.dark(),
-      themeMode: ThemeMode.dark,
-      home: const HomeScreen(),
     );
   }
 }

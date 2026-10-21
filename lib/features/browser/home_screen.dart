@@ -25,6 +25,8 @@ import '../player/player_screen.dart';
 import '../settings/settings_page.dart';
 import '../web/download_manager.dart';
 import '../web/downloads_page.dart';
+import '../../core/plugins/plugin_store.dart';
+import '../../core/plugins/plugin.dart';
 import '../web/web_browser_page.dart';
 import 'local_browser_page.dart';
 import 'recent_page.dart';
@@ -57,6 +59,7 @@ IconData cloudIcon(CloudProvider p) => switch (p) {
   CloudProvider.gdrive => Icons.add_to_drive,
   CloudProvider.dropbox => Icons.inventory_2_outlined,
   CloudProvider.onedrive => Icons.cloud_outlined,
+  CloudProvider.plugin => Icons.extension,
 };
 
 /// nPlayer 홈: 좌측 소스 목록(로컬 / 네트워크 / 클라우드 / 도구) + 우측 브라우저.
@@ -81,6 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _resolveDeviceRoot();
     ServerStore.instance.addListener(_refresh);
     ResourceLocks.instance.addListener(_refresh);
+    PluginStore.instance.addListener(_refresh);
     DownloadManager.instance.onOpenDownloads = _openDownloads;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) DownloadManager.instance.consumeOpenDownloads();
@@ -92,6 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
     DownloadManager.instance.onOpenDownloads = null;
     ServerStore.instance.removeListener(_refresh);
     ResourceLocks.instance.removeListener(_refresh);
+    PluginStore.instance.removeListener(_refresh);
     super.dispose();
   }
 
@@ -183,9 +188,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _connectCloud() async {
-    final provider = await showModalBottomSheet<CloudProvider>(
+    final extension = await showModalBottomSheet<OPlugin>(
       context: context,
-      backgroundColor: OColors.surface,
+      backgroundColor: OColors.of(context).surface,
       builder: (c) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -193,20 +198,55 @@ class _HomeScreenState extends State<HomeScreen> {
             const ListTile(
               title: Text('클라우드 연결', style: TextStyle(fontWeight: FontWeight.w700)),
             ),
-            for (final pr in CloudProvider.values)
-              ListTile(leading: Icon(cloudIcon(pr)), title: Text(pr.label), onTap: () => Navigator.pop(c, pr)),
+            for (final plugin in PluginStore.instance.enabled.where((p) => p.cloud))
+              ListTile(
+                leading: const Icon(Icons.cloud_outlined),
+                title: Text(plugin.name),
+                onTap: () => Navigator.pop(c, plugin),
+              ),
+            if (!PluginStore.instance.enabled.any((p) => p.cloud))
+              const ListTile(title: Text('설정 → 확장앱에서 클라우드 확장앱을 설치하고 켜 주세요')),
           ],
         ),
       ),
     );
-    if (provider == null || !mounted) return;
+    if (extension == null || !mounted) return;
+    final provider = CloudProvider.values.firstWhere(
+      (p) => extension.id == 'cloud.${p.name}',
+      orElse: () => CloudProvider.plugin,
+    );
+    String? clientId;
+    if (provider == CloudProvider.plugin) {
+      final controller = TextEditingController(text: extension.oauth['clientId'] as String? ?? '');
+      clientId = await showDialog<String>(
+        context: context,
+        builder: (c) => AlertDialog(
+          title: Text('${extension.name} Client ID'),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(labelText: 'OAuth Client ID'),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(c), child: const Text('취소')),
+            FilledButton(
+              onPressed: () {
+                if (controller.text.trim().isNotEmpty) Navigator.pop(c, controller.text.trim());
+              },
+              child: const Text('연결'),
+            ),
+          ],
+        ),
+      );
+      controller.dispose();
+      if (clientId == null || !mounted) return;
+    }
     if (!cloudConfigured(provider)) {
       if (!await showCloudSetup(context, provider) || !mounted) return;
     }
     final messenger = ScaffoldMessenger.of(context);
     messenger.showSnackBar(SnackBar(content: Text('${provider.label} 로그인 창을 여는 중…')));
     try {
-      final a = await connectCloudAccount(provider);
+      final a = await connectCloudAccount(provider, pluginId: extension.id, clientId: clientId);
       if (!mounted) return;
       messenger.hideCurrentSnackBar();
       _select(Source(SourceKind.cloud, a.name, cloudIcon(a.provider), id: a.id));
@@ -346,6 +386,13 @@ class _HomeScreenState extends State<HomeScreen> {
       case SourceKind.cloud:
         final a = ServerStore.instance.account(s.id!);
         if (a == null) return const SizedBox.shrink();
+        final pluginId = a.pluginId ?? 'cloud.${a.provider.name}';
+        if (!PluginStore.instance.installed.containsKey(pluginId) || PluginStore.instance.disabled.contains(pluginId)) {
+          return Scaffold(
+            appBar: AppBar(leading: menu, title: Text(a.name)),
+            body: const Center(child: Text('설정 → 확장앱에서 클라우드 확장앱을 설치하고 켜 주세요')),
+          );
+        }
         return RemoteBrowserPage(
           key: ValueKey('cloud-${a.id}'),
           source: SourceRegistry.instance.forAccount(a),
@@ -393,7 +440,7 @@ class _HomeScreenState extends State<HomeScreen> {
           if (wide)
             SizedBox(
               width: 280,
-              child: Material(color: OColors.surface, child: sidebar),
+              child: Material(color: OColors.of(context).surface, child: sidebar),
             ),
           Expanded(
             child: _ShowDrawerButton(
@@ -428,11 +475,11 @@ class _OpenFab extends StatelessWidget {
   Widget build(BuildContext context) {
     return FloatingActionButton(
       tooltip: '열기',
-      backgroundColor: OColors.accent,
+      backgroundColor: OColors.of(context).accent,
       foregroundColor: Colors.white,
       onPressed: () => showModalBottomSheet<void>(
         context: context,
-        backgroundColor: OColors.surface,
+        backgroundColor: OColors.of(context).surface,
         builder: (c) => SafeArea(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -506,8 +553,8 @@ class _Sidebar extends StatelessWidget {
       return ListTile(
         dense: true,
         selected: s == selected,
-        selectedTileColor: OColors.accent.withValues(alpha: 0.15),
-        selectedColor: OColors.accent,
+        selectedTileColor: OColors.of(context).accent.withValues(alpha: 0.15),
+        selectedColor: OColors.of(context).accent,
         leading: Icon(s.icon, size: 22),
         title: Row(
           children: [
@@ -522,7 +569,7 @@ class _Sidebar extends StatelessWidget {
                 s.subtitle!,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 11, color: OColors.textSecondary),
+                style: TextStyle(fontSize: 11, color: OColors.of(context).textSecondary),
               ),
         trailing:
             trailing ??
@@ -546,7 +593,7 @@ class _Sidebar extends StatelessWidget {
           Expanded(
             child: Text(
               t,
-              style: const TextStyle(fontSize: 12, color: OColors.textSecondary, fontWeight: FontWeight.w600),
+              style: TextStyle(fontSize: 12, color: OColors.of(context).textSecondary, fontWeight: FontWeight.w600),
             ),
           ),
           if (action != null) action,
@@ -595,7 +642,18 @@ class _Sidebar extends StatelessWidget {
               final n = DownloadManager.instance.activeCount;
               return item(
                 const Source(SourceKind.downloads, '다운로드', Icons.download_outlined),
-                trailing: n == 0 ? null : Badge(label: Text('$n'), backgroundColor: OColors.accent),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (n > 0) Badge(label: Text('$n'), backgroundColor: OColors.of(context).accent),
+                    more([
+                      (
+                        ResourceLocks.instance.hasExact(downloadsResourceKey) ? '잠금 설정 해제' : '이 리소스 잠금',
+                        () => toggleResourceLock(context, downloadsResourceKey, '다운로드'),
+                      ),
+                    ]),
+                  ],
+                ),
               );
             },
           ),
@@ -642,7 +700,7 @@ class _Sidebar extends StatelessWidget {
             ListTile(
               dense: true,
               leading: const Icon(Icons.add_circle_outline, size: 22),
-              title: const Text('Google Drive / OneDrive / Dropbox'),
+              title: const Text('설치한 클라우드 확장앱'),
               onTap: onConnectCloud,
             ),
           header('도구'),
@@ -656,6 +714,7 @@ class _Sidebar extends StatelessWidget {
 }
 
 String? _sourceResource(Source source) => switch (source.kind) {
+  SourceKind.downloads => downloadsResourceKey,
   SourceKind.device || SourceKind.folder => source.path,
   SourceKind.recent => recentResourceKey,
   SourceKind.server =>

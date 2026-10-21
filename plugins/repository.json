@@ -1,0 +1,55 @@
+{
+  "api": 1,
+  "name": "OPlayer 공식 확장앱 저장소",
+  "description": "OPlayer의 클라우드 연결 확장앱을 제공합니다.",
+  "plugins": [
+    {
+      "id": "cloud.dropbox",
+      "name": "Dropbox",
+      "version": "1.0.0",
+      "kind": "cloud",
+      "author": "OPlayer",
+      "features": [
+        "클라우드 연결",
+        "폴더 탐색",
+        "미디어 재생"
+      ],
+      "description": "Dropbox 계정 연결·폴더 탐색·미디어 재생",
+      "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.dropbox.js",
+      "sha256": "3662ffddd85e2ad2c81eaca205e8d7cce77a7ca40f9fd8672ec3458c0c5006e9",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+    },
+    {
+      "id": "cloud.gdrive",
+      "name": "Google Drive",
+      "version": "1.0.0",
+      "kind": "cloud",
+      "author": "OPlayer",
+      "features": [
+        "클라우드 연결",
+        "폴더 탐색",
+        "미디어 재생"
+      ],
+      "description": "Google Drive 계정 연결·폴더 탐색·미디어 재생",
+      "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.gdrive.js",
+      "sha256": "bec6d254b69f9b4a2432c5b01ea4cf32239cd49ec56929ca4ce334365a4a6d78",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+    },
+    {
+      "id": "cloud.onedrive",
+      "name": "OneDrive",
+      "version": "1.0.0",
+      "kind": "cloud",
+      "author": "OPlayer",
+      "features": [
+        "클라우드 연결",
+        "폴더 탐색",
+        "미디어 재생"
+      ],
+      "description": "OneDrive 계정 연결·폴더 탐색·미디어 재생",
+      "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.onedrive.js",
+      "sha256": "0c1d229351afedb073f7ea8ac11b29da8ff44fcfcab2afb3b5a5fe5293d1b924",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+    }
+  ]
+}

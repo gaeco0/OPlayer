@@ -47,6 +47,10 @@ migrate_working_dir/
 /.codex/
 /.aws/
 /android/.kotlin/
+/packages/quickjs_engine/android/.cxx/
+/packages/quickjs_engine/android/.gradle/
+/packages/quickjs_engine/android/build/
+/packages/quickjs_engine/native/build/
 
 # Symbolication related
 app.*.symbols

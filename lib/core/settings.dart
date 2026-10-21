@@ -8,6 +8,19 @@ enum ResumeMode { auto, ask, off }
 
 enum DefaultAspect { fit, fill, stretch }
 
+enum AppThemeMode { system, light, dark }
+
+enum OutputQuality {
+  original('원본화질'),
+  high('고화질 · 최대 1080p'),
+  medium('중화질 · 최대 720p'),
+  low('저화질 · 최대 480p'),
+  audio('소리만 · M4A');
+
+  const OutputQuality(this.label);
+  final String label;
+}
+
 /// 앱 설정. 모든 화면이 AppSettings.instance를 듣는다.
 class AppSettings extends ChangeNotifier {
   AppSettings._();
@@ -43,6 +56,11 @@ class AppSettings extends ChangeNotifier {
 
   // ---- 브라우저 ----
   bool showHiddenFiles = false;
+  String homepage = 'https://www.google.com';
+  AppThemeMode themeMode = AppThemeMode.system;
+  int primaryColor = 0xFF2D9CFF;
+  int secondaryColor = 0xFF80CBC4;
+  OutputQuality outputQuality = OutputQuality.original;
   final Map<String, FolderSort> _folderSorts = {};
 
   FolderSort folderSort(String key) => _folderSorts[key] ?? const FolderSort();
@@ -104,6 +122,11 @@ class AppSettings extends ChangeNotifier {
     'subColor': subtitleColor,
     'subBg': subtitleBackground,
     'hidden': showHiddenFiles,
+    'homepage': homepage,
+    'themeMode': themeMode.name,
+    'primaryColor': primaryColor,
+    'secondaryColor': secondaryColor,
+    'outputQuality': outputQuality.name,
     'folderSorts': _folderSorts.map((key, value) => MapEntry(key, value.toJson())),
     'preventCapture': preventCapture,
     'thumbs': showThumbnails,
@@ -146,6 +169,14 @@ class AppSettings extends ChangeNotifier {
     subtitleColor = v('subColor', 0xFFFFFFFF);
     subtitleBackground = v('subBg', false);
     showHiddenFiles = v('hidden', false);
+    homepage = normalizeHomepage(v('homepage', 'https://www.google.com')) ?? 'https://www.google.com';
+    themeMode = AppThemeMode.values.firstWhere((e) => e.name == j['themeMode'], orElse: () => AppThemeMode.system);
+    primaryColor = v('primaryColor', 0xFF2D9CFF) | 0xFF000000;
+    secondaryColor = v('secondaryColor', 0xFF80CBC4) | 0xFF000000;
+    outputQuality = OutputQuality.values.firstWhere(
+      (e) => e.name == j['outputQuality'],
+      orElse: () => OutputQuality.original,
+    );
     _folderSorts.clear();
     final sorts = j['folderSorts'];
     if (sorts is Map) {
@@ -176,4 +207,14 @@ class AppSettings extends ChangeNotifier {
     hlsParallelSegments = v('hlsPar', 4);
     ffmpegPath = j['ffmpeg'] as String?;
   }
+}
+
+String? normalizeHomepage(String input) {
+  final value = input.trim();
+  if (value.isEmpty || RegExp(r'\s').hasMatch(value)) return null;
+  final uri = Uri.tryParse(value.contains('://') ? value : 'https://$value');
+  if (uri == null || !['http', 'https'].contains(uri.scheme) || uri.host.isEmpty || uri.userInfo.isNotEmpty) {
+    return null;
+  }
+  return uri.toString();
 }

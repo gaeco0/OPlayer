@@ -40,6 +40,7 @@ class MainActivity : FlutterActivity() {
     private var exitToast: Toast? = null
     private var playerActive = false
     private var playing = false
+    private var pipSeekSeconds = 10
     private var aspect = 16.0 / 9.0
     private var receiverRegistered = false
     private val toggleAction = "com.oplayer.oplayer.PIP_TOGGLE"
@@ -173,6 +174,7 @@ class MainActivity : FlutterActivity() {
                 "update" -> {
                     playerActive = call.argument<Boolean>("active") ?: false
                     playing = call.argument<Boolean>("playing") ?: false
+                    pipSeekSeconds = (call.argument<Number>("seekSeconds")?.toInt() ?: 10).coerceIn(1, 300)
                     aspect = (call.argument<Number>("aspect")?.toDouble() ?: aspect).coerceIn(0.42, 2.39)
                     if (supportsPip()) setPictureInPictureParams(pipParams())
                     result.success(null)
@@ -205,8 +207,14 @@ class MainActivity : FlutterActivity() {
             val intent = Intent(toggleAction).setPackage(packageName).putExtra("command", command)
             val pending = PendingIntent.getBroadcast(this, command.hashCode(), intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            val title = playbackActionTitle(command, playing)
-            RemoteAction(Icon.createWithResource(this, playbackActionIcon(command, playing)), title, title, pending)
+            val title = when (command) {
+                "rewind" -> "${pipSeekSeconds}초 뒤로"
+                "forward" -> "${pipSeekSeconds}초 앞으로"
+                else -> playbackActionTitle(command, playing)
+            }
+            val icon = if (command == "rewind" || command == "forward") pipSeekIcon(pipSeekSeconds, command == "forward")
+                else Icon.createWithResource(this, playbackActionIcon(command, playing))
+            RemoteAction(icon, title, title, pending)
         }
         val rect = Rect()
         window.decorView.getGlobalVisibleRect(rect)

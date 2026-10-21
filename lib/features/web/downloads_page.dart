@@ -6,6 +6,9 @@ import 'package:path/path.dart' as p;
 import '../../app/theme.dart';
 import '../../core/media_item.dart';
 import '../../core/media_utils.dart';
+import '../../core/resource_locks.dart';
+import '../settings/privacy_settings.dart';
+import '../settings/resource_access_view.dart';
 import '../../sources/server_store.dart';
 import '../../sources/source_registry.dart';
 import '../player/player_screen.dart';
@@ -27,55 +30,66 @@ class DownloadsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final m = DownloadManager.instance;
-    return TooltipVisibility(
-      visible: false,
-      child: Scaffold(
-        appBar: AppBar(
-          automaticallyImplyLeading: leading == null,
-          leading: leading,
-          title: const Text('다운로드'),
-          actions: [
-            PopupMenuButton<String>(
-              tooltip: '목록 정리',
-              icon: const Icon(Icons.cleaning_services_outlined),
-              onSelected: (v) async {
-                final n = switch (v) {
-                  'done' => await m.clear(done: true, failed: false),
-                  'failed' => await m.clear(done: false, failed: true),
-                  _ => await m.clear(done: true, failed: true, paused: true),
-                };
-                if (context.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text(n == 0 ? '지울 항목이 없습니다' : '$n개 항목을 목록에서 지웠습니다')));
-                }
-              },
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'done', child: Text('완료 항목 지우기')),
-                PopupMenuItem(value: 'failed', child: Text('실패 항목 지우기')),
-                PopupMenuItem(value: 'all', child: Text('진행 중 제외 모두 지우기')),
-              ],
-            ),
-          ],
-        ),
-        body: ListenableBuilder(
-          listenable: m,
-          builder: (context, _) {
-            if (m.tasks.isEmpty) {
-              return const Center(
-                child: Text(
-                  '다운로드한 동영상이 없습니다\n웹 브라우저에서 영상을 찾아 받아보세요',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: OColors.textSecondary),
+    return ListenableBuilder(
+      listenable: ResourceLocks.instance,
+      builder: (context, _) => TooltipVisibility(
+        visible: false,
+        child: Scaffold(
+          appBar: AppBar(
+            automaticallyImplyLeading: leading == null,
+            leading: leading,
+            title: const Text('다운로드'),
+            actions: [
+              IconButton(
+                icon: Icon(ResourceLocks.instance.hasExact(downloadsResourceKey) ? Icons.lock : Icons.lock_open),
+                onPressed: () => toggleResourceLock(context, downloadsResourceKey, '다운로드'),
+              ),
+              if (!ResourceLocks.instance.isLocked(downloadsResourceKey))
+                PopupMenuButton<String>(
+                  tooltip: '목록 정리',
+                  icon: const Icon(Icons.cleaning_services_outlined),
+                  onSelected: (v) async {
+                    final n = switch (v) {
+                      'done' => await m.clear(done: true, failed: false),
+                      'failed' => await m.clear(done: false, failed: true),
+                      _ => await m.clear(done: true, failed: true, paused: true),
+                    };
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(
+                        context,
+                      ).showSnackBar(SnackBar(content: Text(n == 0 ? '지울 항목이 없습니다' : '$n개 항목을 목록에서 지웠습니다')));
+                    }
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'done', child: Text('완료 항목 지우기')),
+                    PopupMenuItem(value: 'failed', child: Text('실패 항목 지우기')),
+                    PopupMenuItem(value: 'all', child: Text('진행 중 제외 모두 지우기')),
+                  ],
                 ),
-              );
-            }
-            return ListView.separated(
-              itemCount: m.tasks.length,
-              separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
-              itemBuilder: (_, i) => _Tile(task: m.tasks[i]),
-            );
-          },
+            ],
+          ),
+          body: ResourceAccessView(
+            resources: const [downloadsResourceKey],
+            child: ListenableBuilder(
+              listenable: m,
+              builder: (context, _) {
+                if (m.tasks.isEmpty) {
+                  return Center(
+                    child: Text(
+                      '다운로드한 동영상이 없습니다\n웹 브라우저에서 영상을 찾아 받아보세요',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: OColors.of(context).textSecondary),
+                    ),
+                  );
+                }
+                return ListView.separated(
+                  itemCount: m.tasks.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
+                  itemBuilder: (_, i) => _Tile(task: m.tasks[i]),
+                );
+              },
+            ),
+          ),
         ),
       ),
     );
@@ -127,7 +141,11 @@ class _Tile extends StatelessWidget {
           alignment: Alignment.center,
           children: [
             if (t.status == DownloadStatus.running || t.status == DownloadStatus.paused)
-              CircularProgressIndicator(value: t.progress, strokeWidth: 3, backgroundColor: OColors.surfaceHigh),
+              CircularProgressIndicator(
+                value: t.progress,
+                strokeWidth: 3,
+                backgroundColor: OColors.of(context).surfaceHigh,
+              ),
             Icon(
               switch (t.status) {
                 DownloadStatus.done => Icons.play_circle_outline,
@@ -135,7 +153,7 @@ class _Tile extends StatelessWidget {
                 _ => t.kind == DownloadKind.hls ? Icons.stream : Icons.movie_outlined,
               },
               size: t.status == DownloadStatus.done ? 32 : 20,
-              color: t.status == DownloadStatus.failed ? Colors.redAccent : OColors.accent,
+              color: t.status == DownloadStatus.failed ? Colors.redAccent : OColors.of(context).accent,
             ),
           ],
         ),
@@ -147,7 +165,7 @@ class _Tile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           fontSize: 12,
-          color: t.status == DownloadStatus.failed ? Colors.redAccent : OColors.textSecondary,
+          color: t.status == DownloadStatus.failed ? Colors.redAccent : OColors.of(context).textSecondary,
         ),
       ),
       trailing: Row(

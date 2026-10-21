@@ -8,13 +8,7 @@ import 'controls_overlay.dart' show PanelKind;
 
 /// nPlayer식 우측 슬라이드 패널 (배속 / 자막 / 오디오 / 화면비 / 재생목록 / 더보기)
 class SidePanel extends StatelessWidget {
-  const SidePanel({
-    super.key,
-    required this.kind,
-    required this.c,
-    required this.onClose,
-    required this.onToast,
-  });
+  const SidePanel({super.key, required this.kind, required this.c, required this.onClose, required this.onToast});
   final PanelKind kind;
   final PlayerController c;
   final VoidCallback onClose;
@@ -48,18 +42,11 @@ class SidePanel extends StatelessWidget {
                           Expanded(
                             child: Text(
                               _title,
-                              style: const TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
+                              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: Colors.white),
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(
-                              Icons.close,
-                              color: Colors.white70,
-                            ),
+                            icon: const Icon(Icons.close, color: Colors.white70),
                             onPressed: onClose,
                           ),
                         ],
@@ -67,10 +54,7 @@ class SidePanel extends StatelessWidget {
                     ),
                     const Divider(height: 1, color: Colors.white12),
                     Expanded(
-                      child: ListenableBuilder(
-                        listenable: c,
-                        builder: (_, __) => _body(context),
-                      ),
+                      child: ListenableBuilder(listenable: c, builder: (_, __) => _body(context)),
                     ),
                   ],
                 )
@@ -101,11 +85,7 @@ class SidePanel extends StatelessWidget {
   };
 }
 
-const _label = TextStyle(
-  color: Colors.white60,
-  fontSize: 12,
-  fontWeight: FontWeight.w600,
-);
+const _label = TextStyle(color: Colors.white60, fontSize: 12, fontWeight: FontWeight.w600);
 const _white = TextStyle(color: Colors.white);
 
 class _Section extends StatelessWidget {
@@ -119,12 +99,7 @@ class _Section extends StatelessWidget {
 }
 
 class _Stepper extends StatelessWidget {
-  const _Stepper({
-    required this.value,
-    required this.onMinus,
-    required this.onPlus,
-    this.onReset,
-  });
+  const _Stepper({required this.value, required this.onMinus, required this.onPlus, this.onReset});
   final String value;
   final VoidCallback onMinus;
   final VoidCallback onPlus;
@@ -135,21 +110,14 @@ class _Stepper extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 12),
     child: Row(
       children: [
-        IconButton.filledTonal(
-          onPressed: onMinus,
-          icon: const Icon(Icons.remove),
-        ),
+        IconButton.filledTonal(onPressed: onMinus, icon: const Icon(Icons.remove)),
         Expanded(
           child: GestureDetector(
             onTap: onReset,
             child: Text(
               value,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-              ),
+              style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
             ),
           ),
         ),
@@ -176,13 +144,7 @@ class _SpeedPanel extends StatelessWidget {
           onPlus: () => c.setRate(c.baseRate + 0.1),
           onReset: () => c.setRate(1.0),
         ),
-        Slider(
-          value: c.baseRate,
-          min: 0.25,
-          max: 4.0,
-          divisions: 75,
-          onChanged: c.setRate,
-        ),
+        Slider(value: c.baseRate, min: 0.25, max: 4.0, divisions: 75, onChanged: c.setRate),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Wrap(
@@ -190,20 +152,13 @@ class _SpeedPanel extends StatelessWidget {
             runSpacing: 8,
             children: [
               for (final r in presets)
-                ChoiceChip(
-                  label: Text('${fmtRate(r)}x'),
-                  selected: c.baseRate == r,
-                  onSelected: (_) => c.setRate(r),
-                ),
+                ChoiceChip(label: Text('${fmtRate(r)}x'), selected: c.baseRate == r, onSelected: (_) => c.setRate(r)),
             ],
           ),
         ),
         const Padding(
           padding: EdgeInsets.all(20),
-          child: Text(
-            '화면을 길게 누르면 현재 속도의 2배로 재생됩니다.',
-            style: TextStyle(color: Colors.white38, fontSize: 12),
-          ),
+          child: Text('화면을 길게 누르면 현재 속도의 2배로 재생됩니다.', style: TextStyle(color: Colors.white38, fontSize: 12)),
         ),
       ],
     );
@@ -219,10 +174,7 @@ class _SubtitlePanel extends StatelessWidget {
   String _trackName(SubtitleTrack t) {
     if (t.id == 'no') return '사용 안 함';
     if (t.id == 'auto') return '자동';
-    final parts = [
-      t.title,
-      t.language,
-    ].whereType<String>().where((e) => e.isNotEmpty);
+    final parts = [t.title, t.language].whereType<String>().where((e) => e.isNotEmpty);
     return parts.isEmpty ? '트랙 ${t.id}' : parts.join(' · ');
   }
 
@@ -235,9 +187,7 @@ class _SubtitlePanel extends StatelessWidget {
         stream: c.player.stream.track,
         initialData: c.player.state.track,
         builder: (_, sel) {
-          final tracks = (snap.data?.subtitle ?? [])
-              .where((t) => t.id != 'auto')
-              .toList();
+          final tracks = (snap.data?.subtitle ?? []).where((t) => t.id != 'auto').toList();
           final current = sel.data?.subtitle;
           final ext = c.externalSubtitles;
           return ListView(
@@ -249,15 +199,7 @@ class _SubtitlePanel extends StatelessWidget {
                   try {
                     final result = await FilePicker.pickFiles(
                       type: FileType.custom,
-                      allowedExtensions: [
-                        'srt',
-                        'smi',
-                        'ass',
-                        'ssa',
-                        'vtt',
-                        'lrc',
-                        'sub',
-                      ],
+                      allowedExtensions: ['srt', 'smi', 'ass', 'ssa', 'vtt', 'lrc', 'sub'],
                       allowMultiple: false,
                     );
                     final path = result?.files.single.path;
@@ -272,19 +214,14 @@ class _SubtitlePanel extends StatelessWidget {
                 values: [for (final t in tracks) t.id],
                 selected: current?.id,
                 label: (id) => _trackName(tracks.firstWhere((t) => t.id == id)),
-                onChanged: (id) => c.player.setSubtitleTrack(
-                  tracks.firstWhere((t) => t.id == id),
-                ),
+                onChanged: (id) => c.player.setSubtitleTrack(tracks.firstWhere((t) => t.id == id)),
               ),
               if (ext.isNotEmpty) ...[
                 const _Section('외부 자막 파일'),
                 for (final f in ext)
                   ListTile(
                     dense: true,
-                    leading: const Icon(
-                      Icons.subtitles_outlined,
-                      color: Colors.white70,
-                    ),
+                    leading: const Icon(Icons.subtitles_outlined, color: Colors.white70),
                     title: Text(f.title, style: _white),
                     onTap: () => c.loadExternalSubtitle(f),
                   ),
@@ -293,12 +230,8 @@ class _SubtitlePanel extends StatelessWidget {
               _Stepper(
                 value:
                     '${c.subtitleDelay.inMilliseconds >= 0 ? '+' : ''}${(c.subtitleDelay.inMilliseconds / 1000).toStringAsFixed(1)}초',
-                onMinus: () => c.setSubtitleDelay(
-                  c.subtitleDelay - const Duration(milliseconds: 100),
-                ),
-                onPlus: () => c.setSubtitleDelay(
-                  c.subtitleDelay + const Duration(milliseconds: 100),
-                ),
+                onMinus: () => c.setSubtitleDelay(c.subtitleDelay - const Duration(milliseconds: 100)),
+                onPlus: () => c.setSubtitleDelay(c.subtitleDelay + const Duration(milliseconds: 100)),
                 onReset: () => c.setSubtitleDelay(Duration.zero),
               ),
               const _Section('크기'),
@@ -340,9 +273,7 @@ class _AudioPanel extends StatelessWidget {
         stream: c.player.stream.track,
         initialData: c.player.state.track,
         builder: (_, sel) {
-          final tracks = (snap.data?.audio ?? [])
-              .where((t) => t.id != 'auto')
-              .toList();
+          final tracks = (snap.data?.audio ?? []).where((t) => t.id != 'auto').toList();
           return ListView(
             children: [
               const _Section('오디오 트랙'),
@@ -353,26 +284,19 @@ class _AudioPanel extends StatelessWidget {
                   final t = tracks.firstWhere((t) => t.id == id);
                   return t.id == 'no'
                       ? '음소거'
-                      : [t.title, t.language, t.codec]
-                            .whereType<String>()
-                            .where((e) => e.isNotEmpty)
-                            .join(' · ')
-                            .ifEmpty('트랙 ${t.id}');
+                      : [
+                          t.title,
+                          t.language,
+                          t.codec,
+                        ].whereType<String>().where((e) => e.isNotEmpty).join(' · ').ifEmpty('트랙 ${t.id}');
                 },
-                onChanged: (id) => c.player.setAudioTrack(
-                  tracks.firstWhere((t) => t.id == id),
-                ),
+                onChanged: (id) => c.player.setAudioTrack(tracks.firstWhere((t) => t.id == id)),
               ),
               const _Section('오디오 싱크 (탭하면 초기화)'),
               _Stepper(
-                value:
-                    '${(c.audioDelay.inMilliseconds / 1000).toStringAsFixed(1)}초',
-                onMinus: () => c.setAudioDelay(
-                  c.audioDelay - const Duration(milliseconds: 100),
-                ),
-                onPlus: () => c.setAudioDelay(
-                  c.audioDelay + const Duration(milliseconds: 100),
-                ),
+                value: '${(c.audioDelay.inMilliseconds / 1000).toStringAsFixed(1)}초',
+                onMinus: () => c.setAudioDelay(c.audioDelay - const Duration(milliseconds: 100)),
+                onPlus: () => c.setAudioDelay(c.audioDelay + const Duration(milliseconds: 100)),
                 onReset: () => c.setAudioDelay(Duration.zero),
               ),
               const _Section('볼륨 증폭'),
@@ -383,10 +307,7 @@ class _AudioPanel extends StatelessWidget {
                 onReset: () => c.setAudioBoost(0),
               ),
               const _Section('10밴드 이퀄라이저'),
-              TextButton(
-                onPressed: c.resetEqualizer,
-                child: const Text('이퀄라이저 초기화'),
-              ),
+              TextButton(onPressed: c.resetEqualizer, child: const Text('이퀄라이저 초기화')),
               for (var i = 0; i < c.equalizer.length; i++)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -435,12 +356,7 @@ class _AspectPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListView(
     children: [
-      _Radios<AspectMode>(
-        values: AspectMode.values,
-        selected: c.aspect,
-        label: (m) => m.label,
-        onChanged: c.setAspect,
-      ),
+      _Radios<AspectMode>(values: AspectMode.values, selected: c.aspect, label: (m) => m.label, onChanged: c.setAspect),
       const _Section('확대'),
       _Stepper(
         value: '${(c.zoom * 100).round()}%',
@@ -503,15 +419,15 @@ class _PlaylistPanel extends StatelessWidget {
       return ListTile(
         dense: true,
         selected: cur,
-        selectedColor: OColors.accent,
+        selectedColor: OColors.of(context).accent,
         leading: cur
-            ? const Icon(Icons.equalizer, color: OColors.accent)
+            ? Icon(Icons.equalizer, color: OColors.of(context).accent)
             : Text('${i + 1}', style: const TextStyle(color: Colors.white54)),
         title: Text(
           item.title,
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: cur ? OColors.accent : Colors.white),
+          style: TextStyle(color: cur ? OColors.of(context).accent : Colors.white),
         ),
         onTap: () {
           c.jumpTo(i);
@@ -551,21 +467,14 @@ class _MorePanel extends StatelessWidget {
               for (final minutes in [0, 15, 30, 45, 60, 90])
                 ChoiceChip(
                   label: Text(minutes == 0 ? '끄기' : '$minutes분'),
-                  selected: minutes == 0
-                      ? c.sleepUntil == null
-                      : c.sleepDuration?.inMinutes == minutes,
-                  onSelected: (_) => c.setSleepTimer(
-                    minutes == 0 ? null : Duration(minutes: minutes),
-                  ),
+                  selected: minutes == 0 ? c.sleepUntil == null : c.sleepDuration?.inMinutes == minutes,
+                  onSelected: (_) => c.setSleepTimer(minutes == 0 ? null : Duration(minutes: minutes)),
                 ),
             ],
           ),
         ),
         ListTile(
-          leading: const Icon(
-            Icons.photo_camera_outlined,
-            color: Colors.white70,
-          ),
+          leading: const Icon(Icons.photo_camera_outlined, color: Colors.white70),
           title: const Text('현재 화면 저장', style: _white),
           onTap: () async {
             try {
@@ -593,12 +502,7 @@ class _MorePanel extends StatelessWidget {
         ListTile(
           dense: true,
           leading: const Icon(Icons.compare_arrows, color: Colors.white70),
-          title: Text(
-            c.abA == null
-                ? 'A-B 구간 반복: A 지점 설정'
-                : (c.abB == null ? 'B 지점 설정' : 'A-B 반복 해제'),
-            style: _white,
-          ),
+          title: Text(c.abA == null ? 'A-B 구간 반복: A 지점 설정' : (c.abB == null ? 'B 지점 설정' : 'A-B 반복 해제'), style: _white),
           onTap: () {
             final m = c.tapAB();
             if (m != null) onToast(m);
@@ -607,11 +511,7 @@ class _MorePanel extends StatelessWidget {
         const _Section('정보'),
         _info('해상도', s.width != null ? '${s.width} × ${s.height}' : '-'),
         _info('경로', c.current.localPath ?? c.current.key),
-        if (s.audioParams.format != null)
-          _info(
-            '오디오',
-            '${s.audioParams.format} · ${s.audioParams.channels ?? ''}',
-          ),
+        if (s.audioParams.format != null) _info('오디오', '${s.audioParams.format} · ${s.audioParams.channels ?? ''}'),
         const SizedBox(height: 24),
       ],
     );
@@ -624,16 +524,10 @@ class _MorePanel extends StatelessWidget {
       children: [
         SizedBox(
           width: 64,
-          child: Text(
-            k,
-            style: const TextStyle(color: Colors.white54, fontSize: 13),
-          ),
+          child: Text(k, style: const TextStyle(color: Colors.white54, fontSize: 13)),
         ),
         Expanded(
-          child: Text(
-            v,
-            style: const TextStyle(color: Colors.white, fontSize: 13),
-          ),
+          child: Text(v, style: const TextStyle(color: Colors.white, fontSize: 13)),
         ),
       ],
     ),
@@ -641,12 +535,7 @@ class _MorePanel extends StatelessWidget {
 }
 
 class _Radios<T> extends StatelessWidget {
-  const _Radios({
-    required this.values,
-    required this.selected,
-    required this.label,
-    required this.onChanged,
-  });
+  const _Radios({required this.values, required this.selected, required this.label, required this.onChanged});
   final List<T> values;
   final T? selected;
   final String Function(T) label;

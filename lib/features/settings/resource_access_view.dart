@@ -108,7 +108,10 @@ class _ResourceAccessViewState extends State<ResourceAccessView> with WidgetsBin
         children: [
           ExcludeFocus(
             excluding: locked,
-            child: Offstage(offstage: locked, child: widget.child),
+            child: Offstage(
+              offstage: locked,
+              child: TickerMode(enabled: !locked, child: widget.child),
+            ),
           ),
           if (locked)
             Positioned.fill(

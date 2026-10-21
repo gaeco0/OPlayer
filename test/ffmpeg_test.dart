@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:oplayer/core/ffmpeg.dart';
+import 'package:oplayer/core/settings.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -63,5 +64,37 @@ void main() {
     final result = await Ffmpeg.remuxToMp4(video: 'input.ts', output: output.path);
     expect(result.$1, false);
     expect(result.$2, contains('native execution failed'));
+  });
+
+  test('output presets retain original input and map audio-only to a real audio track', () async {
+    final dir = Directory.systemTemp.createTempSync('oplayer_profiles_');
+    addTearDown(() => dir.deleteSync(recursive: true));
+    final input = File('${dir.path}/input.ts')..writeAsBytesSync([1, 2, 3]);
+    final executions = <List<String>>[];
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'version') return '6.0';
+      final args = List<String>.from((call.arguments as Map)['arguments'] as List);
+      executions.add(args);
+      await File(args.last).writeAsBytes([1, 2]);
+      return {'code': 0, 'error': ''};
+    });
+    for (final q in OutputQuality.values) {
+      final path = '${dir.path}/${q.name}${q == OutputQuality.audio ? '.m4a' : '.mp4'}';
+      expect(
+        (await Ffmpeg.createMp4(
+          video: input.path,
+          audio: q == OutputQuality.audio ? 'audio.aac' : null,
+          output: path,
+          quality: q,
+        )).$1,
+        true,
+      );
+    }
+    expect(executions.first, containsAllInOrder(['-c', 'copy']));
+    expect(executions[1], contains("scale=-2:'trunc(min(1080,ih)/2)*2'"));
+    expect(executions[2], contains("scale=-2:'trunc(min(720,ih)/2)*2'"));
+    expect(executions[3], contains("scale=-2:'trunc(min(480,ih)/2)*2'"));
+    expect(executions.last, containsAllInOrder(['-map', '1:a:0', '-vn', '-c:a', 'aac']));
+    expect(input.readAsBytesSync(), [1, 2, 3]);
   });
 }

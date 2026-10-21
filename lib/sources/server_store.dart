@@ -79,18 +79,20 @@ class ServerConfig {
   );
 }
 
-enum CloudProvider { gdrive, dropbox, onedrive }
+enum CloudProvider { gdrive, dropbox, onedrive, plugin }
 
 extension CloudProviderX on CloudProvider {
   String get label => switch (this) {
     CloudProvider.gdrive => 'Google Drive',
     CloudProvider.dropbox => 'Dropbox',
     CloudProvider.onedrive => 'OneDrive',
+    CloudProvider.plugin => '클라우드 확장앱',
   };
 }
 
 class CloudAccount {
-  CloudAccount({required this.id, required this.provider, required this.name, this.oauthClientId});
+  CloudAccount({required this.id, required this.provider, required this.name, this.oauthClientId, this.pluginId});
+  final String? pluginId;
   final String id;
   final CloudProvider provider;
   String name;
@@ -98,12 +100,19 @@ class CloudAccount {
   String get tokenKey => 'tok_$id';
   final String? oauthClientId;
 
-  Map<String, dynamic> toJson() => {'id': id, 'p': provider.name, 'n': name, 'clientId': oauthClientId};
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'p': provider.name,
+    'n': name,
+    'clientId': oauthClientId,
+    'pluginId': pluginId,
+  };
   static CloudAccount fromJson(Map<String, dynamic> j) => CloudAccount(
     id: j['id'] as String,
     provider: CloudProvider.values.byName(j['p'] as String),
     name: j['n'] as String,
     oauthClientId: j['clientId'] as String?,
+    pluginId: j['pluginId'] as String?,
   );
 }
 

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import '../../core/settings.dart';
 
 class PlayerPip extends ChangeNotifier {
   PlayerPip._();
@@ -38,11 +39,17 @@ class PlayerPip extends ChangeNotifier {
 
   Future<void> update({required bool enabled, required bool playing, double aspect = 16 / 9}) async {
     if (!available) return;
-    final state = '$enabled/$playing/$aspect';
+    final seconds = AppSettings.instance.doubleTapSeekSeconds;
+    final state = '$enabled/$playing/$aspect/$seconds';
     if (_lastState == state) return;
     _lastState = state;
     try {
-      await _channel.invokeMethod<void>('update', {'active': enabled, 'playing': playing, 'aspect': aspect});
+      await _channel.invokeMethod<void>('update', {
+        'active': enabled,
+        'playing': playing,
+        'aspect': aspect,
+        'seekSeconds': seconds,
+      });
     } on PlatformException {
       _lastState = null;
     }

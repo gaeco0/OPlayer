@@ -11,6 +11,7 @@ import '../../sources/cloud/oauth.dart';
 import '../../sources/server_store.dart';
 
 bool cloudConfigured(CloudProvider provider) => switch (provider) {
+  CloudProvider.plugin => true,
   CloudProvider.dropbox => CloudConfig.dropboxAppKey.isNotEmpty,
   CloudProvider.onedrive => CloudConfig.oneDriveClientId.isNotEmpty,
   CloudProvider.gdrive =>

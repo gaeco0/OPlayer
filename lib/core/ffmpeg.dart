@@ -59,9 +59,7 @@ class Ffmpeg {
     try {
       final r = await Process.run(Platform.isWindows ? 'where' : 'which', ['ffmpeg']);
       if (r.exitCode == 0) {
-        final first = '${r.stdout}'
-            .split(RegExp(r'[\r\n]+'))
-            .firstWhere((l) => l.trim().isNotEmpty, orElse: () => '');
+        final first = '${r.stdout}'.split(RegExp(r'[\r\n]+')).firstWhere((l) => l.trim().isNotEmpty, orElse: () => '');
         if (first.isNotEmpty) candidates.insert(0, first.trim());
       }
     } catch (_) {}
@@ -72,11 +70,7 @@ class Ffmpeg {
   }
 
   /// 영상(+선택적 음성)을 MP4로 스트림 복사. 성공하면 true.
-  static Future<(bool, String)> remuxToMp4({
-    required String video,
-    String? audio,
-    required String output,
-  }) async {
+  static Future<(bool, String)> remuxToMp4({required String video, String? audio, required String output}) async {
     final bin = await locate();
     if (bin == null) return (false, 'ffmpeg 없음');
     final args = <String>['-y', '-hide_banner', '-loglevel', 'error', '-i', video];
@@ -109,5 +103,60 @@ class Ffmpeg {
     }
     final result = await Process.run(bin, args);
     return (result.exitCode, '${result.stderr}');
+  }
+
+  /// MPEG-4/AAC encoders are included in the LGPL Android FFmpeg build.
+  /// Presets cap resolution without upscaling; original uses stream copy.
+  static Future<(bool, String)> createMp4({
+    required String video,
+    String? audio,
+    required String output,
+    required OutputQuality quality,
+  }) async {
+    if (quality == OutputQuality.original) return remuxToMp4(video: video, audio: audio, output: output);
+    final bin = await locate();
+    if (bin == null) return (false, 'ffmpeg 없음');
+    final args = <String>['-y', '-hide_banner', '-loglevel', 'error', '-i', video];
+    if (audio != null) args.addAll(['-i', audio]);
+    if (quality == OutputQuality.audio) {
+      args.addAll(['-map', audio == null ? '0:a:0' : '1:a:0', '-vn', '-c:a', 'aac', '-b:a', '192k']);
+    } else {
+      final height = switch (quality) {
+        OutputQuality.high => 1080,
+        OutputQuality.medium => 720,
+        _ => 480,
+      };
+      final q = switch (quality) {
+        OutputQuality.high => '2',
+        OutputQuality.medium => '5',
+        _ => '8',
+      };
+      args.addAll([
+        '-map',
+        '0:v?',
+        '-map',
+        audio == null ? '0:a?' : '1:a:0',
+        '-vf',
+        "scale=-2:'trunc(min($height,ih)/2)*2'",
+        '-c:v',
+        'mpeg4',
+        '-q:v',
+        q,
+        '-pix_fmt',
+        'yuv420p',
+        '-c:a',
+        'aac',
+        '-b:a',
+        quality == OutputQuality.low ? '96k' : '192k',
+      ]);
+    }
+    args.addAll(['-movflags', '+faststart', output]);
+    try {
+      final (code, error) = await _execute(bin, args);
+      final f = File(output);
+      return (code == 0 && await f.exists() && await f.length() > 0, error.trim());
+    } catch (e) {
+      return (false, '$e');
+    }
   }
 }

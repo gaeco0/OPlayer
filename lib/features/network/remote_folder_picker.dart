@@ -75,7 +75,7 @@ class _RemoteFolderPickerState extends State<RemoteFolderPicker> {
                 '${widget.source.displayName}:/$crumbs',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, color: OColors.textSecondary),
+                style: TextStyle(fontSize: 12, color: OColors.of(context).textSecondary),
               ),
             ],
           ),
@@ -90,9 +90,9 @@ class _RemoteFolderPickerState extends State<RemoteFolderPicker> {
               : ListView(
                   children: [
                     if (_dirs.isEmpty)
-                      const Padding(
+                      Padding(
                         padding: EdgeInsets.all(24),
-                        child: Text('하위 폴더가 없습니다', style: TextStyle(color: OColors.textSecondary)),
+                        child: Text('하위 폴더가 없습니다', style: TextStyle(color: OColors.of(context).textSecondary)),
                       ),
                     for (final d in _dirs)
                       ListTile(
