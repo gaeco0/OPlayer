@@ -65,6 +65,9 @@ class OPlugin {
     }
     meta['hosts'] ??= <String>[];
     final plugin = OPlugin._(source, meta);
+    if (meta['canDelete'] != null && meta['canDelete'] is! bool) {
+      throw const FormatException('잘못된 삭제 지원 선언');
+    }
     if (meta['platforms'] != null &&
         (meta['platforms'] is! List ||
             (meta['platforms'] as List).any((p) => !['android', 'ios', 'windows', 'linux', 'macos'].contains(p)))) {

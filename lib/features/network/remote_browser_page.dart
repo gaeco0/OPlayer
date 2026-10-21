@@ -10,6 +10,8 @@ import '../../sources/media_source.dart';
 import '../browser/home_screen.dart';
 import '../browser/local_browser_page.dart' show ErrorView, ScrollablePlaceholder;
 import '../browser/video_tile.dart';
+import '../browser/swipe_delete_tile.dart';
+import '../../core/file_deletion.dart';
 import '../player/player_screen.dart';
 import '../photos/photo_viewer.dart';
 
@@ -42,6 +44,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
   bool _foldersFirst = true;
   bool _grid = false;
   bool _videosOnly = true;
+  int _loadGeneration = 0;
 
   String get _sortKey => 'remote:${jsonEncode([widget.source.scheme, widget.source.id, _stack.last.path])}';
 
@@ -62,6 +65,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
   }
 
   Future<void> _load({bool force = false}) async {
+    final generation = ++_loadGeneration;
     _restoreSort();
     final path = _stack.last.path;
     setState(() {
@@ -71,10 +75,12 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
     try {
       await ResourceLocks.instance.requireAccess(widget.source.keyFor(path));
       final list = (!force && _cache.containsKey(path)) ? _cache[path]! : await widget.source.list(path);
+      if (!mounted || generation != _loadGeneration) return;
       _cache[path] = list;
       _all = list;
       _apply();
     } catch (e) {
+      if (!mounted || generation != _loadGeneration) return;
       _error = '불러오지 못했습니다\n$e';
     }
     if (mounted) setState(() => _loading = false);
@@ -116,6 +122,19 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
     final playlist = videos.map((v) => widget.source.itemFor(v, _all)).toList();
     await Navigator.of(context).push(PlayerScreen.route(playlist, videos.indexOf(e)));
     if (mounted) setState(() {});
+  }
+
+  Future<void> _delete(RemoteEntry entry) async {
+    final source = widget.source;
+    if (!source.canDeleteEntry(entry)) throw UnsupportedError('이 항목은 삭제할 수 없습니다');
+    await authorizeDeletion(source.keyFor(entry.path), directory: entry.isDir);
+    try {
+      await source.delete(entry);
+    } finally {
+      // A recursive deletion may partially succeed even when the server fails.
+      _cache.clear();
+      if (mounted) await _load(force: true);
+    }
   }
 
   @override
@@ -190,7 +209,9 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
         body: ResourceAccessView(
           resources: [widget.source.keyFor(_stack.last.path)],
           onRefresh: () => _load(force: true),
-          child: RefreshIndicator(onRefresh: () => _load(force: true), child: _body()),
+          child: SlidableAutoCloseBehavior(
+            child: RefreshIndicator(onRefresh: () => _load(force: true), child: _body()),
+          ),
         ),
       ),
     );
@@ -261,9 +282,14 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
         itemCount: _items.length,
         itemBuilder: (_, i) {
           final e = _items[i];
-          return e.isDir
+          final tile = e.isDir
               ? FolderGridTile(name: e.name, resource: src.keyFor(e.path), onTap: () => _enter(e))
               : fileTile(e, grid: true);
+          return SwipeDeleteTile(
+            key: ValueKey(e.path),
+            onDelete: src.canDeleteEntry(e) ? () => _delete(e) : null,
+            child: tile,
+          );
         },
       );
     }
@@ -274,9 +300,14 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
       separatorBuilder: (_, __) => const Divider(height: 1, indent: 16, endIndent: 16),
       itemBuilder: (_, i) {
         final e = _items[i];
-        return e.isDir
+        final tile = e.isDir
             ? FolderListTile(name: e.name, resource: src.keyFor(e.path), onTap: () => _enter(e))
             : fileTile(e, grid: false);
+        return SwipeDeleteTile(
+          key: ValueKey(e.path),
+          onDelete: src.canDeleteEntry(e) ? () => _delete(e) : null,
+          child: tile,
+        );
       },
     );
   }

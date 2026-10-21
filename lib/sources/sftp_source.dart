@@ -195,6 +195,32 @@ class SftpSource extends MediaSource {
   bool get canUpload => true;
 
   @override
+  bool get canDelete => true;
+
+  @override
+  Future<void> delete(RemoteEntry entry) async {
+    final path = deletionPath(entry);
+    final client = await _client();
+    Future<void> remove(String path, int depth) async {
+      if (depth > 128) throw StateError('삭제할 폴더의 깊이 한도 초과');
+      final attr = await client.stat(path, followLink: false);
+      if (attr.isDirectory && !attr.isSymbolicLink) {
+        for (final child in await client.listdir(path)) {
+          if (child.filename == '.' || child.filename == '..') continue;
+          if (RegExp(r'[/\\\x00-\x1f]').hasMatch(child.filename)) throw const FormatException('잘못된 SFTP 삭제 경로');
+          await remove(p.url.join(path, child.filename), depth + 1);
+        }
+        await client.rmdir(path);
+      } else {
+        await client.remove(path);
+      }
+    }
+
+    // Mutations are not retried: a lost response must not delete a replacement.
+    await remove(path, 0);
+  }
+
+  @override
   Future<String> upload(
     File local,
     String remoteDir,

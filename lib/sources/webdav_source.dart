@@ -124,6 +124,26 @@ class WebDavSource extends MediaSource {
   bool get canUpload => true;
 
   @override
+  bool get canDelete => true;
+
+  @override
+  Future<void> delete(RemoteEntry entry) async {
+    final client = http.Client();
+    try {
+      final request = http.Request('DELETE', _uri(deletionPath(entry)))
+        ..followRedirects = false
+        ..headers.addAll(_auth);
+      final response = await client.send(request).timeout(const Duration(seconds: 30));
+      // 207 is a partial failure for a recursive WebDAV DELETE, not success.
+      if (![200, 202, 204].contains(response.statusCode)) {
+        throw HttpException('WebDAV 삭제 실패 (HTTP ${response.statusCode})');
+      }
+    } finally {
+      client.close();
+    }
+  }
+
+  @override
   Future<String> upload(
     File local,
     String remoteDir,

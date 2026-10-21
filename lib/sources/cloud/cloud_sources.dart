@@ -13,6 +13,7 @@ import '../../core/plugins/plugin_http.dart';
 import '../../core/secure_store.dart';
 import '../../core/network/network_service.dart';
 import '../../core/stream_proxy.dart';
+import '../../core/file_deletion.dart';
 import '../media_source.dart';
 import '../server_store.dart';
 import 'cloud_config.dart';
@@ -155,6 +156,23 @@ class CloudSource extends MediaSource {
   String get rootPath => definition.manifest['root'] as String? ?? '';
   @override
   String get rootTitle => definition.manifest['rootTitle'] as String? ?? definition.name;
+
+  @override
+  bool get canDelete => definition.manifest['canDelete'] == true;
+
+  @override
+  bool canDeleteEntry(RemoteEntry entry) =>
+      canDelete && entry.path.isNotEmpty && ![rootPath, '/', '.', '..'].contains(entry.path);
+
+  @override
+  Future<void> delete(RemoteEntry entry) async {
+    if (!canDeleteEntry(entry)) throw UnsupportedError('이 확장앱은 해당 항목 삭제를 지원하지 않습니다');
+    // ponytail: opaque IDs have no ancestry; verify all account locks for folder
+    // deletion until the extension SDK provides descendant IDs.
+    if (entry.isDir) await authorizeDeletion('$scheme://$id', directory: true);
+    final result = await _call('delete', {'path': entry.path, 'name': entry.name, 'isDir': entry.isDir}, retry: false);
+    if (result != true) throw StateError('확장앱이 삭제 완료를 확인하지 못했습니다');
+  }
 
   Future<Map<String, dynamic>> _credentials() async {
     if (_closed) throw StateError('계정 연결이 해제되었습니다');

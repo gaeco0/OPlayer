@@ -56,6 +56,9 @@ Future<Object?> callPlugin(
     if (validateOnly) {
       final methods =
           evaluate("JSON.stringify(Object.keys(plugin).filter(k => typeof plugin[k] === 'function'))") as List;
+      if (plugin.manifest['canDelete'] == true && !methods.contains('delete')) {
+        throw StateError('삭제를 지원하는 확장앱에는 delete 함수가 필요합니다');
+      }
       if (plugin.cloud
           ? !['accountName', 'list', 'stream'].every(methods.contains)
           : !methods.contains('page') &&

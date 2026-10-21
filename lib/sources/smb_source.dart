@@ -138,6 +138,40 @@ class SmbSource extends MediaSource {
   bool get canUpload => true;
 
   @override
+  bool get canDelete => true;
+
+  @override
+  bool canDeleteEntry(RemoteEntry entry) =>
+      super.canDeleteEntry(entry) && entry.path.split('/').where((part) => part.isNotEmpty).length > 1;
+
+  @override
+  Future<void> delete(RemoteEntry entry) async {
+    if (!canDeleteEntry(entry)) throw const FormatException('SMB 공유 자체는 삭제할 수 없습니다');
+    final path = deletionPath(entry);
+    final client = await _connect();
+    try {
+      Future<void> remove(SmbFile file, int depth) async {
+        if (depth > 128) throw StateError('삭제할 폴더의 깊이 한도 초과');
+        if (!file.canWrite()) throw StateError('SMB 삭제 권한이 없습니다');
+        // Do not follow Windows junctions/symlinks into another directory tree.
+        if ((file.attributes & 0x400) != 0) throw UnsupportedError('SMB 링크·재분석 지점은 삭제를 지원하지 않습니다');
+        if (file.isDirectory()) {
+          for (final child in await client.listFiles(file)) {
+            if (child.name == '.' || child.name == '..') continue;
+            if (RegExp(r'[/\\\x00-\x1f]').hasMatch(child.name)) throw const FormatException('잘못된 SMB 삭제 경로');
+            await remove(child, depth + 1);
+          }
+        }
+        await client.delete(file);
+      }
+
+      await remove(await client.file(path), 0);
+    } finally {
+      await client.close();
+    }
+  }
+
+  @override
   Future<String> upload(
     File local,
     String remoteDir,

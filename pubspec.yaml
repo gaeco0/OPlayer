@@ -47,6 +47,7 @@ dependencies:
   path: ^1.9.1
   http: ^1.6.0
   html: ^0.15.7
+  flutter_slidable: ^4.0.3
   xml: ^6.6.1
   crypto: ^3.0.7
   pointycastle: ^4.0.0

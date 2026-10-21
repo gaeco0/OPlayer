@@ -123,6 +123,12 @@ Android는 WebView 요청 콜백, Windows는 DevTools 요청 차단, Apple WebVi
 - `accountName({})`: 계정 이름 문자열.
 - `list({path})`: `[{name,path,isDir,size,modified,thumbnailUrl}]`.
 - `stream({path})`: `{url, authenticated?: true}`. 인증을 요청하면 URL이 `authHosts`에 속해야 합니다.
+- 선택적 `canDelete: true` 메타데이터와 `async delete({path,name,isDir})`를 함께 선언하면 목록에 스와이프 삭제 버튼이
+  표시됩니다. 실제 서버 삭제가 성공한 뒤 정확히 `true`를 반환해야 합니다. 루트는 삭제할 수 없고, 응답 없는 함수·실패·
+  부분 실패는 성공으로 처리하지 않습니다. 폴더 하위 항목 삭제는 확장앱이 처리하며 사용자의 쓰기 권한이 필요합니다.
+  클라우드 ID에는 경로 계층 정보가 없어 폴더 삭제 전 해당 계정에 등록된 리소스 잠금을 모두 확인합니다.
+  HTTP DELETE 등의 인증 요청은 기존 도메인·비밀값 전송 제한을 따릅니다. 기본 공식 클라우드 확장앱과 DLNA는 읽기 전용이며,
+  이 선언만으로 OAuth 권한이나 S3의 읽기 전용 서명 범위를 넓히지는 않습니다. 권한·지원 여부를 확인한 확장앱만 선언하세요.
 - `OPlayer.request(url, {method, body})`: 앱이 Bearer 인증을 붙이고 401 시 한 번 갱신합니다.
   플러그인에 토큰 문자열을 전달하지 않으며, 인증 리디렉션은 따라가지 않습니다.
 - Android Google 계정 선택·인증은 기존 네이티브 브리지를 재사용합니다.

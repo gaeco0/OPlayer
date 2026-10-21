@@ -79,6 +79,44 @@ class FtpSource extends MediaSource {
   bool get canUpload => true;
 
   @override
+  bool get canDelete => true;
+
+  @override
+  Future<void> delete(RemoteEntry entry) async {
+    final path = deletionPath(entry);
+    final ftp = _new();
+    try {
+      if (!await ftp.connect()) throw StateError('FTP 접속 실패');
+      if (!await ftp.changeDirectory(p.url.dirname(path))) throw StateError('삭제할 항목의 폴더를 열 수 없습니다');
+      Future<void> remove(String name, bool directory, int depth) async {
+        if (depth > 128) throw StateError('삭제할 폴더의 깊이 한도 초과');
+        if (name == '.' || name == '..' || RegExp(r'[/\\\x00-\x1f]').hasMatch(name)) {
+          throw const FormatException('잘못된 FTP 삭제 경로');
+        }
+        if (directory) {
+          if (!await ftp.changeDirectory(name)) throw StateError('FTP 폴더를 열 수 없습니다');
+          for (final child in await ftp.listDirectoryContent()) {
+            if (child.name == '.' || child.name == '..') continue;
+            // Unlink symlinks rather than recursively entering their targets.
+            await remove(child.name, child.type == FTPEntryType.dir, depth + 1);
+          }
+          if (!await ftp.changeDirectory('..') || !await ftp.deleteEmptyDirectory(name)) {
+            throw StateError('FTP 폴더 삭제 실패');
+          }
+        } else if (!await ftp.deleteFile(name)) {
+          throw StateError('FTP 파일 삭제 실패');
+        }
+      }
+
+      await remove(p.url.basename(path.replaceFirst(RegExp(r'/+$'), '')), entry.isDir, 0);
+    } finally {
+      try {
+        await ftp.disconnect();
+      } catch (_) {}
+    }
+  }
+
+  @override
   Future<String> upload(
     File local,
     String remoteDir,
