@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -36,6 +37,7 @@ class OAuthClient {
     required this.tokenEndpoint,
     required this.clientId,
     this.clientSecret,
+    this.clientSecretKey,
     required this.scopes,
     required this.mobileScheme,
     this.mobileRedirectUri,
@@ -47,6 +49,7 @@ class OAuthClient {
   final String tokenEndpoint;
   final String clientId;
   final String? clientSecret;
+  final String? clientSecretKey;
   final List<String> scopes;
 
   /// 모바일 리디렉션 스킴 (예: com.googleusercontent.apps.XXX, db-APPKEY, msalCLIENTID)
@@ -175,14 +178,11 @@ class OAuthClient {
   }
 
   Future<OAuthTokens> _token(Map<String, String> params) async {
+    final secret = clientSecretKey == null ? clientSecret : await SecureStore.instance.readRequired(clientSecretKey!);
     final res = await http
         .post(
           Uri.parse(tokenEndpoint),
-          body: {
-            'client_id': clientId,
-            if (clientSecret != null && clientSecret!.isNotEmpty) 'client_secret': clientSecret!,
-            ...params,
-          },
+          body: {'client_id': clientId, if (secret != null && secret.isNotEmpty) 'client_secret': secret, ...params},
         )
         .timeout(const Duration(seconds: 30));
     final Map<String, dynamic> j;
@@ -201,6 +201,37 @@ class OAuthClient {
       expiry: DateTime.now().add(Duration(seconds: int.tryParse('${j['expires_in']}') ?? 3600)),
     );
   }
+}
+
+/// Android Google authorization uses Play services, not deprecated loopback/custom-scheme OAuth.
+class GoogleAndroidOAuthClient extends OAuthClient {
+  GoogleAndroidOAuthClient({required super.clientId, this.accountEmail})
+    : super(
+        authEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+        tokenEndpoint: 'https://oauth2.googleapis.com/token',
+        scopes: const ['https://www.googleapis.com/auth/drive.readonly'],
+        mobileScheme: CloudConfig.mobileScheme,
+      );
+
+  final String? accountEmail;
+  static const channel = MethodChannel('oplayer/google-drive');
+
+  Future<OAuthTokens> _authorizeNative(bool interactive, [String? invalidateToken]) async {
+    final result = await channel.invokeMapMethod<String, dynamic>('authorize', {
+      'interactive': interactive,
+      'email': accountEmail,
+      'invalidateToken': invalidateToken,
+    });
+    final access = result?['accessToken'];
+    if (access is! String || access.isEmpty) throw 'Google Drive 인증 응답이 비어 있습니다';
+    return OAuthTokens(accessToken: access, expiry: DateTime.now().add(const Duration(minutes: 50)));
+  }
+
+  @override
+  Future<OAuthTokens> authorize() => _authorizeNative(true);
+
+  @override
+  Future<OAuthTokens> refresh(OAuthTokens t) => _authorizeNative(false, t.accessToken);
 }
 
 /// 계정별 토큰 보관 + 자동 갱신

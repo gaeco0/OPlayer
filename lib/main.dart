@@ -15,7 +15,7 @@ import 'features/web/download_manager.dart';
 import 'sources/server_store.dart';
 import 'features/browser/home_screen.dart';
 
-Future<void> main() async {
+Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   LicenseRegistry.addLicense(() async* {
     yield LicenseEntryWithLineBreaks(const ['ByeDPI'], await rootBundle.loadString('assets/licenses/byedpi.txt'));
@@ -41,11 +41,12 @@ Future<void> main() async {
     if (enabled != AppSettings.instance.preventCapture) AppSettings.instance.update((s) => s.preventCapture = enabled);
   }
   MouseNav.installKeyHandler();
-  runApp(const OPlayerApp());
+  runApp(OPlayerApp(initialFiles: args));
 }
 
 class OPlayerApp extends StatelessWidget {
-  const OPlayerApp({super.key});
+  const OPlayerApp({super.key, this.initialFiles = const []});
+  final List<String> initialFiles;
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +54,9 @@ class OPlayerApp extends StatelessWidget {
       title: 'OPlayer',
       navigatorKey: MouseNav.navigatorKey,
       builder: (context, child) => MouseNavListener(
-        child: PrivacyShell(child: MediaShell(child: child!)),
+        child: PrivacyShell(
+          child: MediaShell(initialFiles: initialFiles, child: child!),
+        ),
       ),
       debugShowCheckedModeBanner: false,
       theme: OTheme.dark(),

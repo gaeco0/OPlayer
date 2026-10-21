@@ -57,6 +57,8 @@ class AppSettings extends ChangeNotifier {
   bool networkForResources = true;
   String dropboxAppKey = '';
   String oneDriveClientId = '';
+  String googleDesktopClientId = '';
+  String googleAndroidClientId = '';
 
   // ---- 다운로드 ----
   String? downloadDir; // null이면 기본 폴더
@@ -112,6 +114,8 @@ class AppSettings extends ChangeNotifier {
     'networkForResources': networkForResources,
     'dropboxAppKey': dropboxAppKey,
     'oneDriveClientId': oneDriveClientId,
+    'googleDesktopClientId': googleDesktopClientId,
+    'googleAndroidClientId': googleAndroidClientId,
     'dlDir': downloadDir,
     'dlSrv': downloadServerId,
     'dlSrvDir': downloadServerDir,
@@ -163,6 +167,8 @@ class AppSettings extends ChangeNotifier {
     networkForResources = v('networkForResources', true);
     dropboxAppKey = v('dropboxAppKey', '');
     oneDriveClientId = v('oneDriveClientId', '');
+    googleDesktopClientId = v('googleDesktopClientId', '');
+    googleAndroidClientId = v('googleAndroidClientId', '');
     downloadDir = j['dlDir'] as String?;
     downloadServerId = j['dlSrv'] as String?;
     downloadServerDir = j['dlSrvDir'] as String?;

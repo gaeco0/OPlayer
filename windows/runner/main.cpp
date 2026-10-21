@@ -5,6 +5,7 @@
 
 #include "flutter_window.h"
 #include "utils.h"
+#include "file_associations.h"
 
 int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
                       _In_ wchar_t *command_line, _In_ int show_command) {
@@ -17,6 +18,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.
   winrt::init_apartment(winrt::apartment_type::single_threaded);
+  RegisterMediaFileAssociations();
 
   flutter::DartProject project(L"data");
 

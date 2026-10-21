@@ -39,9 +39,7 @@ void main() {
       expect(challenge, authorization!.queryParameters['code_challenge']);
       expect(body['redirect_uri'], authorization!.queryParameters['redirect_uri']);
       request.response.headers.contentType = ContentType.json;
-      request.response.write(
-        jsonEncode({'access_token': 'access', 'refresh_token': 'refresh', 'expires_in': 3600}),
-      );
+      request.response.write(jsonEncode({'access_token': 'access', 'refresh_token': 'refresh', 'expires_in': 3600}));
       await request.response.close();
     });
     const channel = MethodChannel('plugins.flutter.io/url_launcher');
@@ -55,16 +53,11 @@ void main() {
           final client = HttpClient()..findProxy = (_) => 'DIRECT';
           try {
             final redirect = Uri.parse(authorization!.queryParameters['redirect_uri']!);
-            final wrong = await client.getUrl(
-              redirect.replace(queryParameters: {'state': 'forged', 'code': 'bad'}),
-            );
+            final wrong = await client.getUrl(redirect.replace(queryParameters: {'state': 'forged', 'code': 'bad'}));
             expect((await wrong.close()).statusCode, 400);
             final valid = await client.getUrl(
               redirect.replace(
-                queryParameters: {
-                  'state': authorization!.queryParameters['state']!,
-                  'code': 'authorized-code',
-                },
+                queryParameters: {'state': authorization!.queryParameters['state']!, 'code': 'authorized-code'},
               ),
             );
             expect((await valid.close()).statusCode, 200);
@@ -103,11 +96,7 @@ void main() {
     );
     final source = DropboxSource(account);
     await source.tokens.save(
-      OAuthTokens(
-        accessToken: 'old',
-        refreshToken: 'refresh',
-        expiry: DateTime.now().add(const Duration(hours: 1)),
-      ),
+      OAuthTokens(accessToken: 'old', refreshToken: 'refresh', expiry: DateTime.now().add(const Duration(hours: 1))),
     );
     var refreshes = 0;
     var folderRequests = 0;
@@ -175,11 +164,7 @@ void main() {
     );
     final source = OneDriveSource(account);
     await source.tokens.save(
-      OAuthTokens(
-        accessToken: 'token',
-        refreshToken: 'refresh',
-        expiry: DateTime.now().add(const Duration(hours: 1)),
-      ),
+      OAuthTokens(accessToken: 'token', refreshToken: 'refresh', expiry: DateTime.now().add(const Duration(hours: 1))),
     );
     await http.runWithClient(
       () async {
@@ -210,11 +195,88 @@ void main() {
     );
     AppSettings.instance.update((s) => s.oneDriveClientId = 'different-client');
     final restored = CloudAccount.fromJson(account.toJson());
-    expect(
-      oauthClientFor(restored.provider, clientId: restored.oauthClientId).clientId,
-      account.oauthClientId,
-    );
+    expect(oauthClientFor(restored.provider, clientId: restored.oauthClientId).clientId, account.oauthClientId);
     expect(CloudConfig.dropboxRedirect, 'com.oplayer.oplayer://oauth/dropbox');
     expect(CloudConfig.oneDriveRedirect, 'com.oplayer.oplayer://oauth/onedrive');
+  });
+
+  test('Google Drive refreshes bound desktop credentials, paginates and authenticates media', () async {
+    const id = '123-bound.apps.googleusercontent.com';
+    final account = CloudAccount(
+      id: 'gd-test',
+      provider: CloudProvider.gdrive,
+      name: 'user@example.com',
+      oauthClientId: id,
+    );
+    await SecureStore.instance.writeRequired(CloudConfig.googleSecretKey(id), 'bound-secret');
+    final source = GoogleDriveSource(account);
+    await source.tokens.save(OAuthTokens(accessToken: 'expired', refreshToken: 'refresh', expiry: DateTime(2000)));
+    AppSettings.instance.update((s) => s.googleDesktopClientId = 'different.apps.googleusercontent.com');
+    var pages = 0;
+    await http.runWithClient(
+      () async {
+        expect(await source.accountName(), 'user@example.com');
+        final entries = await source.list('folder');
+        expect(entries.map((e) => e.name), ['folder', 'video.mp4']);
+        final stream = await source.streamFor('video-id');
+        expect(Uri.parse(stream.url).queryParameters['alt'], 'media');
+        expect(stream.headers?['Authorization'], 'Bearer fresh');
+      },
+      () => MockClient((request) async {
+        if (request.url.path == '/token') {
+          expect(request.bodyFields['client_id'], id);
+          expect(request.bodyFields['client_secret'], 'bound-secret');
+          expect(request.bodyFields['refresh_token'], 'refresh');
+          return http.Response(jsonEncode({'access_token': 'fresh', 'expires_in': 3600}), 200);
+        }
+        expect(request.headers['Authorization'], 'Bearer fresh');
+        if (request.url.path.endsWith('/about')) {
+          return http.Response(
+            jsonEncode({
+              'user': {'emailAddress': 'user@example.com'},
+            }),
+            200,
+          );
+        }
+        expect(request.url.queryParameters['q'], "'folder' in parents and trashed=false");
+        pages++;
+        final second = pages == 2;
+        if (second) expect(request.url.queryParameters['pageToken'], 'next+/=');
+        return http.Response(
+          jsonEncode({
+            if (!second) 'nextPageToken': 'next+/=',
+            'files': second
+                ? [
+                    {'id': 'video-id', 'name': 'video.mp4', 'mimeType': 'video/mp4', 'size': '123'},
+                    {'id': 'doc', 'name': 'document', 'mimeType': 'application/vnd.google-apps.document'},
+                  ]
+                : [
+                    {'id': 'child', 'name': 'folder', 'mimeType': 'application/vnd.google-apps.folder'},
+                  ],
+          }),
+          200,
+        );
+      }),
+    );
+    expect(pages, 2);
+    await source.close();
+  });
+
+  test('Android Google refresh stays on selected account and never opens consent in background', () async {
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final calls = <MethodCall>[];
+    messenger.setMockMethodCallHandler(GoogleAndroidOAuthClient.channel, (call) async {
+      calls.add(call);
+      return {'accessToken': 'native-token'};
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(GoogleAndroidOAuthClient.channel, null));
+    final client = GoogleAndroidOAuthClient(clientId: 'android-id', accountEmail: 'selected@example.com');
+    final token = await client.authorize();
+    expect(token.refreshToken, null);
+    await client.refresh(token);
+    expect((calls.first.arguments as Map)['interactive'], true);
+    expect((calls.last.arguments as Map)['interactive'], false);
+    expect((calls.last.arguments as Map)['email'], 'selected@example.com');
+    expect((calls.last.arguments as Map)['invalidateToken'], 'native-token');
   });
 }

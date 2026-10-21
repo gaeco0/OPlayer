@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:oplayer/core/secure_store.dart';
+import 'package:oplayer/sources/cloud/cloud_config.dart';
 import 'package:oplayer/core/settings.dart';
 import 'package:oplayer/features/settings/cloud_settings.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('cloud setup validates and saves public app IDs; Google stays unavailable', (tester) async {
+  testWidgets('cloud setup validates and saves provider IDs and securely stores Google desktop secret', (tester) async {
+    FlutterSecureStorage.setMockInitialValues({});
     SharedPreferences.setMockInitialValues({});
     await AppSettings.instance.init();
     AppSettings.instance.dropboxAppKey = '';
@@ -14,7 +18,7 @@ void main() {
     final google = tester.widget<ListTile>(
       find.ancestor(of: find.text('Google Drive'), matching: find.byType(ListTile)),
     );
-    expect(google.enabled, false);
+    expect(google.enabled, true);
     await tester.tap(find.text('Dropbox'));
     await tester.pumpAndSettle();
     expect(find.text('com.oplayer.oplayer://oauth/dropbox'), findsOneWidget);
@@ -36,5 +40,17 @@ void main() {
     await AppSettings.instance.init();
     expect(AppSettings.instance.oneDriveClientId, id);
     expect(AppSettings.instance.dropboxAppKey, 'testappkey123');
+    await tester.tap(find.text('Google Drive'));
+    await tester.pumpAndSettle();
+    const googleId = '123-test.apps.googleusercontent.com';
+    await tester.enterText(find.byType(TextFormField).first, googleId);
+    await tester.enterText(find.byType(TextFormField).last, 'desktop-secret');
+    await tester.tap(find.text('저장'));
+    await tester.pumpAndSettle();
+    expect(AppSettings.instance.googleDesktopClientId, googleId);
+    expect(await SecureStore.instance.readRequired(CloudConfig.googleSecretKey(googleId)), 'desktop-secret');
+    await AppSettings.instance.init();
+    expect(AppSettings.instance.googleDesktopClientId, googleId);
+    expect((await SharedPreferences.getInstance()).getString('settings_v1'), isNot(contains('desktop-secret')));
   });
 }

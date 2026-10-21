@@ -41,7 +41,7 @@ flutter run -d windows   # 또는 macos / android / ios
 |---|---|
 | 로컬 | 폴더 탐색, 폴더 추가, 정렬(이름·날짜·크기, 자연 정렬), 목록/격자, **썸네일 캐시**, 이어보기 진행바 |
 | 네트워크 | **SMB**(Dart SMB 클라이언트 → 로컬 HTTP Range 프록시), **FTP/FTPS**(ftp:// 직접), **SFTP**(비밀번호/개인 키, 호스트 키 고정 → 프록시), **WebDAV**(http(s)+Basic 인증), **UPnP/DLNA** 자동 검색 |
-| 클라우드 | **Dropbox / OneDrive** — 앱 등록 설정, OAuth PKCE 로그인, 토큰 자동 갱신, 폴더 탐색, 스트리밍 재생. Google Drive는 추후 지원 |
+| 클라우드 | **Google Drive / Dropbox / OneDrive** — 앱 등록 설정, 로그인, 토큰 자동 갱신, 폴더 탐색, 스트리밍 재생 |
 | 웹 | 내장 브라우저(북마크), 페이지 내 동영상 자동 감지(video 태그·fetch/XHR·리소스 로드), 바로 재생 / 다운로드 |
 | 다운로드 | mp4·webm 등 직접 파일 이어받기, **HLS(m3u8)** 최고 화질 선택·병렬 조각 받기·AES-128 복호화·병합(.ts / fMP4는 .mp4), 일시정지/재개 |
 | 플레이어 | 제스처(탐색·밝기·볼륨·핀치·더블탭·길게 눌러 2배속), 잠금, 화면비, 배속, A-B 반복, 자막 트랙/싱크/크기, 오디오 트랙, 재생목록, 단축키 |
@@ -72,9 +72,16 @@ Chromecast·DLNA·PiP는 실제 Android/TV 기기 검증이 필요하다. nPlaye
 
 - OneDrive: Microsoft Entra 앱 등록에서 개인 Microsoft 계정을 포함하는 계정 유형과 모바일 및 데스크톱 플랫폼을 선택한다. 권한은 Files.Read, User.Read, offline_access. 커스텀 복귀 주소 `com.oplayer.oplayer://oauth/onedrive`와 데스크톱 `http://localhost:53682/callback`을 등록한다.
 - Dropbox: Scoped access / Full Dropbox 앱을 만들고 files.metadata.read, files.content.read, account_info.read 권한을 켠다. `com.oplayer.oplayer://oauth/dropbox`와 `http://localhost:53682/callback`을 등록한다.
+- Google Drive: Google Cloud 프로젝트에서 Drive API를 사용 설정하고 OAuth 동의 화면에 `https://www.googleapis.com/auth/drive.readonly`와 테스트 사용자를 추가한다. 파일·폴더 탐색 및 미디어 읽기 전용이며 업로드·수정 권한은 요청하지 않는다. Windows/macOS/Linux에서는 **데스크톱 앱** 유형의 Client ID와 Client Secret을 설정에 입력한다. Secret은 기기의 보안 저장소에 계정이 사용한 Client ID별로 보관하며 APK나 일반 설정 파일에 넣지 않는다. 로그인은 시스템 브라우저와 `http://127.0.0.1:53682/callback` 루프백, PKCE로 처리한다.
+- Google Drive Android/Android TV: **Android** 유형의 OAuth 클라이언트를 만든다. 앱 등록 화면에 표시되는 현재 패키지와 서명 SHA-1을 그대로 등록하고 Client ID를 입력한다. 모바일 `com.oplayer.oplayer`와 TV `com.oplayer.oplayer.tv`, 디버그/배포 서명은 각각 등록한다. Google Play 서비스의 공식 Authorization SDK를 사용하며 Android 루프백·커스텀 스킴은 사용하지 않는다. TV도 Google Play 서비스 및 계정·동의 UI가 필요하다. iOS의 Google Drive 연결은 지원하지 않는다.
+- `drive.readonly`는 제한된 범위이므로 공개 배포 로그인에는 Google OAuth 검증이 필요하다. 외부 테스트 모드에서는 등록한 테스트 사용자만 접속할 수 있고 갱신 토큰이 7일 후 만료될 수 있다. [Google OAuth 안내](https://developers.google.com/identity/protocols/oauth2/native-app), [Android 인증 안내](https://developer.android.com/identity/authorization), [Drive 권한 안내](https://developers.google.com/workspace/drive/api/guides/api-specific-auth).
 - Android/iOS 복귀 스킴은 이미 등록되어 있다. Windows/macOS/Linux는 시스템 브라우저와 루프백 콜백을 사용한다. PKCE S256, state, 복귀 주소를 검증하고 토큰은 보안 저장소에 보관한다.
 - 연결된 계정은 당시의 앱 ID를 유지하므로 설정에서 다른 앱 ID를 입력해도 기존 계정의 갱신 정보가 바뀌지 않는다. 연결 해제 시 로컬 토큰을 삭제한다. 서비스 웹사이트의 전체 로그인 세션을 종료하는 동작은 아니다.
-- 실제 앱 등록 ID와 사용자의 동의가 있어야 로그인할 수 있다. 자동 테스트는 로컬 OAuth 콜백·모의 공급자 응답으로 검증하며, 실계정과 실제 Android 기기 테스트는 별도로 필요하다. Google Drive 모바일 로그인은 아직 지원하지 않는다.
+- 실제 앱 등록 ID와 사용자의 동의가 있어야 로그인할 수 있다. 자동 테스트는 로컬 OAuth 콜백·모의 공급자 응답으로 검증하며, 실계정과 실제 Android 기기 테스트는 별도로 필요하다.
+
+## Windows 기본 미디어 플레이어
+
+Windows 버전을 실행하면 현재 실행 파일 경로를 사용자별 기본 앱 후보와 ‘연결 프로그램’ 목록에 등록한다. 설정 → 재생 → **Windows 기본 미디어 플레이어로 설정**에서 Windows 기본 앱 설정을 열어 OPlayer와 원하는 동영상·음악 확장자를 선택한다. 관리자 권한은 필요 없으며 기존 기본 앱 선택은 자동 변경하지 않는다. 탐색기에서 연결된 파일을 열면 해당 경로를 전달받아 재생하고, 앱 잠금이 켜져 있으면 해제 후 연다. ZIP 배포 폴더를 옮겼다면 새 위치에서 OPlayer를 한 번 실행해 등록 경로를 갱신한다.
 
 ## 리소스 잠금·캡처 방지
 

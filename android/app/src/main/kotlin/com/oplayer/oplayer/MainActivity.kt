@@ -32,6 +32,7 @@ class MainActivity : FlutterActivity() {
     private lateinit var mediaChannel: MethodChannel
     private var castBridge: CastBridge? = null
     private var privacyBridge: PrivacyBridge? = null
+    private var googleDriveBridge: GoogleDriveBridge? = null
     private var byeDpiPid: Int? = null
     private lateinit var downloadChannel: MethodChannel
     private var notificationRequested = false
@@ -54,6 +55,7 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        googleDriveBridge = GoogleDriveBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         privacyBridge = PrivacyBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         downloadChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "oplayer/downloads")
         DownloadService.events = downloadChannel
@@ -271,7 +273,13 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        if (googleDriveBridge?.onActivityResult(requestCode, resultCode, data) == true) return
+        super.onActivityResult(requestCode, resultCode, data)
+    }
+
     override fun onDestroy() {
+        googleDriveBridge?.dispose()
         privacyBridge?.dispose()
         DownloadService.events = null
         stopService(Intent(this, DownloadService::class.java))
