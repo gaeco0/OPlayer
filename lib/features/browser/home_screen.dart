@@ -492,25 +492,52 @@ class _Sidebar extends StatelessWidget {
     final store = ServerStore.instance;
     final folders = ResumeStore.instance.folders;
 
-    Widget item(Source s, {Widget? trailing}) => ListTile(
-      dense: true,
-      selected: s == selected,
-      selectedTileColor: OColors.accent.withValues(alpha: 0.15),
-      selectedColor: OColors.accent,
-      leading: Icon(s.icon, size: 22),
-      title: Text(s.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-      subtitle: s.subtitle == null
-          ? null
-          : Text(
-              s.subtitle!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 11, color: OColors.textSecondary),
-            ),
-      trailing: trailing,
-      onTap: () => onSelect(s),
-      onLongPress: _sourceResource(s) == null ? null : () => toggleResourceLock(context, _sourceResource(s)!, s.title),
+    Widget more(List<(String, VoidCallback)> actions) => PopupMenuButton<int>(
+      icon: const Icon(Icons.more_horiz, size: 18),
+      onSelected: (i) => actions[i].$2(),
+      itemBuilder: (_) => [
+        for (var i = 0; i < actions.length; i++) PopupMenuItem(value: i, child: Text(actions[i].$1)),
+      ],
     );
+
+    Widget item(Source s, {Widget? trailing}) {
+      final resource = _sourceResource(s);
+      final locks = ResourceLocks.instance;
+      return ListTile(
+        dense: true,
+        selected: s == selected,
+        selectedTileColor: OColors.accent.withValues(alpha: 0.15),
+        selectedColor: OColors.accent,
+        leading: Icon(s.icon, size: 22),
+        title: Row(
+          children: [
+            Expanded(child: Text(s.title, maxLines: 1, overflow: TextOverflow.ellipsis)),
+            if (resource != null && locks.protects(resource))
+              Icon(locks.isLocked(resource) ? Icons.lock_outline : Icons.lock_open, size: 15),
+          ],
+        ),
+        subtitle: s.subtitle == null
+            ? null
+            : Text(
+                s.subtitle!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 11, color: OColors.textSecondary),
+              ),
+        trailing:
+            trailing ??
+            (resource == null
+                ? null
+                : more([
+                    (
+                      locks.hasExact(resource) ? '잠금 설정 해제' : '이 리소스 잠금',
+                      () => toggleResourceLock(context, resource, s.title),
+                    ),
+                  ])),
+        onTap: () => onSelect(s),
+        onLongPress: resource == null ? null : () => toggleResourceLock(context, resource, s.title),
+      );
+    }
 
     Widget header(String t, {Widget? action}) => Padding(
       padding: const EdgeInsets.fromLTRB(16, 18, 8, 4),
@@ -525,14 +552,6 @@ class _Sidebar extends StatelessWidget {
           if (action != null) action,
         ],
       ),
-    );
-
-    Widget more(List<(String, VoidCallback)> actions) => PopupMenuButton<int>(
-      icon: const Icon(Icons.more_horiz, size: 18),
-      onSelected: (i) => actions[i].$2(),
-      itemBuilder: (_) => [
-        for (var i = 0; i < actions.length; i++) PopupMenuItem(value: i, child: Text(actions[i].$1)),
-      ],
     );
 
     return SafeArea(
@@ -561,7 +580,13 @@ class _Sidebar extends StatelessWidget {
           for (final f in folders)
             item(
               Source(SourceKind.folder, p.basename(f), Icons.folder, path: f, subtitle: f),
-              trailing: IconButton(icon: const Icon(Icons.close, size: 16), onPressed: () => onRemoveFolder(f)),
+              trailing: more([
+                (
+                  ResourceLocks.instance.hasExact(f) ? '잠금 설정 해제' : '이 리소스 잠금',
+                  () => toggleResourceLock(context, f, p.basename(f)),
+                ),
+                ('목록에서 제거', () => onRemoveFolder(f)),
+              ]),
             ),
           item(const Source(SourceKind.recent, '최근 재생', Icons.history)),
           ListenableBuilder(
@@ -632,6 +657,7 @@ class _Sidebar extends StatelessWidget {
 
 String? _sourceResource(Source source) => switch (source.kind) {
   SourceKind.device || SourceKind.folder => source.path,
+  SourceKind.recent => recentResourceKey,
   SourceKind.server =>
     ServerStore.instance.server(source.id!) == null
         ? null

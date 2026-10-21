@@ -660,7 +660,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
 
   Future<void> _showNetLog() async {
     final items = _netLog.reversed
-        .where((e) => !e.mime.startsWith('image/') && !e.mime.contains('font') && !e.mime.contains('css'))
+        .where((e) => e.failed || (!e.mime.startsWith('image/') && !e.mime.contains('font') && !e.mime.contains('css')))
         .toList();
     await showModalBottomSheet<void>(
       context: context,
@@ -672,13 +672,13 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
           child: Column(
             children: [
               ListTile(
-                title: Text('네트워크 요청 ${items.length}개 (이미지·폰트·CSS 제외)'),
+                title: Text('네트워크 요청 ${items.length}개 (실패한 리소스 포함)'),
                 subtitle: const Text('길게 누르면 주소 복사 · 탭하면 재생 시도', style: TextStyle(fontSize: 12)),
               ),
               const Divider(height: 1),
               Expanded(
                 child: items.isEmpty
-                    ? const Center(child: Text('기록이 없습니다 (Windows에서만 지원)'))
+                    ? const Center(child: Text('감지된 요청이나 실패 기록이 없습니다'))
                     : ListView.builder(
                         itemCount: items.length,
                         itemBuilder: (_, i) {
@@ -699,16 +699,18 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                               Clipboard.setData(ClipboardData(text: e.url));
                               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('주소를 복사했습니다')));
                             },
-                            onTap: () async {
-                              Navigator.pop(c);
-                              final m = DetectedMedia(
-                                url: e.url,
-                                kind: MediaKind.file,
-                                pageUrl: _url,
-                                pageTitle: _title,
-                              );
-                              await _playDetectedMedia(m);
-                            },
+                            onTap: e.failed
+                                ? null
+                                : () async {
+                                    Navigator.pop(c);
+                                    final m = DetectedMedia(
+                                      url: e.url,
+                                      kind: MediaKind.file,
+                                      pageUrl: _url,
+                                      pageTitle: _title,
+                                    );
+                                    await _playDetectedMedia(m);
+                                  },
                           );
                         },
                       ),
@@ -924,7 +926,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (Platform.isWindows)
+                        if (Platform.isWindows || Platform.isAndroid)
                           TextButton(
                             onPressed: () {
                               Navigator.pop(c);
@@ -1270,11 +1272,23 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                   },
                   onTitleChanged: (c, t) => setState(() => _title = t ?? ''),
                   onReceivedError: (c, request, error) {
+                    _logNet(
+                      _NetEntry(request.url.toString(), error.description, '로드 실패 · ${error.type}', 0, failed: true),
+                    );
                     if (request.isForMainFrame == true) {
                       _pullToRefresh?.endRefreshing();
                     }
                   },
                   onReceivedHttpError: (c, request, response) {
+                    _logNet(
+                      _NetEntry(
+                        request.url.toString(),
+                        response.reasonPhrase ?? '',
+                        'HTTP ${response.statusCode}',
+                        0,
+                        failed: true,
+                      ),
+                    );
                     if (request.isForMainFrame == true) {
                       _pullToRefresh?.endRefreshing();
                     }
@@ -1328,9 +1342,10 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
 }
 
 class _NetEntry {
-  _NetEntry(this.url, this.mime, this.type, this.size);
+  _NetEntry(this.url, this.mime, this.type, this.size, {this.failed = false});
   final String url;
   final String mime;
   final String type;
   final int size;
+  final bool failed;
 }
