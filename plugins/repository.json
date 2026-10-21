@@ -6,7 +6,7 @@
     {
       "id": "cloud.box",
       "name": "Box",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "kind": "cloud",
       "author": "OPlayer",
       "features": [
@@ -16,13 +16,13 @@
       ],
       "description": "Box 계정 연결·폴더 탐색·미디어 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.box.js",
-      "sha256": "46df9cbd7235e67d2b66da4619085b0926fb10ddcebb8b769f79b9cc183764d0",
+      "sha256": "3c7dd39228a3153ce7bd0467a7fae192fa4d9c8633e0142126f075a57cba394d",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     },
     {
       "id": "cloud.dropbox",
       "name": "Dropbox",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "kind": "cloud",
       "author": "OPlayer",
       "features": [
@@ -32,13 +32,13 @@
       ],
       "description": "Dropbox 계정 연결·폴더 탐색·미디어 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.dropbox.js",
-      "sha256": "3662ffddd85e2ad2c81eaca205e8d7cce77a7ca40f9fd8672ec3458c0c5006e9",
+      "sha256": "2b9c1f6550d334a9754c44c71f4402a8deca55776c919bf423386d5c49ec1c38",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     },
     {
       "id": "cloud.gdrive",
       "name": "Google Drive",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "kind": "cloud",
       "author": "OPlayer",
       "features": [
@@ -48,13 +48,13 @@
       ],
       "description": "Google Drive 계정 연결·폴더 탐색·미디어 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.gdrive.js",
-      "sha256": "bec6d254b69f9b4a2432c5b01ea4cf32239cd49ec56929ca4ce334365a4a6d78",
+      "sha256": "77b1e0e4120521038936f47a6713bd43e5f1482259045a54d30a9fb8bbee6287",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     },
     {
       "id": "cloud.mybox",
       "name": "네이버 MYBOX",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "kind": "cloud",
       "author": "OPlayer",
       "features": [
@@ -64,13 +64,13 @@
       ],
       "description": "네이버 MYBOX 계정 연결·폴더 탐색·미디어 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.mybox.js",
-      "sha256": "6df5fd9bed02ff06dd1677e7dd6c4d477313ac93162f65da59d411c55861e767",
+      "sha256": "8edc2b8122bcbe4c4565553720059fbd93962f790b24512b9549c17276617a12",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     },
     {
       "id": "cloud.onedrive",
       "name": "OneDrive",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "kind": "cloud",
       "author": "OPlayer",
       "features": [
@@ -80,13 +80,13 @@
       ],
       "description": "OneDrive 계정 연결·폴더 탐색·미디어 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.onedrive.js",
-      "sha256": "0c1d229351afedb073f7ea8ac11b29da8ff44fcfcab2afb3b5a5fe5293d1b924",
+      "sha256": "640f508dc34500e6f24cbd9c1cc9f7ea64053e85a3398efcd3438293db8d6b81",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     },
     {
       "id": "cloud.s3",
       "name": "S3 호환 스토리지",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "kind": "cloud",
       "author": "OPlayer",
       "features": [
@@ -96,7 +96,7 @@
       ],
       "description": "S3 호환 스토리지 계정 연결·폴더 탐색·미디어 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.s3.js",
-      "sha256": "0f26904802a27cd80dc2c26801a9d4feb454eb6e086c86fd12b1587db39dd4ae",
+      "sha256": "9af6dc87eec34a8412019addd11cae03b848aa0509385ecaac6136509d13025e",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     }
   ]

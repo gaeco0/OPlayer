@@ -38,6 +38,7 @@ class OAuthClient {
     required this.clientId,
     this.clientSecret,
     this.clientSecretKey,
+    this.clientSecretFallbackKey,
     required this.scopes,
     required this.mobileScheme,
     this.mobileRedirectUri,
@@ -52,6 +53,7 @@ class OAuthClient {
   final String clientId;
   final String? clientSecret;
   final String? clientSecretKey;
+  final String? clientSecretFallbackKey;
   final List<String> scopes;
 
   /// 모바일 리디렉션 스킴 (예: com.googleusercontent.apps.XXX, db-APPKEY, msalCLIENTID)
@@ -183,7 +185,9 @@ class OAuthClient {
   }
 
   Future<OAuthTokens> _token(Map<String, String> params) async {
-    final secret = clientSecretKey == null ? clientSecret : await SecureStore.instance.readRequired(clientSecretKey!);
+    final secret =
+        (clientSecretKey == null ? clientSecret : await SecureStore.instance.readRequired(clientSecretKey!)) ??
+        (clientSecretFallbackKey == null ? null : await SecureStore.instance.readRequired(clientSecretFallbackKey!));
     final client = http.Client();
     final http.Response res;
     try {

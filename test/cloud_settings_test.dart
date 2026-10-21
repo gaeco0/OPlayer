@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:oplayer/core/secure_store.dart';
-import 'package:oplayer/sources/cloud/cloud_config.dart';
 import 'package:oplayer/core/settings.dart';
 import 'package:oplayer/features/settings/cloud_settings.dart';
 import 'package:oplayer/features/settings/plugins_page.dart';
@@ -44,7 +43,7 @@ void main() {
     await tester.enterText(find.byType(TextFormField), 'testappkey123');
     await tester.tap(find.text('저장'));
     await tester.pumpAndSettle();
-    expect(AppSettings.instance.dropboxAppKey, 'testappkey123');
+    expect(PluginStore.instance.oauthClientId(PluginStore.instance.installed['cloud.dropbox']!), 'testappkey123');
     await open('onedrive');
     await tester.enterText(find.byType(TextFormField), 'invalid');
     await tester.tap(find.text('저장'));
@@ -54,25 +53,28 @@ void main() {
     await tester.enterText(find.byType(TextFormField), id);
     await tester.tap(find.text('저장'));
     await tester.pumpAndSettle();
-    expect(AppSettings.instance.oneDriveClientId, id);
+    expect(PluginStore.instance.oauthClientId(PluginStore.instance.installed['cloud.onedrive']!), id);
     await AppSettings.instance.init();
-    expect(AppSettings.instance.oneDriveClientId, id);
-    expect(AppSettings.instance.dropboxAppKey, 'testappkey123');
+    expect(PluginStore.instance.oauthClientId(PluginStore.instance.installed['cloud.onedrive']!), id);
+    expect(PluginStore.instance.oauthClientId(PluginStore.instance.installed['cloud.dropbox']!), 'testappkey123');
     await open('gdrive');
     const googleId = '123-test.apps.googleusercontent.com';
     await tester.enterText(find.byType(TextFormField).first, googleId);
     await tester.enterText(find.byType(TextFormField).last, 'desktop-secret');
     await tester.tap(find.text('저장'));
     await tester.pumpAndSettle();
-    expect(AppSettings.instance.googleDesktopClientId, googleId);
-    expect(await SecureStore.instance.readRequired(CloudConfig.googleSecretKey(googleId)), 'desktop-secret');
+    expect(PluginStore.instance.oauthClientId(PluginStore.instance.installed['cloud.gdrive']!), googleId);
+    expect(
+      await SecureStore.instance.readRequired(PluginStore.oauthSecretKey('cloud.gdrive', googleId)),
+      'desktop-secret',
+    );
     await AppSettings.instance.init();
-    expect(AppSettings.instance.googleDesktopClientId, googleId);
+    expect(PluginStore.instance.oauthClientId(PluginStore.instance.installed['cloud.gdrive']!), googleId);
     expect((await SharedPreferences.getInstance()).getString('settings_v1'), isNot(contains('desktop-secret')));
   });
 
   testWidgets('cloud registration belongs only to its extension, including when disabled', (tester) async {
-    AppSettings.instance.dropboxAppKey = 'existing-registration';
+    await PluginStore.instance.setCredentials('cloud.dropbox', {'clientId': 'existing-registration'});
     await tester.pumpWidget(MaterialApp(home: SettingsPage(onOpenDrawer: () {})));
     await tester.pump();
     final scroll = tester.state<ScrollableState>(find.byType(Scrollable).first).position;
@@ -127,13 +129,13 @@ void main() {
           'scopes': ['read'],
           'clientId': 'manifest-default',
         },
-      })}\nglobalThis.plugin = {};',
+      })}\nglobalThis.plugin = {accountName(){},list(){},stream(){}};',
     );
     final store = PluginStore.instance;
     final first = custom('cloud.first');
     final second = custom('cloud.second');
-    store.installed[first.id] = first;
-    store.installed[second.id] = second;
+    await store.load(first.source);
+    await store.load(second.source);
     await tester.pumpWidget(MaterialApp(home: CloudPluginSettingsPage(pluginId: first.id)));
     await tester.tap(find.text('앱 등록 정보'));
     await tester.pumpAndSettle();
@@ -182,7 +184,7 @@ void main() {
     await tester.enterText(find.byType(TextFormField).first, 'test-box-client');
     await tester.tap(find.text('저장'));
     await tester.pumpAndSettle();
-    expect(find.text('Client Secret을 입력해 주세요'), findsOneWidget);
+    expect(find.text('Client Secret 값을 입력해 주세요'), findsOneWidget);
     await tester.enterText(find.byType(TextFormField).last, 'test-box-client-secret');
     await tester.tap(find.text('저장'));
     await tester.pumpAndSettle();

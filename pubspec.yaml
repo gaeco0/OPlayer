@@ -90,6 +90,9 @@ flutter:
     - plugins/cloud.gdrive.js
     - plugins/cloud.dropbox.js
     - plugins/cloud.onedrive.js
+    - plugins/cloud.s3.js
+    - plugins/cloud.box.js
+    - plugins/cloud.mybox.js
     - assets/branding/oplayer.png
     - assets/licenses/ffmpeg-kit.txt
     - assets/licenses/byedpi.txt

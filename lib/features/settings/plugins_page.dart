@@ -55,6 +55,7 @@ class _PluginsPageState extends State<PluginsPage> {
           child: Text(
             '${p.cloud ? '클라우드 목록·재생 주소 조회 및 계정 인증' : '지정한 사이트의 페이지와 요청 헤더·쿠키 접근, 다운로드 보완·광고 차단'}\n\n'
             '사이트: ${p.sites.join(', ')}\n네트워크: ${p.hosts.join(', ')}\n인증: ${p.authHosts.join(', ')}\n'
+            '${(p.manifest['networkSettings'] as List? ?? []).isEmpty ? '' : '사용자 지정 서버 설정: ${(p.manifest['networkSettings'] as List).join(', ')}\n'}'
             '${p.cloud && p.authType == 'oauth' ? '로그인 서버: ${p.oauth['authEndpoint']}\n토큰 서버: ${p.oauth['tokenEndpoint']}\n' : ''}'
             '${p.authType == 's3' ? '등록할 S3 Endpoint·버킷에 대한 서명된 읽기 요청\n' : ''}\n'
             '신뢰하는 개발자의 확장앱만 설치하세요. 같은 ID의 확장앱은 교체되며 기존 계정에도 적용됩니다.',
@@ -136,7 +137,7 @@ class _PluginsPageState extends State<PluginsPage> {
                       value: !store.disabled.contains(p.id),
                       onChanged: busy ? null : (v) => _guard(() => store.setEnabled(p.id, v)),
                     ),
-                    onTap: p.cloud && !busy
+                    onTap: (p.cloud || p.settings.isNotEmpty) && !busy
                         ? () => Navigator.of(
                             context,
                           ).push(MaterialPageRoute<void>(builder: (_) => CloudPluginSettingsPage(pluginId: p.id)))
@@ -144,7 +145,7 @@ class _PluginsPageState extends State<PluginsPage> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (p.cloud)
+                        if (p.cloud || p.settings.isNotEmpty)
                           IconButton(
                             icon: const Icon(Icons.settings_outlined),
                             tooltip: '${p.name} 설정',

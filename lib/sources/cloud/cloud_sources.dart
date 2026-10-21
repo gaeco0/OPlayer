@@ -3,12 +3,13 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
-import 'package:xml/xml.dart';
 
 import '../../core/media_item.dart';
 import '../../core/plugins/plugin.dart';
 import '../../core/plugins/plugin_store.dart';
 import '../../core/plugins/plugin_runtime.dart';
+import '../../core/plugins/plugin_values.dart';
+import '../../core/plugins/plugin_http.dart';
 import '../../core/secure_store.dart';
 import '../../core/network/network_service.dart';
 import '../../core/stream_proxy.dart';
@@ -23,14 +24,21 @@ OAuthClient oauthClientFor(CloudProvider provider, {String? clientId, String? ac
   final definition = PluginStore.instance.require(pluginId ?? 'cloud.${provider.name}');
   if (definition.authType != 'oauth') throw StateError('OAuth 확장앱이 아닙니다');
   final oauth = definition.oauth;
-  if (provider == CloudProvider.gdrive && Platform.isAndroid) {
+  if (Platform.isAndroid && (definition.oauth['nativeAndroid'] == 'google' || provider == CloudProvider.gdrive)) {
     return GoogleAndroidOAuthClient(
-      clientId: clientId ?? CloudConfig.googleAndroidClientId,
+      clientId:
+          clientId ??
+          (PluginStore.instance.oauthClientId(definition).isNotEmpty
+              ? PluginStore.instance.oauthClientId(definition)
+              : CloudConfig.googleAndroidClientId),
       accountEmail: accountEmail,
     );
   }
   final id =
       clientId ??
+      (PluginStore.instance.oauthClientId(definition).isNotEmpty
+          ? PluginStore.instance.oauthClientId(definition)
+          : null) ??
       switch (provider) {
         CloudProvider.gdrive => CloudConfig.googleDesktopClientId,
         CloudProvider.dropbox => CloudConfig.dropboxAppKey,
@@ -41,11 +49,10 @@ OAuthClient oauthClientFor(CloudProvider provider, {String? clientId, String? ac
     authEndpoint: oauth['authEndpoint'] as String,
     tokenEndpoint: oauth['tokenEndpoint'] as String,
     clientId: id,
-    clientSecretKey: provider == CloudProvider.gdrive
-        ? CloudConfig.googleSecretKey(id)
-        : oauth['requiresClientSecret'] == true
+    clientSecretKey: provider == CloudProvider.gdrive || oauth['requiresClientSecret'] == true
         ? PluginStore.oauthSecretKey(definition.id, id)
         : null,
+    clientSecretFallbackKey: provider == CloudProvider.gdrive ? CloudConfig.googleSecretKey(id) : null,
     scopes: (oauth['scopes'] as List).cast<String>(),
     mobileScheme: CloudConfig.mobileScheme,
     mobileRedirectUri: switch (provider) {
@@ -89,6 +96,7 @@ Future<CloudAccount> connectCloudAccount(CloudProvider provider, {String? plugin
   }
   final src = cloudSourceFor(account);
   try {
+    if (definition.authType == 'script') await src.authenticate();
     final name = await src.accountName();
     final chosenName = '${credentials?['displayName'] ?? ''}'.trim();
     account.name = chosenName.isEmpty ? name : chosenName;
@@ -159,34 +167,69 @@ class CloudSource extends MediaSource {
     return values;
   }
 
-  Future<Object?> _call(String method, Map<String, dynamic> input) async {
+  Future<void> authenticate({bool refresh = false}) async {
+    final changed = await _call(refresh ? 'refresh' : 'authenticate', {}, retry: false);
+    if (changed == null) {
+      if (refresh) throw StateError('인증이 만료되었습니다. 계정을 다시 연결해 주세요');
+      return;
+    }
+    if (changed is! Map ||
+        changed.keys.any(
+          (key) =>
+              key is! String ||
+              ['authType', 'pluginId'].contains(key) ||
+              definition.settings.any((f) => f['key'] == key),
+        )) {
+      throw StateError('확장앱 인증 응답이 설정을 덮어쓸 수 없습니다');
+    }
+    await SecureStore.instance.writeRequired(account.tokenKey, jsonEncode({...await _credentials(), ...changed}));
+  }
+
+  Future<Object?> _call(String method, Map<String, dynamic> input, {bool retry = true}) async {
     if (_closed) throw StateError('계정 연결이 해제되었습니다');
     final plugin = definition;
-    final s3 = plugin.authType == 's3' ? S3Credentials(await _credentials()) : null;
-    return callPlugin(
-      plugin,
-      method,
-      input,
-      config: s3?.publicConfig ?? const {},
-      allowsRequest: s3?.allows,
-      request: (url, options) async {
-        final verb = options['method'] as String? ?? 'GET';
-        if (!['GET', 'POST', if (s3 != null) 'HEAD'].contains(verb) || (s3 != null && verb == 'POST')) {
-          throw StateError('지원하지 않는 클라우드 요청 방식');
-        }
-        if (options['response'] == 'signedUrl') {
-          if (s3 == null || verb != 'GET') throw StateError('S3 읽기 URL만 서명할 수 있습니다');
-          return s3.presign(Uri.parse(url)).toString();
-        }
-        return _request(
-          url,
-          verb,
-          body: options['body'],
-          responseType: options['response'] as String? ?? 'json',
-          s3: s3,
-        );
-      },
-    );
+    final values = plugin.authType == 'oauth'
+        ? await PluginStore.instance.credentials(plugin.id)
+        : await _credentials();
+    final s3 = plugin.authType == 's3' ? S3Credentials(values) : null;
+    final config = {...plugin.publicConfig(values), ...?s3?.publicConfig};
+    var unauthorized = false;
+    try {
+      return await callPlugin(
+        plugin,
+        method,
+        input,
+        config: config,
+        credentials: values,
+        allowsRequest: s3?.allows ?? (url) => plugin.allowsConfigured(url, config),
+        request: (url, options) async {
+          final verb = options['method'] as String? ?? 'GET';
+          if (!['GET', 'POST', 'HEAD', 'PUT', 'PATCH', 'DELETE'].contains(verb) ||
+              (s3 != null && !['GET', 'HEAD'].contains(verb))) {
+            throw StateError('지원하지 않는 클라우드 요청 방식');
+          }
+          if (options['response'] == 'signedUrl') {
+            if (s3 == null || verb != 'GET') throw StateError('S3 읽기 URL만 서명할 수 있습니다');
+            return s3.presign(Uri.parse(url)).toString();
+          }
+          return _request(
+            url,
+            verb,
+            body: options['body'],
+            responseType: options['response'] as String? ?? 'json',
+            s3: s3,
+            options: options,
+            onUnauthorized: () => unauthorized = true,
+          );
+        },
+      );
+    } catch (_) {
+      if (retry && unauthorized && plugin.authType == 'script') {
+        await authenticate(refresh: true);
+        return _call(method, input, retry: false);
+      }
+      rethrow;
+    }
   }
 
   Future<String> accountName() async => await _call('accountName', {}) as String? ?? definition.name;
@@ -331,19 +374,34 @@ class CloudSource extends MediaSource {
     Object? body,
     String responseType = 'json',
     S3Credentials? s3,
+    Map<String, dynamic> options = const {},
+    void Function()? onUnauthorized,
   }) async {
     if (_closed) throw StateError('계정 연결이 해제되었습니다');
-    if (!(s3?.allows(url) ?? definition.allows(url, auth: true))) throw StateError('허용되지 않은 인증 도메인');
+    final values = definition.authType == 'oauth'
+        ? await PluginStore.instance.credentials(definition.id)
+        : await _credentials();
+    final config = definition.publicConfig(values);
+    if (!(s3?.allows(url) ?? definition.allowsConfigured(url, config))) throw StateError('허용되지 않은 확장앱 도메인');
+    final auth = definition.authType != 'script' && definition.authType != 's3' && options['authenticated'] != false;
+    final protected =
+        usesPluginSecret(options) ||
+        (options['headers'] as Map? ?? {}).keys.any((k) => ['authorization', 'cookie'].contains('$k'.toLowerCase()));
+    if ((auth || protected) && !definition.allowsConfigured(url, config, auth: true)) {
+      throw StateError('허용되지 않은 인증 도메인');
+    }
     final client = http.Client();
     try {
       Future<http.Response> send(bool refresh) async {
-        final request = http.Request(method, s3?.presign(Uri.parse(url), method: method) ?? Uri.parse(url))
-          ..followRedirects = false;
-        if (s3 == null) request.headers.addAll(await _authHeader(refresh: refresh));
-        if (method == 'POST') {
-          request.headers['Content-Type'] = 'application/json';
-          request.body = jsonEncode(body);
-        }
+        final current = definition.authType == 'oauth' ? values : await _credentials();
+        final request = pluginHttpRequest(
+          method,
+          url,
+          {...options, if (!options.containsKey('body') && body != null) 'body': body},
+          current,
+          sign: s3 == null ? null : (uri) => s3.presign(uri, method: method),
+          authHeaders: auth ? await _authHeader(refresh: refresh) : const {},
+        );
         final response = await client.send(request).timeout(const Duration(seconds: 30));
         if (responseType == 'redirect' || responseType == 'headers') {
           await response.stream.listen((_) {}).cancel();
@@ -359,24 +417,9 @@ class CloudSource extends MediaSource {
 
       var response = await send(false);
       if (response.statusCode == 401 && definition.authType == 'oauth') response = await send(true);
-      if (responseType == 'redirect') {
-        if (response.statusCode < 300 || response.statusCode > 399 || response.headers['location'] == null) {
-          throw StateError('파일 다운로드 주소가 준비되지 않았습니다 (HTTP ${response.statusCode}). 잠시 후 다시 시도해 주세요');
-        }
-        final location = Uri.parse(url).resolve(response.headers['location']!);
-        if (location.scheme != 'https' || location.host.isEmpty || location.userInfo.isNotEmpty) {
-          throw StateError('잘못된 클라우드 다운로드 주소');
-        }
-        return {'url': location.toString()};
-      }
-      if (responseType == 'headers' && response.statusCode < 300) return response.headers;
-      if (responseType == 'xml' && response.statusCode < 300) {
-        Map<String, dynamic> node(XmlElement e) => {
-          'name': e.name.local,
-          if (e.childElements.isEmpty) 'text': e.innerText,
-          'children': e.childElements.map(node).toList(),
-        };
-        return node(XmlDocument.parse(utf8.decode(response.bodyBytes)).rootElement);
+      if (responseType != 'raw' && response.statusCode == 401) onUnauthorized?.call();
+      if (responseType != 'json' || definition.authType == 'script') {
+        return decodePluginResponse(response, responseType, url);
       }
       return _decode(response);
     } finally {
