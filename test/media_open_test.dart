@@ -9,17 +9,36 @@ import 'package:oplayer/features/photos/photo_viewer.dart';
 import 'package:oplayer/features/player/player_controller.dart';
 
 void main() {
+  test('Android audio continues in background independently of the video preference', () {
+    expect(backgroundPlaybackAllowed(android: true, audioOnly: true, enabled: false), true);
+    expect(backgroundPlaybackAllowed(android: true, audioOnly: false, enabled: false), false);
+    expect(backgroundPlaybackAllowed(android: true, audioOnly: false, enabled: true), true);
+    expect(backgroundPlaybackAllowed(android: false, audioOnly: true, enabled: false), false);
+  });
   test('audio-only detection uses actual tracks, including audio in an MP4 container', () {
     expect(audioOnlyTracks(const Tracks()), false);
     expect(audioOnlyTracks(const Tracks(audio: [AudioTrack('1', null, null)])), true);
     expect(
-      audioOnlyTracks(const Tracks(audio: [AudioTrack('auto', null, null), AudioTrack('no', null, null)])),
-      false,
+      audioOnlyTracks(
+        const Tracks(
+          audio: [AudioTrack('1', null, null)],
+          video: [VideoTrack('2', null, null, albumart: true)],
+        ),
+      ),
+      true,
     );
     expect(
       audioOnlyTracks(
-        const Tracks(audio: [AudioTrack('1', null, null)], video: [VideoTrack('2', null, null)]),
+        const Tracks(
+          audio: [AudioTrack('1', null, null)],
+          video: [VideoTrack('2', null, null, image: true), VideoTrack('3', null, null)],
+        ),
       ),
+      false,
+    );
+    expect(audioOnlyTracks(const Tracks(audio: [AudioTrack('auto', null, null), AudioTrack('no', null, null)])), false);
+    expect(
+      audioOnlyTracks(const Tracks(audio: [AudioTrack('1', null, null)], video: [VideoTrack('2', null, null)])),
       false,
     );
     expect(isPlayable('music.M4A'), true);

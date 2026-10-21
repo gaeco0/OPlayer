@@ -42,8 +42,12 @@ String fmtRate(double r) => r.toStringAsFixed(2).replaceFirst(RegExp(r'0$'), '')
 
 bool audioOnlyTracks(Tracks tracks) {
   bool actual(String id) => id != 'auto' && id != 'no';
-  return tracks.audio.any((track) => actual(track.id)) && !tracks.video.any((track) => actual(track.id));
+  return tracks.audio.any((track) => actual(track.id)) &&
+      !tracks.video.any((track) => actual(track.id) && track.albumart != true && track.image != true);
 }
+
+bool backgroundPlaybackAllowed({required bool android, required bool audioOnly, required bool enabled}) =>
+    enabled || (android && audioOnly);
 
 /// 플레이어 상태 전체. UI는 이 컨트롤러와 media_kit 스트림만 바라본다.
 class PlayerController extends ChangeNotifier {
@@ -105,6 +109,11 @@ class PlayerController extends ChangeNotifier {
   StreamSubscription<String>? _mediaErrors;
   Timer? _startWatchdog;
   bool get audioOnly => audioOnlyTracks(player.state.tracks);
+  bool get allowsBackgroundPlayback => backgroundPlaybackAllowed(
+    android: Platform.isAndroid,
+    audioOnly: audioOnly,
+    enabled: AppSettings.instance.backgroundAudio,
+  );
 
   bool get hasPrev => _index > 0;
   bool get hasNext => _index < playlist.length - 1;

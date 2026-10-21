@@ -70,7 +70,6 @@ class PlaybackService : Service() {
         val subtitle = intent.getStringExtra("subtitle") ?: ""
         val playing = intent.getBooleanExtra("playing", false)
         remote = intent.getBooleanExtra("remote", false)
-        updateAudioFocus(playing && !remote)
         val position = intent.getLongExtra("position", 0L)
         val duration = intent.getLongExtra("duration", 0L)
         session.setMetadata(MediaMetadataCompat.Builder().putString(MediaMetadataCompat.METADATA_KEY_TITLE, title)
@@ -99,6 +98,8 @@ class PlaybackService : Service() {
             if (foreground) { stopForeground(STOP_FOREGROUND_DETACH); foreground = false }
             getSystemService(NotificationManager::class.java).notify(NOTIFICATION, notification)
         }
+        // Android 15+ grants background audio focus only to a foreground service.
+        updateAudioFocus(playing && !remote)
         return START_NOT_STICKY
     }
 

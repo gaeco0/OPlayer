@@ -30,7 +30,7 @@ flutter run -d windows   # 또는 macos / android / ios
 ## GitHub Actions 빌드와 릴리스
 
 - `devel`·`main`에 push하면 Windows, Android(mobile), Android TV(tv), Linux(x64), macOS(Apple Silicon 러너)의 릴리스를 빌드한다. Android·TV는 같은 배포 키로 각각 서명한다. Windows에서 정적 분석·Dart 테스트·브라우저 JavaScript 테스트도 실행한다. PR의 Android·TV 빌드는 서명 Secrets 없이 디버그 빌드로 검증한다.
-- `main`의 다섯 빌드와 검증이 모두 성공하면 `pubspec.yaml` 버전으로 `v0.1.0` 형태의 태그·GitHub Release를 Actions에서 생성한다. 기존 소스 전용 릴리스에는 같은 앱 소스의 배포 파일을 추가할 수 있으며, 앱 소스가 변경되면 버전을 올린다. 기존 첨부 파일은 덮어쓰지 않는다. Actions 탭의 수동 실행도 지원한다.
+- `main`의 다섯 빌드와 검증이 모두 성공하면 `pubspec.yaml` 버전으로 `v0.1.0` 형태의 태그·GitHub Release를 Actions에서 생성한다. 기존 소스 전용 릴리스에는 같은 앱 소스의 배포 파일을 추가할 수 있으며, 앱 소스가 변경되면 버전을 올린다. 기본 실행은 기존 첨부 파일을 덮어쓰지 않는다. 같은 버전을 교체할 때는 Actions 수동 실행에서 `replace_release`를 켠다. 다섯 빌드 성공 후 파일을 교체하고 해당 태그를 빌드 커밋으로 이동한다.
 - GitHub Release에 Android·Android TV의 ABI별 서명 APK 6개, Windows x64 ZIP, Linux x64 tar.gz, macOS Apple Silicon ZIP과 SHA256SUMS.txt를 첨부한다. 데스크톱 압축 파일은 실행 파일·라이브러리·데이터를 포함하므로 전체를 풀어 사용한다. 빌드 작업 간 전달용 Actions 아티팩트는 7일 동안 보관한다.
 - 저장소 Actions Secrets에 `ANDROID_KEYSTORE_BASE64`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_PASSWORD`, `ANDROID_KEY_ALIAS`를 등록한다. 키와 비밀번호는 빌드 중 임시 복원 후 삭제하며, 저장소·릴리스에 커밋하거나 업로드하지 않는다.
 - 기본 `main`의 `LICENSE`는 `devel`과 `main`에서 그대로 유지한다. `third_party/`의 외부 구성요소는 각 디렉터리의 라이선스도 함께 적용된다.
@@ -54,7 +54,7 @@ DRM(Widevine/FairPlay, SAMPLE-AES)으로 보호된 스트림은 재생·다운�
 - 로컬·네트워크·클라우드 폴더는 경로별로 정렬 기준(이름·날짜·크기), 오름차순/내림차순, ‘폴더 먼저 표시’를 기억한다. 정렬 메뉴에서 변경하면 즉시 저장되어 폴더 재방문과 앱 재시작 후에도 복원되며, 서버와 하위 폴더별로 독립 적용된다.
 - 앱 복귀 후 현재 폴더 목록은 자동 재조회한다. 앱 잠금이 있으면 해제를 기다리고, 리소스 잠금은 재조회 전에 별도로 인증한다. 네트워크 목록은 캐시를 건너뛰며, 잠긴 리소스를 수동 해제한 뒤에도 목록을 다시 불러온다. 다른 화면 뒤에 가려진 폴더는 해당 화면으로 돌아올 때 갱신한다.
 - Android 8 이상 PiP: 플레이어 버튼 또는 재생 중 홈으로 이동, 작은 창에서 재생/일시정지.
-- Android 미디어 알림과 잠금 화면 제어, 설정에 따른 백그라운드 오디오, 이어폰 분리 시 일시정지.
+- Android 미디어 알림과 잠금 화면 제어. 오디오 전용 파일은 앨범 표지 유무와 관계없이 홈 이동 후에도 재생하고, 영상은 PiP 또는 백그라운드 설정을 따른다. 이어폰 분리 시에는 일시정지한다.
 - Android 다운로드는 진행 알림이 있는 dataSync 포그라운드 서비스와 CPU 절전 방지 잠금으로 홈 이동·화면 꺼짐 중 작업을 유지한다. Android 13 이상은 첫 다운로드 때 알림 권한을 요청한다. 알림에서 다운로드 목록 열기·전체 일시정지를 지원하고 완료·실패도 표시한다. 앱 강제 종료·최근 앱에서 작업 제거 시에는 계속 실행하지 않으며, Android의 서비스 시간 제한 시 안전하게 일시정지한다. 실제 기기와 제조사별 절전 정책 검증은 별도로 필요하다.
 - Android에는 FFmpeg를 내장하여 HLS 수신 후 MP4로 스트림 복사하고 분리된 영상·음성을 병합한다. 별도 설치는 필요 없다. Windows/macOS/Linux는 설정에서 외부 FFmpeg를 자동 탐색하거나 지정한다.
 - Chromecast(Android)·DLNA 외부 출력: 같은 네트워크 기기 검색, 탐색·재생/일시정지·볼륨·종료. 로컬 파일과 HTTP 기반 네트워크 소스를 Range 지원 릴레이로 전달한다. FTP 직접 출력은 지원하지 않으며 먼저 로컬 파일로 받아야 한다.
