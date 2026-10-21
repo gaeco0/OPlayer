@@ -40,6 +40,18 @@ class PluginStore extends ChangeNotifier {
     return p;
   }
 
+  // OAuth registration belongs to its extension; account-bound IDs stay unchanged.
+  String oauthClientId(OPlugin plugin) =>
+      _prefs?.getString('pluginOAuthClientId:${plugin.id}') ?? plugin.oauth['clientId'] as String? ?? '';
+
+  Future<void> setOAuthClientId(String id, String value) async {
+    if (installed[id]?.cloud != true) throw StateError('설치된 클라우드 확장앱이 아닙니다');
+    if (!await _prefs!.setString('pluginOAuthClientId:$id', value.trim())) {
+      throw StateError('확장앱 설정을 저장하지 못했습니다');
+    }
+    notifyListeners();
+  }
+
   Future<void> init() async {
     if (_prefs != null) return;
     _prefs = await SharedPreferences.getInstance();

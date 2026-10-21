@@ -6,12 +6,17 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/settings.dart';
 import '../../core/secure_store.dart';
+import '../../core/plugins/plugin.dart';
+import '../../core/plugins/plugin_store.dart';
 import '../../sources/cloud/cloud_config.dart';
 import '../../sources/cloud/oauth.dart';
 import '../../sources/server_store.dart';
 
-bool cloudConfigured(CloudProvider provider) => switch (provider) {
-  CloudProvider.plugin => true,
+CloudProvider cloudPluginProvider(OPlugin plugin) =>
+    CloudProvider.values.firstWhere((p) => plugin.id == 'cloud.${p.name}', orElse: () => CloudProvider.plugin);
+
+bool cloudPluginConfigured(OPlugin plugin) => switch (cloudPluginProvider(plugin)) {
+  CloudProvider.plugin => PluginStore.instance.oauthClientId(plugin).isNotEmpty,
   CloudProvider.dropbox => CloudConfig.dropboxAppKey.isNotEmpty,
   CloudProvider.onedrive => CloudConfig.oneDriveClientId.isNotEmpty,
   CloudProvider.gdrive =>
@@ -20,7 +25,7 @@ bool cloudConfigured(CloudProvider provider) => switch (provider) {
         : (Platform.isWindows || Platform.isMacOS || Platform.isLinux) && CloudConfig.googleDesktopClientId.isNotEmpty,
 };
 
-Future<bool> showCloudSetup(BuildContext context, CloudProvider provider) async {
+Future<bool> _showCloudSetup(BuildContext context, CloudProvider provider) async {
   if (provider == CloudProvider.gdrive) return _showGoogleSetup(context);
   final dropbox = provider == CloudProvider.dropbox;
   var value = dropbox ? CloudConfig.dropboxAppKey : CloudConfig.oneDriveClientId;
@@ -243,25 +248,127 @@ Future<bool> _showGoogleSetup(BuildContext context) async {
       false;
 }
 
-class CloudSettings extends StatelessWidget {
-  const CloudSettings({super.key});
+/// OAuth metadata declares the registration UI needed by a cloud extension.
+/// Native provider dialogs retain platform registration help and secure secrets.
+class CloudPluginSettingsPage extends StatelessWidget {
+  const CloudPluginSettingsPage({super.key, required this.pluginId, this.forConnection = false});
+  final String pluginId;
+  final bool forConnection;
+
+  Future<void> _configure(BuildContext context, OPlugin plugin) async {
+    try {
+      final provider = cloudPluginProvider(plugin);
+      final saved = provider == CloudProvider.plugin
+          ? await _showClientIdSetup(context, plugin)
+          : await _showCloudSetup(context, provider);
+      if (saved && forConnection && context.mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      const ListTile(title: Text('클라우드 계정 연결'), subtitle: Text('앱 등록 정보를 저장한 뒤 사이드바에서 클라우드 연결을 눌러 로그인하세요.')),
-      for (final provider in [CloudProvider.onedrive, CloudProvider.dropbox, CloudProvider.gdrive])
-        ListTile(
-          title: Text(provider.label),
-          subtitle: Text(cloudConfigured(provider) ? '앱 등록 정보 설정됨' : '앱 등록 정보 필요'),
-          trailing: const Icon(Icons.edit_outlined),
-          enabled:
-              Platform.isAndroid ||
-              (Platform.isIOS && provider != CloudProvider.gdrive) ||
-              Platform.isWindows ||
-              Platform.isMacOS ||
-              Platform.isLinux,
-          onTap: () => showCloudSetup(context, provider),
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: Listenable.merge([PluginStore.instance, AppSettings.instance]),
+    builder: (context, _) {
+      final store = PluginStore.instance;
+      final plugin = store.installed[pluginId];
+      if (plugin == null || !plugin.cloud) {
+        return Scaffold(
+          appBar: AppBar(title: const Text('확장앱 설정')),
+          body: const Center(child: Text('확장앱이 설치되어 있지 않습니다')),
+        );
+      }
+      final supported = cloudPluginProvider(plugin) != CloudProvider.gdrive || !Platform.isIOS;
+      return Scaffold(
+        appBar: AppBar(title: Text('${plugin.name} 설정')),
+        body: ListView(
+          children: [
+            ListTile(title: Text(plugin.name), subtitle: Text('${plugin.version} · 클라우드 확장앱')),
+            if (store.disabled.contains(pluginId))
+              const ListTile(subtitle: Text('꺼진 확장앱입니다. 설정은 보관되며, 연결하려면 확장앱을 켜 주세요.')),
+            ListTile(
+              title: const Text('앱 등록 정보'),
+              subtitle: Text(cloudPluginConfigured(plugin) ? '앱 등록 정보 설정됨' : '앱 등록 정보 필요'),
+              trailing: const Icon(Icons.edit_outlined),
+              enabled: supported,
+              onTap: () => _configure(context, plugin),
+            ),
+            const ListTile(subtitle: Text('등록 정보를 저장한 뒤 사이드바의 클라우드 연결에서 로그인하세요. 기존 연결 계정은 유지됩니다.')),
+            if (forConnection)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: FilledButton(
+                  onPressed: supported && cloudPluginConfigured(plugin) && !store.disabled.contains(pluginId)
+                      ? () => Navigator.pop(context, true)
+                      : null,
+                  child: const Text('연결 계속'),
+                ),
+              ),
+          ],
         ),
-    ],
+      );
+    },
   );
+}
+
+Future<bool> _showClientIdSetup(BuildContext context, OPlugin plugin) async {
+  var value = PluginStore.instance.oauthClientId(plugin);
+  final form = GlobalKey<FormState>();
+  var saving = false;
+  String? error;
+  return await showDialog<bool>(
+        context: context,
+        builder: (c) => StatefulBuilder(
+          builder: (c, setState) => AlertDialog(
+            title: Text('${plugin.name} 앱 등록'),
+            content: Form(
+              key: form,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    initialValue: value,
+                    enabled: !saving,
+                    autocorrect: false,
+                    decoration: const InputDecoration(labelText: 'OAuth Client ID'),
+                    onChanged: (text) => value = text.trim(),
+                    validator: (text) => (text ?? '').trim().isEmpty ? 'Client ID를 입력해 주세요' : null,
+                  ),
+                  if (error != null) Text(error!, style: TextStyle(color: Theme.of(c).colorScheme.error)),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(onPressed: saving ? null : () => Navigator.pop(c, false), child: const Text('취소')),
+              FilledButton(
+                onPressed: saving
+                    ? null
+                    : () async {
+                        if (!form.currentState!.validate()) return;
+                        setState(() {
+                          saving = true;
+                          error = null;
+                        });
+                        try {
+                          await PluginStore.instance.setOAuthClientId(plugin.id, value);
+                          if (c.mounted) Navigator.pop(c, true);
+                        } catch (_) {
+                          if (c.mounted) {
+                            setState(() {
+                              saving = false;
+                              error = '등록 정보를 저장하지 못했습니다. 다시 시도해 주세요.';
+                            });
+                          }
+                        }
+                      },
+                child: saving
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('저장'),
+              ),
+            ],
+          ),
+        ),
+      ) ??
+      false;
 }

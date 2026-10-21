@@ -30,7 +30,7 @@ OAuthClient oauthClientFor(CloudProvider provider, {String? clientId, String? ac
         CloudProvider.gdrive => CloudConfig.googleDesktopClientId,
         CloudProvider.dropbox => CloudConfig.dropboxAppKey,
         CloudProvider.onedrive => CloudConfig.oneDriveClientId,
-        CloudProvider.plugin => oauth['clientId'] as String? ?? '',
+        CloudProvider.plugin => PluginStore.instance.oauthClientId(definition),
       };
   return OAuthClient(
     authEndpoint: oauth['authEndpoint'] as String,
@@ -162,7 +162,8 @@ class CloudSource extends MediaSource {
         final request = http.Request(method, Uri.parse(url))..followRedirects = false;
         request.headers.addAll(await tokens.authHeader(forceRefresh: refresh));
         if (method == 'POST') {
-          request.headers['Content-Type'] = 'application/json'; request.body = jsonEncode(body);
+          request.headers['Content-Type'] = 'application/json';
+          request.body = jsonEncode(body);
         }
         final response = await client.send(request).timeout(const Duration(seconds: 30));
         final bytes = <int>[];
@@ -172,10 +173,13 @@ class CloudSource extends MediaSource {
         }
         return http.Response.bytes(bytes, response.statusCode);
       }
+
       var response = await send(false);
       if (response.statusCode == 401) response = await send(true);
       return _decode(response);
-    } finally { client.close(); }
+    } finally {
+      client.close();
+    }
   }
 
   Map<String, dynamic> _decode(http.Response r) {

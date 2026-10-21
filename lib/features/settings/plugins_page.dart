@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../../core/plugins/plugin.dart';
 import '../../core/plugins/plugin_store.dart';
+import 'cloud_settings.dart';
 
 class PluginsPage extends StatefulWidget {
   const PluginsPage({super.key});
@@ -134,25 +135,45 @@ class _PluginsPageState extends State<PluginsPage> {
                       value: !store.disabled.contains(p.id),
                       onChanged: busy ? null : (v) => _guard(() => store.setEnabled(p.id, v)),
                     ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_outline),
-                      tooltip: '확장앱 삭제',
-                      onPressed: busy
-                          ? null
-                          : () => _guard(() async {
-                              final yes = await showDialog<bool>(
-                                context: context,
-                                builder: (c) => AlertDialog(
-                                  title: Text('${p.name} 삭제'),
-                                  content: const Text('확장앱을 삭제합니다. 기존 클라우드 계정은 유지되며 다시 설치하면 사용할 수 있습니다.'),
-                                  actions: [
-                                    TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('취소')),
-                                    FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('삭제')),
-                                  ],
-                                ),
-                              );
-                              if (yes == true) await store.remove(p.id);
-                            }),
+                    onTap: p.cloud && !busy
+                        ? () => Navigator.of(
+                            context,
+                          ).push(MaterialPageRoute<void>(builder: (_) => CloudPluginSettingsPage(pluginId: p.id)))
+                        : null,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (p.cloud)
+                          IconButton(
+                            icon: const Icon(Icons.settings_outlined),
+                            tooltip: '${p.name} 설정',
+                            onPressed: busy
+                                ? null
+                                : () => Navigator.of(context).push(
+                                    MaterialPageRoute<void>(builder: (_) => CloudPluginSettingsPage(pluginId: p.id)),
+                                  ),
+                          ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline),
+                          tooltip: '확장앱 삭제',
+                          onPressed: busy
+                              ? null
+                              : () => _guard(() async {
+                                  final yes = await showDialog<bool>(
+                                    context: context,
+                                    builder: (c) => AlertDialog(
+                                      title: Text('${p.name} 삭제'),
+                                      content: const Text('확장앱을 삭제합니다. 기존 클라우드 계정은 유지되며 다시 설치하면 사용할 수 있습니다.'),
+                                      actions: [
+                                        TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('취소')),
+                                        FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('삭제')),
+                                      ],
+                                    ),
+                                  );
+                                  if (yes == true) await store.remove(p.id);
+                                }),
+                        ),
+                      ],
                     ),
                   ),
                 for (final repository in store.repositories) ...[

@@ -12,7 +12,6 @@ import '../../sources/source_registry.dart';
 import '../network/remote_folder_picker.dart';
 import '../web/download_manager.dart';
 import 'network_settings.dart';
-import 'cloud_settings.dart';
 import 'privacy_settings.dart';
 import 'appearance_settings.dart';
 import 'plugins_page.dart';
@@ -46,7 +45,6 @@ class SettingsPage extends StatelessWidget {
               onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const PluginsPage())),
             ),
             const NetworkSettings(),
-            const CloudSettings(),
             const PrivacySettings(),
             const _Header('재생'),
             if (Platform.isWindows)
