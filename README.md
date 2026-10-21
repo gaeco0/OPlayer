@@ -29,8 +29,8 @@ flutter run -d windows   # 또는 macos / android / ios
 
 ## GitHub Actions 빌드와 릴리스
 
-- push·PR에서는 빌드를 자동 실행하지 않는다. 사용자가 빌드나 배포본 교체를 요청할 때만 Actions의 수동 실행으로 Windows, Android(mobile), Android TV(tv), Linux(x64), macOS(Apple Silicon 러너)를 빌드한다. Android·TV는 같은 배포 키로 각각 서명하며 Windows에서 정적 분석·Dart 테스트·브라우저 JavaScript 테스트도 실행한다. 버전 번호 변경만으로는 빌드하거나 배포 파일을 교체하지 않는다.
-- `main`의 다섯 빌드와 검증이 모두 성공하면 `pubspec.yaml` 버전으로 `v0.1.0` 형태의 태그·GitHub Release를 Actions에서 생성한다. 기존 소스 전용 릴리스에는 같은 앱 소스의 배포 파일을 추가할 수 있으며, 앱 소스가 변경되면 버전을 올린다. 기본 실행은 기존 첨부 파일을 덮어쓰지 않는다. 같은 버전을 교체할 때는 Actions 수동 실행에서 `replace_release`를 켠다. 다섯 빌드 성공 후 파일을 교체하고 해당 태그를 빌드 커밋으로 이동한다.
+- 브랜치 push·PR·버전 번호 변경만으로는 빌드하지 않는다. 사용자가 배포를 지시할 때만 해당 커밋에 `v0.1.1` 같은 버전 태그를 만들고 push한다. `v*` 태그 push를 받으면 Windows, Android(mobile), Android TV(tv), Linux(x64), macOS(Apple Silicon 러너)를 빌드한다. Android·TV는 같은 배포 키로 각각 서명하며 Windows에서 정적 분석·Dart 테스트·브라우저 JavaScript 테스트도 실행한다.
+- 다섯 빌드와 검증이 모두 성공하면 push된 태그에 GitHub Release와 배포 파일을 등록한다. 태그와 `pubspec.yaml` 버전이 다르면 게시를 거부한다. Actions는 태그를 생성하거나 이동하지 않는다. 기존 버전 교체도 사용자 지시가 있을 때만 해당 태그를 대상 커밋으로 갱신·push하며, 이 경우 같은 이름의 배포 파일을 교체한다.
 - GitHub Release에 Android·Android TV의 ABI별 서명 APK 6개, Windows x64 ZIP, Linux x64 tar.gz, macOS Apple Silicon ZIP과 SHA256SUMS.txt를 첨부한다. 데스크톱 압축 파일은 실행 파일·라이브러리·데이터를 포함하므로 전체를 풀어 사용한다. 빌드 작업 간 전달용 Actions 아티팩트는 7일 동안 보관한다.
 - 저장소 Actions Secrets에 `ANDROID_KEYSTORE_BASE64`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_PASSWORD`, `ANDROID_KEY_ALIAS`를 등록한다. 키와 비밀번호는 빌드 중 임시 복원 후 삭제하며, 저장소·릴리스에 커밋하거나 업로드하지 않는다.
 - 기본 `main`의 `LICENSE`는 `devel`과 `main`에서 그대로 유지한다. `third_party/`의 외부 구성요소는 각 디렉터리의 라이선스도 함께 적용된다.
