@@ -49,14 +49,12 @@ class NativeMediaSession {
     required Duration duration,
     bool foreground = false,
     bool remote = false,
-    bool canAudioOnly = false,
     bool canPrevious = true,
     bool canNext = true,
     double rate = 1,
   }) async {
     if (!Platform.isAndroid) return;
-    final signature =
-        '$enabled/$playing/$title/$subtitle/$foreground/$remote/$duration/$rate/$canAudioOnly/$canPrevious/$canNext';
+    final signature = '$enabled/$playing/$title/$subtitle/$foreground/$remote/$duration/$rate/$canPrevious/$canNext';
     final now = DateTime.now();
     if (signature == _signature && now.difference(_last) < const Duration(seconds: 3)) {
       return;
@@ -73,7 +71,6 @@ class NativeMediaSession {
         'duration': duration.inMilliseconds,
         'foreground': foreground,
         'remote': remote,
-        'canAudioOnly': canAudioOnly,
         'canPrevious': canPrevious,
         'canNext': canNext,
         'rate': rate,

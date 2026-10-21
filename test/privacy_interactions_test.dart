@@ -57,6 +57,88 @@ void main() {
     expect(ResourceLocks.validPattern([0, 1, 2]), false);
   });
 
+  testWidgets('biometrics precede PIN and pattern, including fresh settings authentication', (tester) async {
+    await tester.runAsync(() async {
+      await locks.setPin('123456');
+      await locks.setPattern([0, 1, 2, 5]);
+      await locks.setBiometric(true);
+    });
+    for (final forceCredential in [false, true]) {
+      final pending = Completer<bool>();
+      var prompts = 0;
+      messenger.setMockMethodCallHandler(privacyChannel, (call) async {
+        if (call.method == 'authenticate') {
+          prompts++;
+          return pending.future;
+        }
+        return null;
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ResourceUnlockPanel(
+              key: ValueKey(forceCredential),
+              forceCredential: forceCredential,
+              onUnlocked: () {},
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(prompts, 1);
+      expect(find.byType(TextField), findsNothing);
+      expect(find.byType(PatternPad), findsNothing);
+      pending.complete(false);
+      await tester.pumpAndSettle();
+      expect(find.byType(TextField), findsOneWidget);
+      await tester.tap(find.text('패턴으로 해제'));
+      await tester.pumpAndSettle();
+      expect(find.byType(PatternPad), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    }
+  });
+
+  testWidgets('background lock defers biometrics until resume and keeps credentials hidden', (tester) async {
+    await tester.runAsync(() async {
+      await locks.setPin('123456');
+      await locks.setBiometric(true);
+      await locks.setAppLockEnabled(true);
+    });
+    final pending = Completer<bool>();
+    var prompts = 0;
+    messenger.setMockMethodCallHandler(privacyChannel, (call) async {
+      if (call.method == 'authenticate') {
+        prompts++;
+        return pending.future;
+      }
+      return null;
+    });
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: PrivacyShell(child: Scaffold(body: Text('private app'))),
+      ),
+    );
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    await tester.pump();
+    expect(prompts, 0);
+    expect(find.byType(TextField), findsNothing);
+    expect(find.byType(PatternPad), findsNothing);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    expect(prompts, 1);
+    expect(find.byType(TextField), findsNothing);
+    expect(find.text('private app').hitTestable(), findsNothing);
+    pending.complete(true);
+    await tester.pumpAndSettle();
+    expect(locks.shielded, false);
+    expect(find.text('private app').hitTestable(), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('drawing a pattern submits its actual ordered dots', (tester) async {
     List<int>? submitted;
     await tester.pumpWidget(

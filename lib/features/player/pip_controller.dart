@@ -23,9 +23,6 @@ class PlayerPip extends ChangeNotifier {
         case 'playPause':
         case 'rewind':
         case 'forward':
-        case 'audioOnly':
-        case 'previous':
-        case 'next':
           await onCommand?.call(call.method);
         case 'backgrounded':
           onBackground?.call();
@@ -39,25 +36,13 @@ class PlayerPip extends ChangeNotifier {
     }
   }
 
-  Future<void> update({
-    required bool enabled,
-    required bool playing,
-    double aspect = 16 / 9,
-    bool canPrevious = false,
-    bool canNext = false,
-  }) async {
+  Future<void> update({required bool enabled, required bool playing, double aspect = 16 / 9}) async {
     if (!available) return;
-    final state = '$enabled/$playing/$aspect/$canPrevious/$canNext';
+    final state = '$enabled/$playing/$aspect';
     if (_lastState == state) return;
     _lastState = state;
     try {
-      await _channel.invokeMethod<void>('update', {
-        'active': enabled,
-        'playing': playing,
-        'aspect': aspect,
-        'canPrevious': canPrevious,
-        'canNext': canNext,
-      });
+      await _channel.invokeMethod<void>('update', {'active': enabled, 'playing': playing, 'aspect': aspect});
     } on PlatformException {
       _lastState = null;
     }

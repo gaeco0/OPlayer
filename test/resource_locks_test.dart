@@ -41,6 +41,37 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(privacyChannel, null);
   });
 
+  test('background relock retains current playback but denies new access and manual relock revokes it', () async {
+    final locks = ResourceLocks();
+    await locks.init();
+    await locks.setPin('123456');
+    locks.onAuthenticate = (_) => locks.verifyPin('123456');
+    await locks.setAppLockEnabled(true);
+    await locks.toggle(dir.path, 'private');
+    final current = '${dir.path}/current.mp3';
+    await locks.requireAccess(current);
+    final permit = locks.authorizePlayback([current]);
+    expect(permit, isNotNull);
+    locks.background(true);
+    expect(locks.shielded, true);
+    expect(locks.isLocked(current), true);
+    expect(locks.canContinuePlayback(permit), true);
+    expect(locks.authorizePlayback([current]), isNull);
+    expect(locks.canContinuePlayback(null), false);
+    await expectLater(locks.requireAccess('${dir.path}/other.mp3'), throwsA(isA<ResourceLockedException>()));
+    locks.background(false);
+    expect(locks.isLocked(current), true);
+    expect(locks.canContinuePlayback(permit), true);
+    locks.relock();
+    expect(locks.canContinuePlayback(permit), false);
+    await locks.requireAccess(current);
+    final renewed = locks.authorizePlayback([current]);
+    expect(locks.canContinuePlayback(renewed), true);
+    await locks.toggle(current, 'nested lock');
+    expect(locks.canContinuePlayback(renewed), false);
+    expect(locks.authorizePlayback([current]), isNull);
+  });
+
   test('PIN protects descendants, persists without plaintext, and canceled auth denies access', () async {
     final locks = ResourceLocks();
     await locks.init();

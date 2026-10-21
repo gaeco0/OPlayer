@@ -39,9 +39,6 @@ class MainActivity : FlutterActivity() {
     private var exitToast: Toast? = null
     private var playerActive = false
     private var playing = false
-    private var pipActionsPage = 0
-    private var canPrevious = false
-    private var canNext = false
     private var aspect = 16.0 / 9.0
     private var receiverRegistered = false
     private val toggleAction = "com.oplayer.oplayer.PIP_TOGGLE"
@@ -49,10 +46,7 @@ class MainActivity : FlutterActivity() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action != toggleAction || !playerActive) return
             val command = intent.getStringExtra("command") ?: "playPause"
-            if (command == "more") {
-                pipActionsPage++
-                if (supportsPip()) setPictureInPictureParams(pipParams())
-            } else if (command in listOf("rewind", "forward", "playPause", "audioOnly", "previous", "next")) {
+            if (command in listOf("rewind", "playPause", "forward")) {
                 pipChannel.invokeMethod(command, null)
             }
         }
@@ -158,7 +152,6 @@ class MainActivity : FlutterActivity() {
                         .putExtra("playing", call.argument<Boolean>("playing") ?: false)
                         .putExtra("foreground", call.argument<Boolean>("foreground") ?: false)
                         .putExtra("remote", call.argument<Boolean>("remote") ?: false)
-                        .putExtra("canAudioOnly", call.argument<Boolean>("canAudioOnly") ?: false)
                         .putExtra("canPrevious", call.argument<Boolean>("canPrevious") ?: false)
                         .putExtra("canNext", call.argument<Boolean>("canNext") ?: false)
                         .putExtra("position", call.argument<Number>("position")?.toLong() ?: 0L)
@@ -176,11 +169,8 @@ class MainActivity : FlutterActivity() {
                 "available" -> result.success(supportsPip())
                 "background" -> { moveTaskToBack(true); result.success(null) }
                 "update" -> {
-                    if (!playerActive) pipActionsPage = 0
                     playerActive = call.argument<Boolean>("active") ?: false
                     playing = call.argument<Boolean>("playing") ?: false
-                    canPrevious = call.argument<Boolean>("canPrevious") ?: false
-                    canNext = call.argument<Boolean>("canNext") ?: false
                     aspect = (call.argument<Number>("aspect")?.toDouble() ?: aspect).coerceIn(0.42, 2.39)
                     if (supportsPip()) setPictureInPictureParams(pipParams())
                     result.success(null)
@@ -208,17 +198,13 @@ class MainActivity : FlutterActivity() {
 
     @RequiresApi(26)
     private fun pipParams(): PictureInPictureParams {
-        val commands = playbackActionPage(
-            listOf("rewind", "forward", "playPause", "audioOnly", "previous", "next"),
-            maxNumPictureInPictureActions, pipActionsPage)
+        val commands = listOf("rewind", "playPause", "forward").take(maxNumPictureInPictureActions)
         val actions = commands.map { command ->
             val intent = Intent(toggleAction).setPackage(packageName).putExtra("command", command)
             val pending = PendingIntent.getBroadcast(this, command.hashCode(), intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             val title = playbackActionTitle(command, playing)
-            RemoteAction(Icon.createWithResource(this, playbackActionIcon(command, playing)), title, title, pending).apply {
-                isEnabled = when (command) { "previous" -> canPrevious; "next" -> canNext; else -> true }
-            }
+            RemoteAction(Icon.createWithResource(this, playbackActionIcon(command, playing)), title, title, pending)
         }
         val rect = Rect()
         window.decorView.getGlobalVisibleRect(rect)

@@ -115,32 +115,57 @@ class ResourceUnlockPanel extends StatefulWidget {
   State<ResourceUnlockPanel> createState() => _ResourceUnlockPanelState();
 }
 
-class _ResourceUnlockPanelState extends State<ResourceUnlockPanel> {
+class _ResourceUnlockPanelState extends State<ResourceUnlockPanel> with WidgetsBindingObserver {
   final _pin = TextEditingController();
   bool _busy = false;
   String? _error;
   bool _usePattern = false;
+  bool _showCredential = true;
+  bool _autoBiometricPending = false;
+  bool get _prefersBiometric => ResourceLocks.supportsSystemAuthentication && ResourceLocks.instance.biometricEnabled;
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _usePattern = !ResourceLocks.instance.hasPin && ResourceLocks.instance.hasPattern;
-    if (!widget.forceCredential && ResourceLocks.instance.biometricEnabled) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _unlock(biometric: true);
+    _showCredential = !_prefersBiometric;
+    _autoBiometricPending = _prefersBiometric;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _tryBiometric());
+  }
+
+  void _tryBiometric() {
+    if (!mounted || _busy || !_autoBiometricPending || ResourceLocks.instance.inBackground) return;
+    _autoBiometricPending = false;
+    _unlock(biometric: true);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if ((state == AppLifecycleState.paused || state == AppLifecycleState.hidden) && _prefersBiometric) {
+      setState(() {
+        _autoBiometricPending = true;
+        _showCredential = false;
       });
+    }
+    if (state == AppLifecycleState.resumed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _tryBiometric());
+      WidgetsBinding.instance.ensureVisualUpdate();
     }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pin.dispose();
     super.dispose();
   }
 
   Future<void> _unlock({bool biometric = false, List<int>? pattern}) async {
     if (_busy) return;
+    if (biometric) FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
       _busy = true;
+      if (biometric) _showCredential = false;
       _error = null;
     });
     try {
@@ -158,13 +183,22 @@ class _ResourceUnlockPanelState extends State<ResourceUnlockPanel> {
         return;
       }
       setState(() {
+        if (biometric) _showCredential = !_autoBiometricPending;
         _error = locks.retrySeconds > 0 ? '${locks.retrySeconds}초 후 다시 입력해 주세요' : '인증하지 못했습니다';
         _pin.clear();
       });
     } catch (_) {
-      if (mounted) setState(() => _error = '인증 정보를 읽거나 저장하지 못했습니다');
+      if (mounted) {
+        setState(() {
+          if (biometric) _showCredential = !_autoBiometricPending;
+          _error = '인증 정보를 읽거나 저장하지 못했습니다';
+        });
+      }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        setState(() => _busy = false);
+        WidgetsBinding.instance.addPostFrameCallback((_) => _tryBiometric());
+      }
     }
   }
 
@@ -188,12 +222,17 @@ class _ResourceUnlockPanelState extends State<ResourceUnlockPanel> {
         ),
         if (ResourceLocks.instance.authenticatingResource case final String resource)
           Text(ResourceLocks.instance.resources[resource] ?? resource, maxLines: 2, overflow: TextOverflow.ellipsis),
-        if (_usePattern)
+        if (!_showCredential) ...[
+          const SizedBox(height: 20),
+          const Icon(Icons.fingerprint, size: 48),
+          Text(Platform.isWindows ? 'Windows Hello로 확인 중…' : '지문·생체인증으로 확인 중…'),
+        ],
+        if (_showCredential && _usePattern)
           PatternPad(
             enabled: !_busy,
             onCompleted: (pattern) => _unlock(pattern: pattern),
           ),
-        if (!_usePattern)
+        if (_showCredential && !_usePattern)
           TextField(
             controller: _pin,
             autofocus: true,
@@ -206,7 +245,8 @@ class _ResourceUnlockPanelState extends State<ResourceUnlockPanel> {
             decoration: InputDecoration(labelText: 'PIN', errorText: _error),
             onSubmitted: (_) => _unlock(),
           ),
-        if (_usePattern && _error != null) Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+        if (_showCredential && _usePattern && _error != null)
+          Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
         if (_busy)
           const Padding(
             padding: EdgeInsets.all(12),
@@ -219,9 +259,9 @@ class _ResourceUnlockPanelState extends State<ResourceUnlockPanel> {
               ],
             ),
           ),
-        if (!_usePattern)
+        if (_showCredential && !_usePattern)
           FilledButton(onPressed: _busy ? null : () => _unlock(), child: Text(_busy ? '확인 중…' : '잠금 해제')),
-        if (ResourceLocks.instance.hasPattern && ResourceLocks.instance.hasPin)
+        if (_showCredential && ResourceLocks.instance.hasPattern && ResourceLocks.instance.hasPin)
           TextButton(
             onPressed: _busy
                 ? null
@@ -231,9 +271,7 @@ class _ResourceUnlockPanelState extends State<ResourceUnlockPanel> {
                   }),
             child: Text(_usePattern ? 'PIN으로 해제' : '패턴으로 해제'),
           ),
-        if (ResourceLocks.supportsSystemAuthentication &&
-            ResourceLocks.instance.biometricEnabled &&
-            !widget.forceCredential)
+        if (_showCredential && _prefersBiometric)
           TextButton.icon(
             onPressed: _busy ? null : () => _unlock(biometric: true),
             icon: const Icon(Icons.fingerprint),
