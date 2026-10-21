@@ -96,6 +96,10 @@ Windows 버전을 실행하면 현재 실행 파일 경로를 사용자별 기�
 - 캡처 수동 설정 스위치는 앱 잠금 중에도 변경·저장할 수 있다. 현재 실제 차단 상태를 별도로 표시한다. 앱 잠금 사용 중에는 잠금 해제 후에도 항상 차단하고, 앱 잠금을 끄면 저장된 수동 설정을 따른다. Android는 `FLAG_SECURE`, Windows는 [SetWindowDisplayAffinity](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowdisplayaffinity)를 사용한다. 플레이어 자체 화면 저장에도 동일한 정책을 적용한다.
 - Windows Hello는 앱 창의 HWND를 지정하는 공식 [UserConsentVerifier interop](https://learn.microsoft.com/en-us/uwp/api/windows.security.credentials.ui.userconsentverifier)으로 인증한다. `flutter run -d windows --debug --no-pub -t tool/privacy_native_smoke.dart`로 실제 캡처 차단 값과 Hello 사용 가능 여부를 확인한다. 실제 지문·Hello 승인과 Android 화면 차단은 실기기 확인이 필요하다.
 
+## Android WebView와 HTTPS 필터링
+
+Android는 시스템 인증서와 사용자가 기기에 설치한 CA 인증서를 신뢰한다. AdGuard HTTPS 필터링을 사용하려면 AdGuard CA가 기기의 사용자 인증서 저장소에 설치되어 있어야 한다. 이 신뢰 설정은 WebView 외 Android 네트워크 API에도 적용될 수 있으며, 호스트명·유효기간·인증서 체인 검증은 유지한다. 내장 브라우저의 감지된 동영상 → 요청 기록에서 리소스 로드 실패·HTTP 오류를 확인할 수 있다.
+
 ## 구조
 
 ```
