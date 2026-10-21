@@ -61,7 +61,7 @@ jobs:
           cache: true
       - name: Install Android SDK components
         # The runner image does not guarantee Android command-line tools on PATH.
-        run: sdkmanager 'platforms;android-36' 'platforms;android-37' 'build-tools;36.0.0' 'ndk;28.2.13676358'
+        run: sdkmanager 'platforms;android-36' 'platforms;android-37.0' 'build-tools;36.0.0' 'ndk;28.2.13676358'
       - run: flutter pub get
       - name: Restore release signing key
         if: github.event_name != 'pull_request'
