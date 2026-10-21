@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: build-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   FLUTTER_VERSION: '3.47.7'
@@ -50,12 +50,14 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
       - name: Install Android SDK components
+        # The runner image does not guarantee Android command-line tools on PATH.
         run: sdkmanager 'platforms;android-36' 'platforms;android-37' 'build-tools;36.0.0' 'ndk;28.2.13676358'
       - run: flutter pub get
       - name: Restore release signing key
