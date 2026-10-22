@@ -8,14 +8,50 @@ class OPlugin {
   String get id => manifest['id'] as String;
   String get name => manifest['name'] as String;
   String get version => manifest['version'] as String;
-  bool get cloud => manifest['kind'] == 'cloud';
-  bool get site => manifest['kind'] == 'site';
-  bool get subtitle => manifest['kind'] == 'subtitle';
-  String get kindLabel => cloud
-      ? '클라우드'
-      : subtitle
-      ? '자막 검색'
-      : '사이트 기능';
+  // Legacy manifests keep their source/identity, but use the same host contract.
+  String get kind => switch (manifest['kind']) {
+    'cloud' => 'resource',
+    'site' => 'browser',
+    'subtitle' => 'player',
+    final String value => value,
+    _ => '',
+  };
+  static const contracts = {
+    'player': {
+      'subtitles': ['searchSubtitles', 'downloadSubtitle'],
+      'videoFilter': ['videoFilter'],
+    },
+    'browser': {
+      'page': ['page'],
+      'resolveDownload': ['resolveDownload'],
+      'blockRequests': <String>[],
+    },
+    'resource': {
+      'storage': ['accountName', 'list', 'stream'],
+    },
+  };
+  bool get typed => contracts.containsKey(manifest['kind']);
+  List<String> get capabilities => typed
+      ? (manifest['capabilities'] as List).cast<String>()
+      : switch (manifest['kind']) {
+          'cloud' => ['storage'],
+          'subtitle' => ['subtitles'],
+          _ => ['page', 'resolveDownload', 'blockRequests'],
+        };
+  bool supports(String capability) => capabilities.contains(capability);
+  bool get cloud => kind == 'resource';
+  bool get site => kind == 'browser';
+  bool get subtitle => kind == 'player' && supports('subtitles');
+  String get kindLabel => switch (kind) {
+    'player' => '플레이어',
+    'resource' => '리소스',
+    _ => '브라우저',
+  };
+  Set<String> get allowedMethods => {
+    'validateSettings',
+    for (final capability in capabilities) ...contracts[kind]![capability]!,
+    if (cloud) ...['authenticate', 'refresh', if (manifest['canDelete'] == true) 'delete'],
+  };
   List<String> get hosts => (manifest['hosts'] as List).cast<String>();
   List<String> get authHosts => (manifest['authHosts'] as List? ?? []).cast<String>();
   List<String> get sites => (manifest['sites'] as List? ?? []).cast<String>();
@@ -59,7 +95,7 @@ class OPlugin {
         meta['name'] is! String ||
         '${meta['name']}'.isEmpty ||
         meta['version'] is! String ||
-        !['site', 'cloud', 'subtitle'].contains(meta['kind'])) {
+        !['site', 'cloud', 'subtitle', ...contracts.keys].contains(meta['kind'])) {
       throw const FormatException('지원하지 않는 확장앱 형식입니다');
     }
     for (final key in ['hosts', 'authHosts', 'sites']) {
@@ -72,6 +108,23 @@ class OPlugin {
     }
     meta['hosts'] ??= <String>[];
     final plugin = OPlugin._(source, meta);
+    if (plugin.typed) {
+      final capabilities = meta['capabilities'];
+      if (meta['api'] != 4 ||
+          capabilities is! List ||
+          capabilities.isEmpty ||
+          capabilities.any((c) => c is! String || !contracts[plugin.kind]!.containsKey(c)) ||
+          capabilities.toSet().length != capabilities.length) {
+        throw const FormatException('유형에 맞는 API 4 기능(capabilities)을 선언하세요');
+      }
+      if (!plugin.site && (meta.containsKey('sites') || meta.containsKey('blockRules')) ||
+          !plugin.cloud && ['oauth', 'auth', 'canDelete'].any(meta.containsKey)) {
+        throw const FormatException('다른 유형의 확장앱 권한은 사용할 수 없습니다');
+      }
+      if (plugin.site && !plugin.supports('blockRequests') && meta.containsKey('blockRules')) {
+        throw const FormatException('광고 차단에는 blockRequests 기능 선언이 필요합니다');
+      }
+    }
     if (meta['canDelete'] != null && meta['canDelete'] is! bool) {
       throw const FormatException('잘못된 삭제 지원 선언');
     }

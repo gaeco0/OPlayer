@@ -129,8 +129,9 @@ void main() {
         requests.add(r);
         expect(r.headers.containsKey('authorization'), false);
         expect(r.url.path.endsWith('/login'), false);
-        if (r.url.host == 'dl.opensubtitles.com')
+        if (r.url.host == 'dl.opensubtitles.com') {
           return http.Response('1\n00:00:00,000 --> 00:00:01,000\nAnonymous\n', 200);
+        }
         expect(r.headers['api-key'], 'test-key');
         if (r.url.path.endsWith('/subtitles')) {
           expect(r.url.queryParameters['query'], 'example movie');

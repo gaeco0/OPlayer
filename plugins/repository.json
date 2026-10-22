@@ -1,13 +1,17 @@
 {
   "api": 1,
   "name": "OPlayer 공식 확장앱 저장소",
-  "description": "OPlayer의 클라우드 연결·자막 검색 확장앱을 제공합니다.",
+  "description": "OPlayer의 플레이어·브라우저·리소스 확장앱을 제공합니다.",
   "plugins": [
     {
       "id": "cloud.box",
       "name": "Box",
-      "version": "1.1.0",
-      "kind": "cloud",
+      "version": "1.1.1",
+      "kind": "resource",
+      "capabilities": [
+        "storage"
+      ],
+      "pluginApi": 4,
       "author": "OPlayer",
       "features": [
         "클라우드 연결",
@@ -16,14 +20,18 @@
       ],
       "description": "Box 계정 연결·폴더 탐색·미디어 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.box.js",
-      "sha256": "3c7dd39228a3153ce7bd0467a7fae192fa4d9c8633e0142126f075a57cba394d",
+      "sha256": "d9f6c423c100ba6250300c945cb94b088174948747c6f6379960079c5ca5f887",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     },
     {
       "id": "cloud.dropbox",
       "name": "Dropbox",
-      "version": "1.1.0",
-      "kind": "cloud",
+      "version": "1.1.1",
+      "kind": "resource",
+      "capabilities": [
+        "storage"
+      ],
+      "pluginApi": 4,
       "author": "OPlayer",
       "features": [
         "클라우드 연결",
@@ -32,14 +40,18 @@
       ],
       "description": "Dropbox 계정 연결·폴더 탐색·미디어 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.dropbox.js",
-      "sha256": "2b9c1f6550d334a9754c44c71f4402a8deca55776c919bf423386d5c49ec1c38",
+      "sha256": "9340b170bb1fdf8d041cc9c87d162c1b0cd6ddb4acedafe6676f9b0a7eb433e2",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     },
     {
       "id": "cloud.gdrive",
       "name": "Google Drive",
-      "version": "1.1.0",
-      "kind": "cloud",
+      "version": "1.1.1",
+      "kind": "resource",
+      "capabilities": [
+        "storage"
+      ],
+      "pluginApi": 4,
       "author": "OPlayer",
       "features": [
         "클라우드 연결",
@@ -48,14 +60,18 @@
       ],
       "description": "Google Drive 계정 연결·폴더 탐색·미디어 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.gdrive.js",
-      "sha256": "77b1e0e4120521038936f47a6713bd43e5f1482259045a54d30a9fb8bbee6287",
+      "sha256": "d096e84faa46fab8966b7de12d26bbe1fdbc792018f261d3ff723436be13f833",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     },
     {
       "id": "cloud.mybox",
       "name": "네이버 MYBOX",
-      "version": "1.1.0",
-      "kind": "cloud",
+      "version": "1.1.1",
+      "kind": "resource",
+      "capabilities": [
+        "storage"
+      ],
+      "pluginApi": 4,
       "author": "OPlayer",
       "features": [
         "클라우드 연결",
@@ -64,14 +80,18 @@
       ],
       "description": "네이버 MYBOX 계정 연결·폴더 탐색·미디어 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.mybox.js",
-      "sha256": "8edc2b8122bcbe4c4565553720059fbd93962f790b24512b9549c17276617a12",
+      "sha256": "eb1acac94470ad6818a329db003018bd70b4d7b0807e892a89a0a2bc1cae9c62",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     },
     {
       "id": "cloud.onedrive",
       "name": "OneDrive",
-      "version": "1.1.0",
-      "kind": "cloud",
+      "version": "1.1.1",
+      "kind": "resource",
+      "capabilities": [
+        "storage"
+      ],
+      "pluginApi": 4,
       "author": "OPlayer",
       "features": [
         "클라우드 연결",
@@ -80,14 +100,18 @@
       ],
       "description": "OneDrive 계정 연결·폴더 탐색·미디어 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.onedrive.js",
-      "sha256": "640f508dc34500e6f24cbd9c1cc9f7ea64053e85a3398efcd3438293db8d6b81",
+      "sha256": "c022bc3906db7083ea842c45136c6977353b1e8ce64d436a2498837e77d3563b",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     },
     {
       "id": "cloud.s3",
       "name": "S3 호환 스토리지",
-      "version": "1.1.0",
-      "kind": "cloud",
+      "version": "1.1.1",
+      "kind": "resource",
+      "capabilities": [
+        "storage"
+      ],
+      "pluginApi": 4,
       "author": "OPlayer",
       "features": [
         "클라우드 연결",
@@ -96,14 +120,36 @@
       ],
       "description": "S3 호환 스토리지 계정 연결·폴더 탐색·미디어 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.s3.js",
-      "sha256": "9af6dc87eec34a8412019addd11cae03b848aa0509385ecaac6136509d13025e",
+      "sha256": "9d4ace89f2e49f55f78c129a496757edd147fd0df9fe75e043692c3e8bbea9fd",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+    },
+    {
+      "id": "player.video-presets",
+      "name": "영상 색상 프리셋",
+      "version": "1.0.0",
+      "kind": "player",
+      "capabilities": [
+        "videoFilter"
+      ],
+      "pluginApi": 4,
+      "author": "OPlayer",
+      "features": [
+        "영상 필터"
+      ],
+      "description": "영상 색상·회전·반전 설정 프리셋",
+      "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/player.video-presets.js",
+      "sha256": "6be4f7fc574adb6cb9b731dc7c2227146a9a570a98e3a9297227573eb29e4105",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     },
     {
       "id": "subtitle.opensubtitles",
       "name": "OpenSubtitles",
-      "version": "1.0.1",
-      "kind": "subtitle",
+      "version": "1.0.2",
+      "kind": "player",
+      "capabilities": [
+        "subtitles"
+      ],
+      "pluginApi": 4,
       "author": "OPlayer",
       "features": [
         "자막 검색",
@@ -111,7 +157,7 @@
       ],
       "description": "OpenSubtitles 자막 검색·다운로드·적용",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/subtitle.opensubtitles.js",
-      "sha256": "dd66e1784138e9ba16399df674a6350b0e0ed1e8f1c814e677fbca8bbb35a0d6",
+      "sha256": "a36af0ec9a3a4840cb7de1324eb33fd2f4fb13e42c8035c2d527256320065c02",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     }
   ]

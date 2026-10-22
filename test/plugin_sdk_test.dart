@@ -175,12 +175,11 @@ void main() {
       () => OPlugin.parse(plugin.source.replaceFirst('"authSettings":["endpoint"]', '"authSettings":["password"]')),
       throwsFormatException,
     );
-    final hashSource = plugin.source.replaceFirst(
-      'globalThis.plugin = {',
-      "globalThis.plugin = {hash(){return OPlayer.crypto.hash('sha256','abc')},",
-    );
+    final hashSource =
+        '${plugin.source.split('\n').first}\n'
+        "globalThis.plugin = {accountName(){return OPlayer.crypto.hash('sha256','abc')},list(){return []},stream(){return {}}};";
     expect(
-      await callPlugin(OPlugin.parse(hashSource), 'hash', {}),
+      await callPlugin(OPlugin.parse(hashSource), 'accountName', {}),
       'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
     );
   });

@@ -3,7 +3,7 @@
 설정 → **확장앱**에서 저장소를 추가하고 목록을 확인한 뒤 설치합니다.
 확장앱은 `.js` 파일이며 APK·앱 재설치 없이 로드합니다. JS 파일 직접 가져오기도 지원합니다.
 v0.1.3은 JavaScript API 1·2·3을 지원하며 Dart 소스·Flutter 위젯·네이티브 코드를 동적으로 로드하지 않습니다.
-현재 개발 버전은 자막 검색을 위한 API 4도 지원합니다. API 4 확장앱은 기존 v0.1.4 배포 앱에서 설치할 수 없습니다.
+v1.0.5는 아래 세 유형의 공통 API 4를 지원합니다. 기존 v0.1.4 앱은 API 4가 없으므로 한 번 업데이트해야 합니다. 이후 같은 규약을 사용하는 공급자·사이트·필터는 JS와 저장소 JSON만 배포합니다.
 
 공식 저장소 JSON:
 https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/repository.json
@@ -17,8 +17,8 @@ S3 호환 스토리지·Box·네이버 MYBOX도 공식 저장소에서 선택 �
 이 문서의 공통 SDK를 포함한 앱으로 한 번 업데이트하면, 이후 같은 SDK를 사용하는 공급자는 JS 파일·저장소 목록만
 추가하면 됩니다. 공급자별 설정·서버 주소·인증 흐름을 추가할 때 앱을 다시 빌드하지 않습니다.
 새 OS 네이티브 기능처럼 SDK 자체에 없는 기능을 추가할 때만 호스트 앱 변경이 필요합니다.
-기존 API 1·2 확장앱도 계속 사용할 수 있습니다. 새 파서 API가 필요한 확장앱은 `api: 3`을 선언해
-미지원 앱에서 설치되지 않게 합니다. 저장소 목록 자체의 형식은 그대로 `api: 1`입니다.
+기존 API 1·2·3 확장앱도 계속 사용할 수 있습니다. 새 확장앱은 유형·기능을 선언하는 `api: 4`를 사용하세요.
+저장소 목록 자체의 형식은 그대로 `api: 1`이며 각 항목의 `pluginApi`가 실행 API 버전입니다.
 
 | 확장앱 | 해당 확장앱 설정에서 입력할 정보 | 지원 범위 |
 | --- | --- | --- |
@@ -60,7 +60,9 @@ S3와 Box도 재생 중 탐색 시 새 임시 URL을 얻습니다. 서비스별 
     {
       "id": "site.example",
       "name": "사이트 확장 예제",
-      "kind": "site",
+      "kind": "browser",
+      "pluginApi": 4,
+      "capabilities": ["page", "resolveDownload", "blockRequests"],
       "description": "사이트 동영상 감지와 광고 차단",
       "features": ["동영상 감지", "다운로드 보완", "광고 차단"],
       "author": "개발자 이름",
@@ -85,10 +87,67 @@ JSON 추가는 코드 설치·실행을 하지 않으며, 사용자가 항목을
 python tools/update_plugin_repository.py
 ```
 
+## 유형별 공통 규약 (API 4)
+
+| 유형 (`kind`) | 기능 (`capabilities`) | 필수 함수 / 선언 | 앱에서 사용하는 곳 |
+|---|---|---|---|
+| `player` | `subtitles` | `searchSubtitles`, `downloadSubtitle` | 플레이어 자막 메뉴·자동 검색 |
+| `player` | `videoFilter` | `videoFilter` | 플레이어 화면 비율 → 영상 필터 확장앱 |
+| `browser` | `page` | `page` | 허용 사이트 WebView DOM·미디어 감지 |
+| `browser` | `resolveDownload` | `resolveDownload` | 브라우저 재생·다운로드 공통 경로 |
+| `browser` | `blockRequests` | 비어 있지 않은 `blockRules` | 허용 사이트 광고 요청 차단 |
+| `resource` | `storage` | `accountName`, `list`, `stream` | 계정 연결·파일 목록·재생 |
+
+한 확장앱은 한 유형이며 같은 유형의 기능은 복수 선택할 수 있습니다. 미정의 유형·기능, 중복 기능,
+다른 유형의 권한(`sites`, `blockRules`, `oauth`, `auth`, `canDelete`), 누락된 필수 함수는 거절합니다.
+`validateSettings`는 모든 유형의 선택 훅입니다. 리소스는 `authenticate`, `refresh`와 `canDelete:true`일 때
+`delete`도 사용할 수 있습니다. 내부 보조 함수는 객체 밖에 두거나 `_`로 시작하게 작성하세요.
+앱이 호출할 수 있는 공개 훅은 위 규약으로 제한하며 비공개 보조 함수를 직접 호출하지 않습니다.
+플레이어·리소스 코드는 WebView에 주입하지 않고 브라우저도 선언한 기능만 실행합니다.
+
+`OPlayer.api`는 4, `OPlayer.kind`는 유형, `OPlayer.capabilities`는 선언한 기능 목록입니다.
+공통 설정·비밀값 참조·HTML/XML/JSON 파서·HTTP 권한 검사는 기존 SDK를 재사용합니다.
+새 네이티브 기능이나 새로운 공개 훅이 필요할 때만 호스트 API와 앱을 업데이트합니다.
+JS 플러그인으로 임의 Dart 코드·Flutter 위젯·네이티브 모듈은 추가할 수 없습니다.
+
+### 앱 배포 없이 확장앱 배포하기
+
+1. 위 규약에서 유형과 기능을 고르고 하단 예제처럼 JS 파일을 작성합니다.
+2. 설정은 JS 메타데이터의 `settings`에 선언합니다. 앱 공통 설정에 공급자 전용 코드를 추가하지 않습니다.
+3. 확장앱 자체 `version`을 올리고 JS를 HTTPS로 공개합니다. 기존 ID를 유지하세요.
+4. 저장소 JSON에 `kind`, `pluginApi:4`, `capabilities`, 버전·다운로드 URL·SHA-256을 반영합니다.
+   이 저장소에서는 `python tools/update_plugin_repository.py`로 `plugins/*.js`를 자동 수집합니다.
+5. 사용자에게 확장앱 목록 새로고침 → 설치/교체를 안내합니다. 앱 태그·APK·Actions 빌드는 필요 없습니다.
+6. 브라우저는 페이지 새로고침 후, 자막/필터는 다음 검색·적용 시, 리소스는 다음 요청 시 반영됩니다.
+
+실행 가능한 JS 예제를 포함한 검증은 `flutter test test/plugin_contract_test.dart`로 실행합니다.
+CI와 동일하게 QuickJS 네이티브 테스트 라이브러리를 먼저 빌드해야 합니다(워크플로 참고).
+설치 시 SHA-256·ID·버전·유형·기능 목록과 필수 훅을 확인하며, 설정·계정은 플러그인 ID로 유지합니다.
+
+### 영상 필터 예제
+
+[영상 색상 프리셋](player.video-presets.js)은 공식 저장소에서 선택 설치합니다(기본 강제 설치하지 않음).
+확장앱 설정에서 프리셋을 정한 후 플레이어 화면 비율 메뉴에서 해당 필터를 누릅니다.
+
+```js
+// @oplayer {"api":4,"id":"player.example","name":"흑백","version":"1.0.0","kind":"player","capabilities":["videoFilter"],"hosts":[]}
+globalThis.plugin = {
+  videoFilter() { return {brightness:0, contrast:0, saturation:-100}; }
+};
+```
+
+`videoFilter({})`는 변경할 값만 반환합니다. `brightness`, `contrast`, `saturation`은 유한한 -100~100 숫자,
+`rotation`은 0/90/180/270 정수, `horizontal`, `vertical`은 boolean입니다. 빈 응답·미정의 필드·범위 초과는
+적용 전 거절합니다. 네이티브 프로퍼티 문자열·파일 경로·임의 셰이더·`vf` 명령을 받지 않습니다.
+필터 훅에는 HTTP/비밀값/미디어 경로를 전달하지 않으며 공개 `OPlayer.config`만 전달합니다.
+적용된 값은 기존 영상 설정처럼 저장됩니다. 플러그인을 끈다고 이미 적용된 영상 값을 되돌리지는 않습니다.
+원본 프리셋 또는 기존 색상·회전 설정으로 초기화할 수 있습니다. 캐스팅 수신기의 영상에는 적용되지 않습니다.
+
 ## JS 파일 규약
 
 첫 줄은 `// @oplayer `와 JSON 메타데이터이며 나머지는 `globalThis.plugin = {...}`입니다.
-`id`, `name`, `version`, `api: 1 | 2 | 3 | 4`, `kind: "site" | "cloud" | "subtitle"`를 지정합니다.
+`id`, `name`, `version`, `api: 4`, `kind: "player" | "browser" | "resource"`, `capabilities`를 지정합니다.
+기존 `site`·`cloud`·`subtitle` 선언/API 1~3은 호환용으로 읽지만 새 확장앱에는 사용하지 마세요. ID를 유지하면 계정·설정도 유지됩니다.
 도메인은 정확한 호스트 또는 `*.example.com` 형식입니다. 와일드카드는 하위 호스트만 포함합니다.
 
 ### 사이트 기능
@@ -254,13 +313,13 @@ WebView의 `page` 함수는 이 실행 제한 밖에서 해당 페이지의 사�
 
 ### 자막 검색 (API 4)
 
-`kind: "subtitle"` 확장앱은 브라우저에 주입하지 않습니다. 기존 사이트·클라우드와 같은
+`kind: "player", capabilities: ["subtitles"]` 확장앱은 브라우저에 주입하지 않습니다. 기존 사이트·클라우드와 같은
 도메인 권한, 공통 설정 UI, OS 보안 저장소와 `OPlayer.request`·파서 SDK를 사용합니다.
 필수 함수는 `searchSubtitles`와 `downloadSubtitle`이며 설치 시 둘 다 검사합니다.
 공식 구현은 [subtitle.opensubtitles.js](subtitle.opensubtitles.js)를 참고하세요.
 
 ```js
-// @oplayer {"api":4,"id":"subtitle.example","name":"Example subtitles","version":"1.0.0","kind":"subtitle","hosts":["subtitles.example.com"],"settings":[]}
+// @oplayer {"api":4,"id":"subtitle.example","name":"Example subtitles","version":"1.0.0","kind":"player","capabilities":["subtitles"],"hosts":["subtitles.example.com"],"settings":[]}
 globalThis.plugin = {
   async searchSubtitles({query, language, page = 1}) {
     const response = await OPlayer.request('https://subtitles.example.com/search', {

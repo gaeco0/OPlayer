@@ -17,6 +17,7 @@ import '../../core/network/local_proxy.dart';
 import '../../core/plugins/plugin.dart';
 import '../../core/plugins/plugin_store.dart';
 import '../../core/plugins/subtitle_plugins.dart';
+import '../../core/plugins/player_plugins.dart';
 import '../cast/cast_controller.dart';
 
 /// 화면 비율 모드 (nPlayer: 화면 맞춤 → 가득 채우기 → 늘이기 → 16:9 → 4:3 → 원본)
@@ -159,6 +160,35 @@ class PlayerController extends ChangeNotifier {
   bool onlineSubtitleBusy = false;
   String? onlineSubtitleError;
   final onlineSubtitles = SubtitlePlugins(PluginStore.instance);
+  bool videoFilterBusy = false;
+
+  Future<void> applyVideoFilter(OPlugin plugin) async {
+    if (videoFilterBusy || _disposed) return;
+    final generation = _openGeneration;
+    final store = PluginStore.instance;
+    store.require(plugin.id);
+    videoFilterBusy = true;
+    notifyListeners();
+    try {
+      final values = await videoFilterValues(plugin, store.publicSettings(plugin));
+      if (_disposed || generation != _openGeneration) return;
+      if (!identical(store.require(plugin.id), plugin)) throw StateError('확장앱이 변경되었습니다. 다시 선택하세요');
+      for (final property in ['brightness', 'contrast', 'saturation']) {
+        if (_disposed || generation != _openGeneration) return;
+        if (values.containsKey(property)) await setVideoColor(property, (values[property] as num).toDouble());
+      }
+      if (!_disposed && generation == _openGeneration) {
+        await setVideoTransform(
+          rotation: values['rotation'] as int?,
+          horizontal: values['horizontal'] as bool?,
+          vertical: values['vertical'] as bool?,
+        );
+      }
+    } finally {
+      videoFilterBusy = false;
+      notifyListeners();
+    }
+  }
 
   /// 일반 재생 속도(롱프레스 2배속과 별개로 기억)
   double baseRate = 1.0;

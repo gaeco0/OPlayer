@@ -103,7 +103,7 @@ void main() {
             request.response.contentLength = media.length;
           } else {
             gets++;
-          expect(request.headers.value('accept-encoding'), 'identity');
+            expect(request.headers.value('accept-encoding'), 'identity');
             final range = RegExp(r'^bytes=(\d+)-(\d+)$').firstMatch(request.headers.value('range')!)!;
             final start = int.parse(range[1]!), end = int.parse(range[2]!);
             request.response.statusCode = 206;
@@ -339,6 +339,6 @@ void main() {
     );
     expect(sent, false);
     expect(() => OPlugin.parse(p.source.replaceFirst('"type":"s3"', '"type":"unknown"')), throwsFormatException);
-    expect(() => OPlugin.parse(p.source.replaceFirst('"api":2', '"api":1')), throwsFormatException);
+    expect(() => OPlugin.parse(p.source.replaceFirst('"api":4', '"api":1')), throwsFormatException);
   });
 }

@@ -1,4 +1,4 @@
-// @oplayer {"api":1,"id":"site.example","name":"사이트 확장 예제","version":"1.0.0","kind":"site","sites":["example.com"],"hosts":["example.com"],"blockRules":[{"urlFilter":"^https?://ads\\.example\\.com/"}]}
+// @oplayer {"api":4,"id":"site.example","name":"사이트 확장 예제","version":"1.0.1","kind":"browser","sites":["example.com"],"hosts":["example.com"],"blockRules":[{"urlFilter":"^https?://ads\\.example\\.com/"}],"capabilities":["page","resolveDownload","blockRequests"]}
 globalThis.plugin = {
   // Runs in matching pages only. The API reports media to OPlayer's detected list.
   page(api) {
