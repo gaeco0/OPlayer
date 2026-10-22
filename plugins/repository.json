@@ -144,7 +144,7 @@
     {
       "id": "subtitle.opensubtitles",
       "name": "OpenSubtitles",
-      "version": "1.0.2",
+      "version": "1.0.3",
       "kind": "player",
       "capabilities": [
         "subtitles"
@@ -157,7 +157,7 @@
       ],
       "description": "OpenSubtitles 자막 검색·다운로드·적용",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/subtitle.opensubtitles.js",
-      "sha256": "a36af0ec9a3a4840cb7de1324eb33fd2f4fb13e42c8035c2d527256320065c02",
+      "sha256": "d35017f145af113c508fbd6f657be089d0f39c19a5b77c324e4d9b944c9b5b05",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     }
   ]
