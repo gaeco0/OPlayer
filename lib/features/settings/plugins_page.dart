@@ -17,6 +17,8 @@ class _PluginsPageState extends State<PluginsPage> {
   final listings = <String, List<PluginListing>>{};
   final errors = <String, String>{};
   bool busy = false;
+  String category = '';
+  static const categories = {'': '전체', 'player': '플레이어', 'browser': '브라우저', 'resource': '리소스'};
   @override
   void initState() {
     super.initState();
@@ -53,10 +55,12 @@ class _PluginsPageState extends State<PluginsPage> {
         title: Text('${p.name} ${p.version} 설치'),
         content: SingleChildScrollView(
           child: Text(
-            '${p.cloud
+            '유형: ${p.kindLabel}\n기능: ${p.capabilities.join(', ')}\n\n${p.cloud
                 ? '클라우드 목록·재생 주소 조회 및 계정 인증'
                 : p.subtitle
                 ? '영상 제목으로 자막 검색, 선택한 자막 다운로드·적용'
+                : p.kind == 'player'
+                ? '영상 색상·회전·반전 필터 적용'
                 : '지정한 사이트의 페이지와 요청 헤더·쿠키 접근, 다운로드 보완·광고 차단'}\n\n'
             '사이트: ${p.sites.join(', ')}\n네트워크: ${p.hosts.join(', ')}\n인증: ${p.authHosts.join(', ')}\n'
             '${(p.manifest['networkSettings'] as List? ?? []).isEmpty ? '' : '사용자 지정 서버 설정: ${(p.manifest['networkSettings'] as List).join(', ')}\n'}'
@@ -126,6 +130,22 @@ class _PluginsPageState extends State<PluginsPage> {
       body: Column(
         children: [
           if (busy) const LinearProgressIndicator(),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (final entry in categories.entries)
+                  Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: ChoiceChip(
+                      label: Text(entry.value),
+                      selected: category == entry.key,
+                      onSelected: (_) => setState(() => category = entry.key),
+                    ),
+                  ),
+              ],
+            ),
+          ),
           Expanded(
             child: ListView(
               children: [
@@ -133,10 +153,10 @@ class _PluginsPageState extends State<PluginsPage> {
                   title: Text('설치됨'),
                   subtitle: Text('사이트 변경은 페이지를 새로고침한 뒤 적용됩니다. 클라우드를 끄거나 삭제하면 계정 정보는 보관됩니다.'),
                 ),
-                for (final p in store.installed.values)
+                for (final p in store.installed.values.where((p) => category.isEmpty || p.kind == category))
                   ListTile(
                     title: Text(p.name),
-                    subtitle: Text('${p.version} · ${p.kindLabel}'),
+                    subtitle: Text('${p.version} · ${p.kindLabel}\n${p.capabilities.join(' · ')}'),
                     leading: Switch(
                       value: !store.disabled.contains(p.id),
                       onChanged: busy ? null : (v) => _guard(() => store.setEnabled(p.id, v)),
@@ -195,11 +215,13 @@ class _PluginsPageState extends State<PluginsPage> {
                   ),
                   if (errors[repository] != null)
                     ListTile(title: const Text('저장소 목록을 받지 못했습니다'), subtitle: Text(errors[repository]!)),
-                  for (final entry in listings[repository] ?? <PluginListing>[])
+                  for (final entry in (listings[repository] ?? <PluginListing>[]).where(
+                    (p) => category.isEmpty || p.kind == category,
+                  ))
                     ListTile(
                       title: Text(entry.name),
                       subtitle: Text(
-                        '${entry.version}${entry.author.isEmpty ? '' : ' · ${entry.author}'}\n${entry.description}'
+                        '${entry.version} · ${categories[entry.kind] ?? '기존 규약'}${entry.author.isEmpty ? '' : ' · ${entry.author}'}\n${entry.description}'
                         '${entry.features.isEmpty ? '' : '\n기능: ${entry.features.join(' · ')}'}',
                       ),
                       trailing: FilledButton(

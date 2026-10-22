@@ -3,6 +3,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/plugins/plugin_store.dart';
 import '../player_controller.dart';
 import 'controls_overlay.dart' show PanelKind;
 import 'online_subtitles_dialog.dart';
@@ -369,6 +370,30 @@ class _AspectPanel extends StatelessWidget {
   Widget build(BuildContext context) => ListView(
     children: [
       _Radios<AspectMode>(values: AspectMode.values, selected: c.aspect, label: (m) => m.label, onChanged: c.setAspect),
+      const _Section('영상 필터 확장앱'),
+      ListenableBuilder(
+        listenable: PluginStore.instance,
+        builder: (context, _) => Column(
+          children: [
+            if (c.videoFilterBusy) const LinearProgressIndicator(),
+            for (final plugin in PluginStore.instance.enabled.where(
+              (p) => p.kind == 'player' && p.supports('videoFilter'),
+            ))
+              ListTile(
+                title: Text(plugin.name, style: _white),
+                leading: const Icon(Icons.filter, color: Colors.white70),
+                enabled: !c.videoFilterBusy,
+                onTap: () async {
+                  try {
+                    await c.applyVideoFilter(plugin);
+                  } catch (e) {
+                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+                  }
+                },
+              ),
+          ],
+        ),
+      ),
       const _Section('확대'),
       _Stepper(
         value: '${(c.zoom * 100).round()}%',

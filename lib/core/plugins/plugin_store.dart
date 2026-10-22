@@ -23,6 +23,13 @@ class PluginListing {
   String get description => data['description'] as String? ?? '';
   List<String> get features => (data['features'] as List? ?? []).cast<String>();
   String get author => data['author'] as String? ?? '';
+  String get kind => switch (data['kind']) {
+    'cloud' => 'resource',
+    'site' => 'browser',
+    'subtitle' => 'player',
+    final String value => value,
+    _ => '',
+  };
   Uri get url => repository.resolve((data['downloadUrl'] ?? data['url']) as String);
 }
 
@@ -193,6 +200,18 @@ class PluginStore extends ChangeNotifier {
           !RegExp(r'^[a-fA-F0-9]{64}$').hasMatch('${data['sha256']}')) {
         throw const FormatException('잘못된 확장앱 목록');
       }
+      if (data['kind'] != null && !OPlugin.contracts.containsKey(listing.kind)) {
+        throw const FormatException('지원하지 않는 확장앱 유형');
+      }
+      final capabilities = data['capabilities'];
+      if (capabilities != null &&
+          (!OPlugin.contracts.containsKey(listing.kind) ||
+              capabilities is! List ||
+              capabilities.isEmpty ||
+              capabilities.any((c) => !OPlugin.contracts[listing.kind]!.containsKey(c)) ||
+              capabilities.toSet().length != capabilities.length)) {
+        throw const FormatException('지원하지 않는 확장앱 기능 목록');
+      }
       repositoryUri(listing.url.toString());
       return listing;
     }).toList();
@@ -205,6 +224,13 @@ class PluginStore extends ChangeNotifier {
     }
     final p = OPlugin.parse(utf8.decode(bytes));
     if (p.id != listing.id || p.version != listing.version) throw const FormatException('목록과 확장앱 정보가 다릅니다');
+    final capabilities = listing.data['capabilities'] as List?;
+    if (listing.kind.isNotEmpty && listing.kind != p.kind ||
+        capabilities != null &&
+            (capabilities.length != p.capabilities.length || !capabilities.every(p.capabilities.contains)) ||
+        listing.data['pluginApi'] != null && listing.data['pluginApi'] != p.manifest['api']) {
+      throw const FormatException('목록과 확장앱 유형·기능이 다릅니다');
+    }
     return p;
   }
 

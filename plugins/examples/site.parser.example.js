@@ -1,4 +1,4 @@
-// @oplayer {"api":3,"id":"site.parser.example","name":"HTML·XML·JSON 파서 예제","version":"1.0.0","kind":"site","sites":["example.com"],"hosts":["example.com"]}
+// @oplayer {"api":4,"id":"site.parser.example","name":"HTML·XML·JSON 파서 예제","version":"1.0.1","kind":"browser","sites":["example.com"],"hosts":["example.com"],"capabilities":["resolveDownload"]}
 
 globalThis.plugin = {
   async resolveDownload(media) {

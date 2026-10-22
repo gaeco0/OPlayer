@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:oplayer/core/plugins/plugin_store.dart';
+import 'package:oplayer/core/plugins/plugin.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -19,6 +20,7 @@ void main() {
       final server = await HttpServer.bind('127.0.0.1', 0);
       addTearDown(() => server.close(force: true));
       var tampered = false;
+      var advertisedKind = 'browser';
       server.listen((request) async {
         if (request.uri.path == '/plugin.js') {
           request.response.add(tampered ? utf8.encode('$source\n// tampered') : bytes);
@@ -30,7 +32,9 @@ void main() {
                 {
                   'id': 'site.example',
                   'name': 'Example',
-                  'version': '1.0.0',
+                  'version': OPlugin.parse(source).version,
+                  'kind': advertisedKind,
+                  'capabilities': ['page', 'resolveDownload', 'blockRequests'],
                   'url': 'plugin.js',
                   'sha256': sha256.convert(bytes).toString(),
                 },
@@ -46,6 +50,16 @@ void main() {
       final listings = await store.listings(url);
       expect(listings.single.url.path, '/plugin.js');
       final plugin = await store.download(listings.single);
+      advertisedKind = 'resource';
+      // Hash and identity alone must not permit a misleading type declaration.
+      final wrongType = PluginListing(listings.single.repository, {...listings.single.data, 'kind': advertisedKind});
+      await expectLater(store.download(wrongType), throwsFormatException);
+      advertisedKind = 'browser';
+      final wrongFeatures = PluginListing(listings.single.repository, {
+        ...listings.single.data,
+        'capabilities': ['page'],
+      });
+      await expectLater(store.download(wrongFeatures), throwsFormatException);
       await store.load(plugin.source);
       await store.setEnabled(plugin.id, false);
       expect(store.enabled.any((p) => p.id == plugin.id), false);
@@ -76,7 +90,10 @@ void main() {
     for (final item in (catalog['plugins'] as List).cast<Map>()) {
       final fileName = Uri.parse(item['downloadUrl'] as String).pathSegments.last;
       expect(sha256.convert(await File('plugins/$fileName').readAsBytes()).toString(), item['sha256']);
-      expect(item['features'], contains(item['kind'] == 'subtitle' ? '자막 검색' : '클라우드 연결'));
+      expect(['player', 'browser', 'resource'], contains(item['kind']));
+      expect(item['pluginApi'], 4);
+      expect(item['capabilities'], isNotEmpty);
+      expect(item['features'], isNotEmpty);
     }
   });
 }

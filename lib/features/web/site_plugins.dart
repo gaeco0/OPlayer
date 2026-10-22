@@ -12,8 +12,9 @@ import '../../core/plugins/plugin_http.dart';
 import '../../core/plugins/plugin_parser.dart';
 import 'request_headers.dart';
 
-String sitePluginScript(OPlugin p) =>
-    '''(() => {
+String sitePluginScript(OPlugin p) => !p.site || !p.supports('page')
+    ? ''
+    : '''(() => {
   const domains = ${jsonEncode(p.sites)};
   const host = location.hostname.toLowerCase();
   if (!domains.some(d => d.startsWith('*.') ? host.endsWith(d.slice(1)) : host === d)) return;
@@ -23,7 +24,7 @@ String sitePluginScript(OPlugin p) =>
     const config = Object.freeze(${jsonEncode(PluginStore.instance.publicSettings(p))});
     $pluginParserFactory
     $pluginPageParser
-    const sandbox = {OPlayer:Object.freeze({config,parse:createOPlayerPageParser()})};
+    const sandbox = {OPlayer:Object.freeze({api:4,kind:'browser',capabilities:Object.freeze(${jsonEncode(p.capabilities)}),config,parse:createOPlayerPageParser()})};
     (function(globalThis,OPlayer) { ${p.source}\n }).call(sandbox, sandbox, sandbox.OPlayer);
     const api = Object.freeze({
       config,
@@ -63,7 +64,7 @@ String siteUrlPattern(String site) {
 /// Resolves in the same pipeline for playback and download, preserving headers.
 Future<Map<String, dynamic>> resolveSiteMedia(Map<String, dynamic> media) async {
   var current = Map<String, dynamic>.of(media);
-  for (final p in PluginStore.instance.enabled.where((p) => p.site).toList()) {
+  for (final p in PluginStore.instance.enabled.where((p) => p.site && p.supports('resolveDownload')).toList()) {
     if (!p.matches('${media['pageUrl']}') && !p.matches('${media['referer'] ?? ''}')) continue;
     final value = await callPlugin(
       p,

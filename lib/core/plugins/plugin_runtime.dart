@@ -20,6 +20,9 @@ Future<Object?> callPlugin(
   bool validateOnly = false,
 }) async {
   if (!RegExp(r'^[a-zA-Z]+$').hasMatch(method)) throw ArgumentError.value(method);
+  if (!validateOnly && !plugin.allowedMethods.contains(method)) {
+    throw StateError('선언하지 않은 확장앱 기능: $method');
+  }
   final js = QuickJsRuntime2(timeout: 200, memoryLimit: 32 * 1024 * 1024, stackSize: 512 * 1024);
   final parser = PluginParser();
   Object? evaluate(String code) {
@@ -40,6 +43,7 @@ Future<Object?> callPlugin(
       });
       $pluginParserFactory
       globalThis.OPlayer = Object.freeze({
+        api: 4, kind: ${jsonEncode(plugin.kind)}, capabilities: Object.freeze(${jsonEncode(plugin.capabilities)}),
         config: Object.freeze(${jsonEncode(config)}),
         secret: (name, options = {}) => ({\$secret:name, ...options}),
         parse: createOPlayerParser(args => __host('parse',{args})),
@@ -56,13 +60,20 @@ Future<Object?> callPlugin(
     if (validateOnly) {
       final methods =
           evaluate("JSON.stringify(Object.keys(plugin).filter(k => typeof plugin[k] === 'function'))") as List;
+      if (plugin.typed) {
+        if (methods.any((m) => !(m as String).startsWith('_') && !plugin.allowedMethods.contains(m)) ||
+            plugin.capabilities.any((c) => !OPlugin.contracts[plugin.kind]![c]!.every(methods.contains)) ||
+            plugin.supports('blockRequests') && (plugin.manifest['blockRules'] as List? ?? []).isEmpty) {
+          throw StateError('선언된 유형·기능에 맞는 함수와 규칙만 제공하세요');
+        }
+      }
       if (plugin.manifest['canDelete'] == true && !methods.contains('delete')) {
         throw StateError('삭제를 지원하는 확장앱에는 delete 함수가 필요합니다');
       }
       if (plugin.cloud
           ? !['accountName', 'list', 'stream'].every(methods.contains)
-          : plugin.subtitle
-          ? !['searchSubtitles', 'downloadSubtitle'].every(methods.contains)
+          : plugin.kind == 'player'
+          ? plugin.subtitle && !['searchSubtitles', 'downloadSubtitle'].every(methods.contains)
           : !methods.contains('page') &&
                 !methods.contains('resolveDownload') &&
                 (plugin.manifest['blockRules'] as List? ?? []).isEmpty) {
