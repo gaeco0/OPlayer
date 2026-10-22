@@ -19,6 +19,7 @@ import '../../core/plugins/plugin_store.dart';
 import '../../core/plugins/subtitle_plugins.dart';
 import '../../core/plugins/player_plugins.dart';
 import '../cast/cast_controller.dart';
+import 'frame_interpolation.dart';
 
 /// 화면 비율 모드 (nPlayer: 화면 맞춤 → 가득 채우기 → 늘이기 → 16:9 → 4:3 → 원본)
 enum AspectMode { fit, fill, stretch, r16x9, r4x3, r1x1, r3x2, r5x3, cinema185, cinema235, original }
@@ -66,12 +67,24 @@ class PlayerController extends ChangeNotifier {
     };
     _applyNativeOptions();
     ResourceLocks.instance.addListener(_enforceResourceLock);
+    AppSettings.instance.addListener(_onInterpolationSettings);
     _subs.addAll([
       player.stream.playing.listen((playing) {
         if (playing) _enforceResourceLock();
+        if (playing && !preparing && AppSettings.instance.frameInterpolation) unawaited(_refreshInterpolation());
+      }),
+      player.stream.width.listen((_) {
+        if (!preparing) unawaited(_refreshInterpolation());
       }),
       player.stream.position.listen(_onPosition),
-      player.stream.tracks.listen((_) => notifyListeners()),
+      player.stream.tracks.listen((_) {
+        notifyListeners();
+        final audio = audioOnly;
+        if (_lastAudioOnly != audio) {
+          _lastAudioOnly = audio;
+          if (!preparing) unawaited(_refreshInterpolation());
+        }
+      }),
       player.stream.completed.listen((done) {
         if (done) _onCompleted();
       }),
@@ -99,6 +112,93 @@ class PlayerController extends ChangeNotifier {
   final player = Player(configuration: const PlayerConfiguration(title: 'OPlayer'));
   late final video = VideoController(player);
   final _subs = <StreamSubscription>[];
+  double _displayRate = 0;
+  bool _lastAudioOnly = false;
+  bool interpolationBusy = false;
+  bool interpolationApplied = false;
+  String? interpolationIssue;
+  int _interpolationRequest = 0;
+  Timer? _interpolationCheck;
+  bool _interpolationPreference = AppSettings.instance.frameInterpolation;
+  late final _frameInterpolation = FrameInterpolation(
+    read: (key) async {
+      if (_disposed) throw StateError('플레이어가 종료됐습니다');
+      final native = player.platform;
+      if (native is! NativePlayer) throw UnsupportedError('현재 재생 엔진은 프레임 혼합을 지원하지 않습니다');
+      return native.getProperty(key);
+    },
+    write: (key, value) async {
+      if (_disposed) throw StateError('플레이어가 종료됐습니다');
+      await (player.platform as NativePlayer).setProperty(key, value);
+    },
+  );
+
+  void _onInterpolationSettings() {
+    final value = AppSettings.instance.frameInterpolation;
+    if (_interpolationPreference == value) return;
+    _interpolationPreference = value;
+    unawaited(_refreshInterpolation());
+  }
+
+  void setDisplayRefreshRate(double rate) {
+    rate = rate.isFinite && rate >= 20 && rate <= 1000 ? rate : 0;
+    if (_disposed || (rate - _displayRate).abs() < .01) return;
+    _displayRate = rate;
+    if (!preparing) unawaited(_refreshInterpolation());
+  }
+
+  Future<void> _refreshInterpolation() async {
+    if (_disposed || preparing) return;
+    final desired = AppSettings.instance.frameInterpolation && !audioOnly && (player.state.width ?? 0) > 0;
+    final enabled = desired && _displayRate > 0;
+    // The screen supplies its actual display, including when moving monitors.
+    final request = ++_interpolationRequest;
+    _interpolationCheck?.cancel();
+    interpolationBusy = true;
+    interpolationIssue = null;
+    notifyListeners();
+    try {
+      await _frameInterpolation.apply(enabled, _displayRate);
+      if (_disposed || request != _interpolationRequest) return;
+      interpolationApplied = enabled;
+      if (desired && !enabled) interpolationIssue = '화면 주사율을 확인할 수 없어 프레임 혼합 적용을 기다리는 중입니다';
+      if (enabled) {
+        _scheduleInterpolationCheck(request);
+      }
+    } catch (e) {
+      if (!_disposed && request == _interpolationRequest) {
+        interpolationApplied = false;
+        interpolationIssue = '$e';
+      }
+    } finally {
+      if (!_disposed && request == _interpolationRequest) {
+        interpolationBusy = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  void _scheduleInterpolationCheck(int request) {
+    _interpolationCheck = Timer(const Duration(seconds: 2), () async {
+      if (_disposed || request != _interpolationRequest || !player.state.playing) return;
+      if (player.state.buffering) {
+        _scheduleInterpolationCheck(request);
+        return;
+      }
+      try {
+        final active = await (player.platform as NativePlayer).getProperty('display-sync-active');
+        if (_disposed || request != _interpolationRequest || active == 'yes') return;
+        await _frameInterpolation.apply(false, _displayRate);
+        if (_disposed || request != _interpolationRequest) return;
+        interpolationApplied = false;
+        interpolationIssue = '이 영상 출력에서는 화면 동기화를 지원하지 않아 프레임 혼합을 해제했습니다';
+      } catch (_) {
+        if (!_disposed && request == _interpolationRequest) interpolationIssue = '프레임 혼합 상태를 확인하지 못했습니다';
+      }
+      if (!_disposed && request == _interpolationRequest) notifyListeners();
+    });
+  }
+
   bool _disposed = false;
 
   @override
@@ -274,6 +374,7 @@ class PlayerController extends ChangeNotifier {
       if (generation == _openGeneration) error = '열 수 없습니다: $e';
     } finally {
       if (generation == _openGeneration) preparing = false;
+      if (!_disposed && generation == _openGeneration) unawaited(_refreshInterpolation());
       notifyListeners();
     }
   }
@@ -830,6 +931,9 @@ class PlayerController extends ChangeNotifier {
     _releaseMedia = null;
     if (release != null) unawaited(release().catchError((Object _) {}));
     ResourceLocks.instance.removeListener(_enforceResourceLock);
+    AppSettings.instance.removeListener(_onInterpolationSettings);
+    _interpolationRequest++;
+    _interpolationCheck?.cancel();
     _disposed = true;
     _hideTimer?.cancel();
     _sleepTimer?.cancel();

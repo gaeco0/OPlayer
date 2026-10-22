@@ -98,6 +98,12 @@ class SettingsPage extends StatelessWidget {
               options: {0.75: '0.75x', 1.0: '1.0x', 1.25: '1.25x', 1.5: '1.5x', 2.0: '2.0x'},
               onChanged: (v) => s.update((x) => x.defaultSpeed = v),
             ),
+            SwitchListTile(
+              title: const Text('가벼운 프레임 보간'),
+              subtitle: const Text('화면 주사율에 맞춰 프레임을 혼합해 끊김 완화 · 기본 꺼짐'),
+              value: s.frameInterpolation,
+              onChanged: (v) => s.update((x) => x.frameInterpolation = v),
+            ),
             _choice<DefaultAspect>(
               context,
               title: '기본 화면 비율',

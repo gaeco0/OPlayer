@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 
 import '../../../app/theme.dart';
 import '../../../core/plugins/plugin_store.dart';
+import '../../../core/settings.dart';
 import '../player_controller.dart';
 import 'controls_overlay.dart' show PanelKind;
 import 'online_subtitles_dialog.dart';
@@ -370,6 +371,26 @@ class _AspectPanel extends StatelessWidget {
   Widget build(BuildContext context) => ListView(
     children: [
       _Radios<AspectMode>(values: AspectMode.values, selected: c.aspect, label: (m) => m.label, onChanged: c.setAspect),
+      const _Section('프레임 보간'),
+      SwitchListTile(
+        title: const Text('가벼운 프레임 혼합', style: _white),
+        subtitle: Text(c.audioOnly ? '오디오 전용 재생에는 적용하지 않습니다' : '화면 주사율에 맞춰 끊김 완화 · 설정 자동 저장', style: _label),
+        value: AppSettings.instance.frameInterpolation,
+        onChanged: c.interpolationBusy || c.audioOnly
+            ? null
+            : (v) => AppSettings.instance.update((s) => s.frameInterpolation = v),
+      ),
+      if (c.interpolationBusy) const LinearProgressIndicator(),
+      if (c.interpolationIssue != null)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          child: Text(c.interpolationIssue!, style: _label),
+        )
+      else if (c.interpolationApplied)
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          child: Text('프레임 혼합 설정 적용됨', style: _label),
+        ),
       const _Section('영상 필터 확장앱'),
       ListenableBuilder(
         listenable: PluginStore.instance,

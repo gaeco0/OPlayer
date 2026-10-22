@@ -11,6 +11,31 @@ nPlayer의 UI/UX를 기준으로, 로컬·네트워크·클라우드 재생과 �
 - v0.1.5는 확장앱을 플레이어·브라우저·리소스 세 유형으로 분류하고 유형별 기능을 검사합니다. 같은 API 4 규약의 새 자막 공급자·영상 색상 필터·사이트·스토리지는 앱 업데이트 없이 JS와 저장소 JSON만으로 배포합니다.
 - Windows `Alt+Enter` 전체화면과 온라인 자막 검색·적용을 지원합니다. [변경 내역](CHANGELOG.md)과 [배포 파일](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.5)을 참고하세요. API 4를 지원하지 않는 v0.1.4 앱은 한 번 업데이트해야 합니다.
 
+## 가벼운 프레임 보간 (개발 소스 · 다음 배포)
+
+현재 개발 소스에는 **설정 → 재생 → 가벼운 프레임 보간**, 플레이어 **화면 비율 → 프레임 보간**을
+추가했습니다. 이미 배포된 v0.1.5 APK에는 포함되지 않습니다. 기본값은 꺼짐이며 선택은 앱 설정에 저장됩니다.
+
+mpv의 `interpolation=yes`, `tscale=oversample`, `video-sync=display-resample`을 사용해 화면 주사율에
+맞춰 인접 프레임을 혼합합니다. 실제 표시 중인 화면의 주사율을 사용하고 모니터 변경 시 갱신하며,
+끄면 이전 시간축 필터·화면 주사율 재정의·영상 동기화 설정을 복원합니다. 영상 파일 자체의 FPS나
+기존 색상·회전·반전 필터, 하드웨어 디코딩 설정은 변경하지 않습니다.
+
+이 기능은 움직임을 추정하는 AI/모션 보간이 아닙니다. 영상 FPS와 주사율이 맞으면 엔진이 혼합을 생략할 수
+있으며, 장면에 따라 흐림·잔상이 생길 수 있습니다. 오디오 전용 재생과 외부 캐스팅 장치에는 적용하지 않습니다.
+지원하지 않는 옵션은 되돌리고, 재생 중 화면 동기화가 활성화되지 않으면 혼합을 해제해 상태를 표시합니다.
+Windows 실제 영상 출력에서 활성화·해제·설정 복원을 확인했으며 Android·TV·Linux·macOS 실기기 확인은 남아 있습니다.
+
+프레임 혼합 엔진 문서: [mpv interpolation](https://mpv.io/manual/stable/#options-interpolation).
+개발 검증은 `flutter test test/frame_interpolation_test.dart`로 실행합니다. 실제 Windows 출력 검증:
+
+```powershell
+ffmpeg -f lavfi -i "testsrc2=size=160x90:rate=24:duration=3" -c:v libx264 -pix_fmt yuv420p .dart_tool/interpolation.mp4
+flutter run -d windows --debug -t tool/frame_interpolation_smoke.dart
+```
+
+테스트는 앱 설정을 바꾸지 않으며 보간 활성·화면 동기화·해제 후 원래 옵션 복원을 확인합니다.
+
 ## 실행
 
 ```bash
