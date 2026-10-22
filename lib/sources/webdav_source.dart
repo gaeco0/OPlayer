@@ -152,6 +152,46 @@ class WebDavSource extends MediaSource {
     Future<void>? cancelled,
   }) async {
     final path = MediaSource.joinRemote(_normDir(remoteDir), name);
+    var stopped = false;
+    var finished = false;
+    cancelled?.then((_) {
+      if (!finished) stopped = true;
+    });
+    try {
+      for (var attempt = 0; ; attempt++) {
+        if (stopped) throw const HttpException('업로드 일시정지');
+        try {
+          onProgress?.call(0);
+          await _put(local, path, onProgress: onProgress, cancelled: cancelled);
+          return path;
+        } catch (error) {
+          if (stopped || !_connectionLost(error)) rethrow;
+          if (attempt >= 2) {
+            throw HttpException(
+              'WebDAV 연결이 반복해서 끊겼습니다 (업로드 3회 시도). 받은 원본은 보관됩니다. '
+              '서버·역방향 프록시의 연결 제한을 확인한 뒤 재개해 주세요. 원인: $error',
+            );
+          }
+          // PUT to the same target is idempotent. Reopen the file and connection;
+          // never treat a lost final response as acknowledgement of storage.
+          await Future.any<void>([
+            Future<void>.delayed(Duration(milliseconds: 250 * (attempt + 1))),
+            if (cancelled != null) cancelled,
+          ]);
+        }
+      }
+    } finally {
+      finished = true;
+    }
+  }
+
+  static bool _connectionLost(Object error) =>
+      error is SocketException ||
+      (error is HttpException &&
+          (error.message.toLowerCase().contains('connection closed') ||
+              error.message.toLowerCase().contains('connection reset')));
+
+  Future<void> _put(File local, String path, {void Function(int sent)? onProgress, Future<void>? cancelled}) async {
     final client = HttpClient()..connectionTimeout = uploadTimeout;
     HttpClientRequest? request;
     Timer? watchdog;
@@ -184,6 +224,7 @@ class WebDavSource extends MediaSource {
         throw interrupted!;
       }
       req.followRedirects = false;
+      req.persistentConnection = false;
       req.contentLength = len;
       req.headers.set(HttpHeaders.contentTypeHeader, 'application/octet-stream');
       _auth.forEach(req.headers.set);
@@ -220,7 +261,6 @@ class WebDavSource extends MediaSource {
       watchdog?.cancel();
       client.close(force: true);
     }
-    return path;
   }
 }
 
