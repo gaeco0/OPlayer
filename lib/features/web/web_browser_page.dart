@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 
 import 'dart:convert';
@@ -19,6 +20,7 @@ import '../browser/home_screen.dart';
 import '../player/player_screen.dart';
 import 'download_manager.dart';
 import 'browser_interactions.dart';
+import 'browser_history.dart';
 import 'downloads_page.dart';
 import 'hls.dart';
 import 'request_headers.dart';
@@ -359,6 +361,10 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
   double _progress = 0;
   bool _canBack = false;
   bool _canForward = false;
+  BrowserHistory _history = BrowserHistory();
+  bool _historyReady = false;
+  bool _historyMoving = false;
+  int _historyRead = 0;
   List<String> _bookmarks = [];
 
   @override
@@ -367,6 +373,22 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     PluginStore.instance.addListener(_pluginsChanged);
     MouseNav.addForwardHandler(_forward);
     HardwareKeyboard.instance.addHandler(_onKey);
+    BrowserHistoryStore.load()
+        .catchError((Object error) {
+          debugPrint('Browser history restore failed: $error');
+          return BrowserHistory();
+        })
+        .then((history) {
+          if (!mounted) return;
+          setState(() {
+            _history = history;
+            _historyReady = true;
+            _canBack = history.canBack;
+            _canForward = history.canForward;
+            _url = history.current ?? _home;
+            _address.text = _url;
+          });
+        });
     if (Platform.isAndroid || Platform.isIOS) {
       _pullToRefresh = PullToRefreshController(
         settings: PullToRefreshSettings(color: Color(AppSettings.instance.primaryColor)),
@@ -424,12 +446,73 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
 
   bool _forward() {
     if (!_canForward) return false;
-    _web?.goForward();
+    unawaited(_navigateHistory(1));
     return true;
+  }
+
+  void _saveHistory() {
+    unawaited(
+      BrowserHistoryStore.save(_history).catchError((Object error) {
+        debugPrint('Browser history save failed: $error');
+      }),
+    );
+  }
+
+  Future<void> _navigateHistory(int steps) async {
+    final web = _web;
+    if (web == null || _historyMoving || (steps < 0 ? !_history.canBack : !_history.canForward)) return;
+    _historyMoving = true;
+    try {
+      final native = await web.getCopyBackForwardList();
+      if (!mounted) return;
+      final nativeTarget = _history.move(steps);
+      _historyRead++; // Discard a history query issued before this navigation.
+      _saveHistory();
+      setState(() {
+        _canBack = _history.canBack;
+        _canForward = _history.canForward;
+      });
+      final index = native?.currentIndex;
+      if (nativeTarget != null && index != null) {
+        await web.goBackOrForward(steps: nativeTarget - index);
+        return;
+      }
+      _history.prepareReload();
+      await web.loadUrl(urlRequest: URLRequest(url: WebUri(_history.current!)));
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('페이지 이동 실패: $error')));
+    } finally {
+      _historyMoving = false;
+    }
+  }
+
+  Future<void> _syncHistory(InAppWebViewController web, {bool reload = false}) async {
+    final read = ++_historyRead;
+    WebHistory? native;
+    try {
+      native = await web.getCopyBackForwardList();
+    } catch (_) {
+      return; // The platform view may have been disposed during a menu change.
+    }
+    if (!mounted || read != _historyRead) return;
+    final index = native?.currentIndex;
+    final entries = native?.list;
+    if (index == null || entries == null || index < 0 || index >= entries.length) return;
+    final url = entries[index].url?.toString();
+    if (url == null || url == 'about:blank') return;
+    _history.record(url, index, reload: reload);
+    _saveHistory();
+    setState(() {
+      _url = url;
+      if (!_addressFocus.hasFocus) _address.text = _url;
+      _canBack = _history.canBack;
+      _canForward = _history.canForward;
+    });
   }
 
   @override
   void dispose() {
+    if (_historyReady) _saveHistory();
     PluginStore.instance.removeListener(_pluginsChanged);
     MouseNav.removeForwardHandler(_forward);
     HardwareKeyboard.instance.removeHandler(_onKey);
@@ -1179,7 +1262,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
       child: PopScope(
         canPop: !_canBack,
         onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) _web?.goBack();
+          if (!didPop) unawaited(_navigateHistory(-1));
         },
         child: Scaffold(
           appBar: AppBar(
@@ -1231,12 +1314,12 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                   : const SizedBox(height: 2),
             ),
           ),
-          body: !_envReady
+          body: !_envReady || !_historyReady
               ? const SizedBox.shrink()
               : InAppWebView(
                   webViewEnvironment: _env,
                   pullToRefreshController: _pullToRefresh,
-                  initialUrlRequest: URLRequest(url: WebUri(_home)),
+                  initialUrlRequest: URLRequest(url: WebUri(_history.current ?? _home)),
                   initialSettings: InAppWebViewSettings(
                     javaScriptEnabled: true,
                     useOnLoadResource: true,
@@ -1364,25 +1447,10 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     // 페이지에 따라 document_start 주입이 안 되는 경우 대비
                     await c.evaluateJavascript(source: _snifferJs);
                     await c.evaluateJavascript(source: browserInteractionScript);
-                    final back = await c.canGoBack();
-                    final fwd = await c.canGoForward();
-                    if (mounted) {
-                      setState(() {
-                        _canBack = back;
-                        _canForward = fwd;
-                      });
-                    }
+                    await _syncHistory(c);
                   },
-                  onUpdateVisitedHistory: (c, url, _) async {
-                    final back = await c.canGoBack();
-                    final fwd = await c.canGoForward();
-                    if (!mounted) return;
-                    setState(() {
-                      _url = url?.toString() ?? _url;
-                      if (!_addressFocus.hasFocus) _address.text = _url;
-                      _canBack = back;
-                      _canForward = fwd;
-                    });
+                  onUpdateVisitedHistory: (c, url, reload) async {
+                    await _syncHistory(c, reload: reload ?? false);
                   },
                   onTitleChanged: (c, t) => setState(() => _title = t ?? ''),
                   onReceivedError: (c, request, error) {
@@ -1420,11 +1488,11 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-                    onPressed: _canBack ? () => _web?.goBack() : null,
+                    onPressed: _canBack ? () => _navigateHistory(-1) : null,
                   ),
                   IconButton(
                     icon: const Icon(Icons.arrow_forward_ios, size: 20),
-                    onPressed: _canForward ? () => _web?.goForward() : null,
+                    onPressed: _canForward ? () => _navigateHistory(1) : null,
                   ),
                   IconButton(icon: const Icon(Icons.home_outlined), onPressed: () => _go(_home)),
                   GestureDetector(
