@@ -7,4 +7,8 @@ class DesktopWindow {
   static Future<void> compact(bool enabled) async {
     if (Platform.isWindows) await _channel.invokeMethod<void>('compact', enabled);
   }
+
+  static Future<void> fullscreen(bool enabled) async {
+    if (Platform.isWindows) await _channel.invokeMethod<void>('fullscreen', enabled);
+  }
 }

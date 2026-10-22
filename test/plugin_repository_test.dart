@@ -63,12 +63,20 @@ void main() {
     final catalog = jsonDecode(await File('plugins/repository.json').readAsString()) as Map;
     expect(
       (catalog['plugins'] as List).map((p) => p['id']),
-      containsAll(['cloud.gdrive', 'cloud.dropbox', 'cloud.onedrive', 'cloud.s3', 'cloud.box', 'cloud.mybox']),
+      containsAll([
+        'cloud.gdrive',
+        'cloud.dropbox',
+        'cloud.onedrive',
+        'cloud.s3',
+        'cloud.box',
+        'cloud.mybox',
+        'subtitle.opensubtitles',
+      ]),
     );
     for (final item in (catalog['plugins'] as List).cast<Map>()) {
       final fileName = Uri.parse(item['downloadUrl'] as String).pathSegments.last;
       expect(sha256.convert(await File('plugins/$fileName').readAsBytes()).toString(), item['sha256']);
-      expect(item['features'], contains('클라우드 연결'));
+      expect(item['features'], contains(item['kind'] == 'subtitle' ? '자막 검색' : '클라우드 연결'));
     }
   });
 }

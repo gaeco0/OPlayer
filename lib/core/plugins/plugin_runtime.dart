@@ -61,6 +61,8 @@ Future<Object?> callPlugin(
       }
       if (plugin.cloud
           ? !['accountName', 'list', 'stream'].every(methods.contains)
+          : plugin.subtitle
+          ? !['searchSubtitles', 'downloadSubtitle'].every(methods.contains)
           : !methods.contains('page') &&
                 !methods.contains('resolveDownload') &&
                 (plugin.manifest['blockRules'] as List? ?? []).isEmpty) {

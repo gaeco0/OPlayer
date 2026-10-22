@@ -63,24 +63,15 @@ bool FlutterWindow::OnCreate() {
       else result->Error("DEFAULT_APPS", "Cannot register OPlayer or open Windows default apps settings");
       return;
     }
-    if (call.method_name() != "compact") { result->NotImplemented(); return; }
+    if (call.method_name() != "compact" && call.method_name() != "fullscreen") {
+      result->NotImplemented(); return;
+    }
     const auto* enabled = call.arguments() ? std::get_if<bool>(call.arguments()) : nullptr;
     if (!enabled) { result->Error("INVALID_ARGUMENT", "Expected a boolean"); return; }
-    if (*enabled != compact_) {
-      if (*enabled) {
-        GetWindowPlacement(GetHandle(), &saved_placement_);
-        ShowWindow(GetHandle(), SW_RESTORE);
-        MONITORINFO monitor = {sizeof(MONITORINFO)};
-        GetMonitorInfo(MonitorFromWindow(GetHandle(), MONITOR_DEFAULTTONEAREST), &monitor);
-        const auto dpi = GetDpiForWindow(GetHandle());
-        const int width = MulDiv(480, dpi, 96), height = MulDiv(320, dpi, 96);
-        SetWindowPos(GetHandle(), HWND_TOPMOST, monitor.rcWork.right - width - 20,
-                     monitor.rcWork.bottom - height - 20, width, height, SWP_SHOWWINDOW);
-      } else {
-        SetWindowPos(GetHandle(), HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-        SetWindowPlacement(GetHandle(), &saved_placement_);
-      }
-      compact_ = *enabled;
+    if (call.method_name() == "fullscreen") {
+      if (!SetFullscreen(*enabled)) { result->Error("FULLSCREEN", "Cannot change window mode"); return; }
+    } else {
+      SetCompact(*enabled);
     }
     result->Success();
   });
@@ -95,6 +86,50 @@ bool FlutterWindow::OnCreate() {
   // window is shown. It is a no-op if the first frame hasn't completed yet.
   flutter_controller_->ForceRedraw();
 
+  return true;
+}
+
+void FlutterWindow::SetCompact(bool enabled) {
+  if (enabled && fullscreen_) SetFullscreen(false);
+  if (enabled == compact_) return;
+  if (enabled) {
+    GetWindowPlacement(GetHandle(), &saved_placement_);
+    ShowWindow(GetHandle(), SW_RESTORE);
+    MONITORINFO monitor = {sizeof(MONITORINFO)};
+    GetMonitorInfo(MonitorFromWindow(GetHandle(), MONITOR_DEFAULTTONEAREST), &monitor);
+    const auto dpi = GetDpiForWindow(GetHandle());
+    const int width = MulDiv(480, dpi, 96), height = MulDiv(320, dpi, 96);
+    SetWindowPos(GetHandle(), HWND_TOPMOST, monitor.rcWork.right - width - 20,
+                 monitor.rcWork.bottom - height - 20, width, height, SWP_SHOWWINDOW);
+  } else {
+    SetWindowPos(GetHandle(), HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+    SetWindowPlacement(GetHandle(), &saved_placement_);
+  }
+  compact_ = enabled;
+}
+
+bool FlutterWindow::SetFullscreen(bool enabled) {
+  if (enabled == fullscreen_) return true;
+  if (enabled) {
+    const auto target_monitor = MonitorFromWindow(GetHandle(), MONITOR_DEFAULTTONEAREST);
+    if (compact_) SetCompact(false);
+    MONITORINFO monitor = {sizeof(MONITORINFO)};
+    if (!GetMonitorInfo(target_monitor, &monitor) ||
+        !GetWindowPlacement(GetHandle(), &fullscreen_placement_)) return false;
+    fullscreen_style_ = GetWindowLongPtr(GetHandle(), GWL_STYLE);
+    ShowWindow(GetHandle(), SW_RESTORE);
+    SetWindowLongPtr(GetHandle(), GWL_STYLE, fullscreen_style_ & ~(WS_OVERLAPPEDWINDOW | WS_MAXIMIZE | WS_MINIMIZE));
+    SetWindowPos(GetHandle(), nullptr, monitor.rcMonitor.left, monitor.rcMonitor.top,
+                 monitor.rcMonitor.right - monitor.rcMonitor.left,
+                 monitor.rcMonitor.bottom - monitor.rcMonitor.top,
+                 SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+  } else {
+    SetWindowLongPtr(GetHandle(), GWL_STYLE, fullscreen_style_);
+    SetWindowPlacement(GetHandle(), &fullscreen_placement_);
+    SetWindowPos(GetHandle(), nullptr, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+  }
+  fullscreen_ = enabled;
   return true;
 }
 

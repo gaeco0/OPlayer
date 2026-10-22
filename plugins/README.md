@@ -3,6 +3,7 @@
 설정 → **확장앱**에서 저장소를 추가하고 목록을 확인한 뒤 설치합니다.
 확장앱은 `.js` 파일이며 APK·앱 재설치 없이 로드합니다. JS 파일 직접 가져오기도 지원합니다.
 v0.1.3은 JavaScript API 1·2·3을 지원하며 Dart 소스·Flutter 위젯·네이티브 코드를 동적으로 로드하지 않습니다.
+현재 개발 버전은 자막 검색을 위한 API 4도 지원합니다. API 4 확장앱은 기존 v0.1.4 배포 앱에서 설치할 수 없습니다.
 
 공식 저장소 JSON:
 https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/repository.json
@@ -78,7 +79,7 @@ S3와 Box도 재생 중 탐색 시 새 임시 URL을 얻습니다. 서비스별 
 JSON 추가는 코드 설치·실행을 하지 않으며, 사용자가 항목을 선택하고 권한을 확인한 뒤 설치합니다.
 같은 ID는 교체하고 버전이 달라지면 교체 버튼을 제공합니다. SHA-256은 무결성 검사이며 개발자 서명은 아닙니다.
 
-공식 클라우드 스크립트를 수정하면 버전도 올리고 다음을 실행해 목록·해시를 갱신합니다.
+공식 클라우드·자막 스크립트를 수정하면 버전도 올리고 다음을 실행해 목록·해시를 갱신합니다.
 
 ```sh
 python tools/update_plugin_repository.py
@@ -87,7 +88,7 @@ python tools/update_plugin_repository.py
 ## JS 파일 규약
 
 첫 줄은 `// @oplayer `와 JSON 메타데이터이며 나머지는 `globalThis.plugin = {...}`입니다.
-`id`, `name`, `version`, `api: 1 | 2 | 3`, `kind: "site" | "cloud"`를 지정합니다.
+`id`, `name`, `version`, `api: 1 | 2 | 3 | 4`, `kind: "site" | "cloud" | "subtitle"`를 지정합니다.
 도메인은 정확한 호스트 또는 `*.example.com` 형식입니다. 와일드카드는 하위 호스트만 포함합니다.
 
 ### 사이트 기능
@@ -250,6 +251,55 @@ const fileName = json.files[0].name;
 힙은 32MB, 호출 전체는 60초·최대 200개 요청으로 제한합니다. 로컬 파일·네이티브 API는 노출하지 않습니다.
 WebView의 `page` 함수는 이 실행 제한 밖에서 해당 페이지의 사용자 스크립트로 실행됩니다.
 페이지·요청 헤더에 접근하는 확장앱이므로 신뢰하는 개발자의 코드만 설치하세요.
+
+### 자막 검색 (API 4)
+
+`kind: "subtitle"` 확장앱은 브라우저에 주입하지 않습니다. 기존 사이트·클라우드와 같은
+도메인 권한, 공통 설정 UI, OS 보안 저장소와 `OPlayer.request`·파서 SDK를 사용합니다.
+필수 함수는 `searchSubtitles`와 `downloadSubtitle`이며 설치 시 둘 다 검사합니다.
+공식 구현은 [subtitle.opensubtitles.js](subtitle.opensubtitles.js)를 참고하세요.
+
+```js
+// @oplayer {"api":4,"id":"subtitle.example","name":"Example subtitles","version":"1.0.0","kind":"subtitle","hosts":["subtitles.example.com"],"settings":[]}
+globalThis.plugin = {
+  async searchSubtitles({query, language, page = 1}) {
+    const response = await OPlayer.request('https://subtitles.example.com/search', {
+      query: {q: query, language, page: String(page)}
+    });
+    return {
+      items: response.results.map(row => ({
+        id: String(row.id), title: row.name, language, release: row.release,
+        data: {fileId: row.fileId} // provider-owned data passed back on selection
+      })),
+      totalPages: response.totalPages
+    };
+  },
+  async downloadSubtitle({item}) {
+    const response = await OPlayer.request('https://subtitles.example.com/download', {
+      method: 'POST', body: {id: item.data.fileId}
+    });
+    return {url: response.url, format: 'srt'};
+    // Or return {content: 'subtitle text', format: 'srt'}.
+  }
+};
+```
+
+- 입력 `query`는 편집 가능한 영상 제목, `language`는 `ko`·`en`·`ja` 등의 언어 코드,
+  `page`는 1부터 시작하는 페이지입니다. 로컬 경로·미디어 인증 헤더는 전달하지 않습니다.
+- 결과 `items`는 페이지당 최대 100개입니다. `id`(최대 200자)와 `title`(최대 512자)은 필수 문자열이며,
+  `language`·`release`는 표시용 선택 항목입니다. `data`는 선택된 항목과 함께 다운로드 함수에 전달됩니다.
+- 다운로드 함수는 `url`과 선택적 `headers` 또는 자막 본문 `content`를 반환합니다.
+  `format`은 `srt`·`smi`·`ass`·`ssa`·`vtt`·`lrc`·`sub`이며 기본은 `srt`입니다. 파일명은 호스트가 정하고
+  크기는 8MiB로 제한합니다. HTML 오류 페이지와 ZIP 묶음은 자막으로 적용하지 않습니다.
+- URL은 `hosts`/`networkSettings` 권한 안에 있어야 합니다. 비밀값 참조는 `authHosts`/`authSettings`에만
+  보낼 수 있습니다. 리디렉션도 매번 권한을 확인하며, 출처가 바뀌면 모든 요청 헤더를 제거합니다.
+- 공통 설정의 `language`(기본 `ko`)와 `autoApply`(기본 false)를 선언하면 재생 시작 시 자동 적용에
+  참여합니다. 사용할 내장·외부 자막이 있으면 자동 검색을 건너뛰며, 첫 번째로 활성화된 자동 적용 공급자에서
+  첫 결과를 선택합니다. 자동 적용 순서가 중요하면 확장앱이 결과를 정렬해야 합니다.
+- API Key·비밀번호는 `type: "password"`로 선언하고 `OPlayer.secret`으로 참조합니다. 로그인·다운로드 URL 발급과
+  서비스별 오류 처리는 JS에서 구현합니다. 자막 파일은 현재 재생 세션의 임시 파일로 관리됩니다.
+- 기본 OpenSubtitles는 첫 도입 시 추가되며 사용자가 삭제·비활성화할 수 있습니다. 삭제 후 매 실행마다
+  다시 설치하지 않습니다. API Key·계정 등록과 할당량은 [공식 API 안내](https://opensubtitles.tawk.help/article/getting-started)를 따릅니다.
 
 ## 테스트
 

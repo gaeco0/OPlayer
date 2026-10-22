@@ -95,6 +95,7 @@ flutter:
     - plugins/cloud.s3.js
     - plugins/cloud.box.js
     - plugins/cloud.mybox.js
+    - plugins/subtitle.opensubtitles.js
     - assets/branding/oplayer.png
     - assets/licenses/ffmpeg-kit.txt
     - assets/licenses/byedpi.txt

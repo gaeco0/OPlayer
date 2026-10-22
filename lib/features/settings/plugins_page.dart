@@ -53,7 +53,11 @@ class _PluginsPageState extends State<PluginsPage> {
         title: Text('${p.name} ${p.version} 설치'),
         content: SingleChildScrollView(
           child: Text(
-            '${p.cloud ? '클라우드 목록·재생 주소 조회 및 계정 인증' : '지정한 사이트의 페이지와 요청 헤더·쿠키 접근, 다운로드 보완·광고 차단'}\n\n'
+            '${p.cloud
+                ? '클라우드 목록·재생 주소 조회 및 계정 인증'
+                : p.subtitle
+                ? '영상 제목으로 자막 검색, 선택한 자막 다운로드·적용'
+                : '지정한 사이트의 페이지와 요청 헤더·쿠키 접근, 다운로드 보완·광고 차단'}\n\n'
             '사이트: ${p.sites.join(', ')}\n네트워크: ${p.hosts.join(', ')}\n인증: ${p.authHosts.join(', ')}\n'
             '${(p.manifest['networkSettings'] as List? ?? []).isEmpty ? '' : '사용자 지정 서버 설정: ${(p.manifest['networkSettings'] as List).join(', ')}\n'}'
             '${p.cloud && p.authType == 'oauth' ? '로그인 서버: ${p.oauth['authEndpoint']}\n토큰 서버: ${p.oauth['tokenEndpoint']}\n' : ''}'
@@ -132,7 +136,7 @@ class _PluginsPageState extends State<PluginsPage> {
                 for (final p in store.installed.values)
                   ListTile(
                     title: Text(p.name),
-                    subtitle: Text('${p.version} · ${p.cloud ? '클라우드' : '사이트 기능'}'),
+                    subtitle: Text('${p.version} · ${p.kindLabel}'),
                     leading: Switch(
                       value: !store.disabled.contains(p.id),
                       onChanged: busy ? null : (v) => _guard(() => store.setEnabled(p.id, v)),

@@ -528,7 +528,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
       if (Platform.isWindows) await _configureAdBlock(web);
       await web.setSettings(settings: InAppWebViewSettings(contentBlockers: pluginContentBlockers()));
       await web.removeUserScriptsByGroupName(groupName: 'oplayerPlugins');
-      for (final p in PluginStore.instance.enabled.where((p) => !p.cloud)) {
+      for (final p in PluginStore.instance.enabled.where((p) => p.site)) {
         await web.addUserScript(
           userScript: UserScript(
             source: sitePluginScript(p),
@@ -735,7 +735,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
 
   Future<void> _configureAdBlock(InAppWebViewController c) async {
     final enabled = PluginStore.instance.enabled.any(
-      (p) => !p.cloud && (p.manifest['blockRules'] as List? ?? []).isNotEmpty,
+      (p) => p.site && (p.manifest['blockRules'] as List? ?? []).isNotEmpty,
     );
     await c.callDevToolsProtocolMethod(
       methodName: enabled ? 'Fetch.enable' : 'Fetch.disable',
@@ -1331,7 +1331,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     contentBlockers: pluginContentBlockers(),
                   ),
                   initialUserScripts: UnmodifiableListView([
-                    for (final plugin in PluginStore.instance.enabled.where((p) => !p.cloud))
+                    for (final plugin in PluginStore.instance.enabled.where((p) => p.site))
                       UserScript(
                         source: sitePluginScript(plugin),
                         groupName: 'oplayerPlugins',

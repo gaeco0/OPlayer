@@ -9,6 +9,13 @@ class OPlugin {
   String get name => manifest['name'] as String;
   String get version => manifest['version'] as String;
   bool get cloud => manifest['kind'] == 'cloud';
+  bool get site => manifest['kind'] == 'site';
+  bool get subtitle => manifest['kind'] == 'subtitle';
+  String get kindLabel => cloud
+      ? '클라우드'
+      : subtitle
+      ? '자막 검색'
+      : '사이트 기능';
   List<String> get hosts => (manifest['hosts'] as List).cast<String>();
   List<String> get authHosts => (manifest['authHosts'] as List? ?? []).cast<String>();
   List<String> get sites => (manifest['sites'] as List? ?? []).cast<String>();
@@ -47,12 +54,12 @@ class OPlugin {
     final first = source.trimLeft().split('\n').first;
     if (!first.startsWith('// @oplayer ')) throw const FormatException('확장앱 메타데이터가 없습니다');
     final meta = jsonDecode(first.substring(12)) as Map<String, dynamic>;
-    if (![1, 2, 3].contains(meta['api']) ||
+    if (![1, 2, 3, 4].contains(meta['api']) ||
         !RegExp(r'^[a-z][a-z0-9._-]{1,79}$').hasMatch('${meta['id']}') ||
         meta['name'] is! String ||
         '${meta['name']}'.isEmpty ||
         meta['version'] is! String ||
-        !['site', 'cloud'].contains(meta['kind'])) {
+        !['site', 'cloud', 'subtitle'].contains(meta['kind'])) {
       throw const FormatException('지원하지 않는 확장앱 형식입니다');
     }
     for (final key in ['hosts', 'authHosts', 'sites']) {
@@ -76,7 +83,8 @@ class OPlugin {
     if (plugin.authHosts.any((h) => !plugin.hosts.contains(h))) {
       throw const FormatException('인증 도메인은 네트워크 권한에도 있어야 합니다');
     }
-    if (!plugin.cloud && plugin.sites.isEmpty) throw const FormatException('사이트 확장앱에는 sites 권한이 필요합니다');
+    if (plugin.site && plugin.sites.isEmpty) throw const FormatException('사이트 확장앱에는 sites 권한이 필요합니다');
+    if (plugin.subtitle && meta['api'] != 4) throw const FormatException('자막 검색에는 확장앱 API 4가 필요합니다');
     final rules = meta['blockRules'] ?? [];
     if (rules is! List || rules.length > 500) throw const FormatException('광고 차단 규칙 제한 초과');
     for (final rule in rules) {
@@ -146,7 +154,7 @@ class OPlugin {
         throw const FormatException('잘못된 복귀 주소 안내');
       }
     }
-    if (plugin.cloud && plugin.authType != 'oauth' && ![2, 3].contains(meta['api'])) {
+    if (plugin.cloud && plugin.authType != 'oauth' && ![2, 3, 4].contains(meta['api'])) {
       throw const FormatException('이 인증 방식에는 확장앱 API 2 이상이 필요합니다');
     }
     if (plugin.cloud && plugin.authType == 'oauth') {

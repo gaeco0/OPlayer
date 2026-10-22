@@ -60,10 +60,7 @@ class CloudPluginSettingsPage extends StatelessWidget {
         appBar: AppBar(title: Text('${plugin.name} 설정')),
         body: ListView(
           children: [
-            ListTile(
-              title: Text(plugin.name),
-              subtitle: Text('${plugin.version} · ${plugin.cloud ? '클라우드' : '사이트'} 확장앱'),
-            ),
+            ListTile(title: Text(plugin.name), subtitle: Text('${plugin.version} · ${plugin.kindLabel} 확장앱')),
             if (store.disabled.contains(pluginId))
               const ListTile(subtitle: Text('꺼진 확장앱입니다. 설정은 보관되며, 사용하려면 확장앱을 켜 주세요.')),
             ListTile(
@@ -77,6 +74,8 @@ class CloudPluginSettingsPage extends StatelessWidget {
               subtitle: Text(
                 plugin.cloud
                     ? '설정을 저장한 뒤 사이드바의 클라우드 연결에서 계정을 추가하세요. 기존 연결 계정은 유지됩니다.'
+                    : plugin.subtitle
+                    ? '설정을 저장한 뒤 플레이어의 자막 메뉴에서 온라인 자막을 검색하세요.'
                     : '설정을 저장한 뒤 열려 있는 웹페이지를 새로고침해 주세요.',
               ),
             ),
