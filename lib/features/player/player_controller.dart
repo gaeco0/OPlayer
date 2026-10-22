@@ -20,6 +20,8 @@ import '../../core/plugins/subtitle_plugins.dart';
 import '../../core/plugins/player_plugins.dart';
 import '../cast/cast_controller.dart';
 import 'frame_interpolation.dart';
+import 'video_upscaling.dart';
+import 'package:flutter/painting.dart';
 
 /// 화면 비율 모드 (nPlayer: 화면 맞춤 → 가득 채우기 → 늘이기 → 16:9 → 4:3 → 원본)
 enum AspectMode { fit, fill, stretch, r16x9, r4x3, r1x1, r3x2, r5x3, cinema185, cinema235, original }
@@ -68,6 +70,7 @@ class PlayerController extends ChangeNotifier {
     _applyNativeOptions();
     ResourceLocks.instance.addListener(_enforceResourceLock);
     AppSettings.instance.addListener(_onInterpolationSettings);
+    AppSettings.instance.addListener(_onUpscalingSettings);
     _subs.addAll([
       player.stream.playing.listen((playing) {
         if (playing) _enforceResourceLock();
@@ -76,6 +79,7 @@ class PlayerController extends ChangeNotifier {
       player.stream.width.listen((_) {
         if (!preparing) unawaited(_refreshInterpolation());
       }),
+      player.stream.videoParams.listen((_) => _queueUpscaling()),
       player.stream.position.listen(_onPosition),
       player.stream.tracks.listen((_) {
         notifyListeners();
@@ -110,7 +114,97 @@ class PlayerController extends ChangeNotifier {
 
   final List<String> folderFiles;
   final player = Player(configuration: const PlayerConfiguration(title: 'OPlayer'));
-  late final video = VideoController(player);
+  late final video = _createVideoController();
+  bool _hasVideoController = false;
+  VideoController _createVideoController() {
+    _hasVideoController = true;
+    final output = VideoController(player);
+    output.rect.addListener(_queueUpscaling);
+    return output;
+  }
+
+  bool upscalingBusy = false;
+  bool upscalingApplied = false;
+  String? upscalingIssue;
+  Size? upscalingOutput;
+  Size _upscalingViewport = Size.zero;
+  BoxFit _upscalingFit = BoxFit.contain;
+  Timer? _upscalingTimer;
+  int _upscalingRequest = 0;
+  bool _upscalingPreference = AppSettings.instance.videoUpscaling;
+  late final _upscaler = VideoUpscaler(
+    read: (key) async {
+      if (_disposed) throw StateError('플레이어가 종료됐습니다');
+      final native = player.platform;
+      if (native is! NativePlayer) throw UnsupportedError('현재 재생 엔진은 GPU 업스케일을 지원하지 않습니다');
+      return native.getProperty(key);
+    },
+    write: (key, value) async {
+      if (_disposed) throw StateError('플레이어가 종료됐습니다');
+      await (player.platform as NativePlayer).setProperty(key, value);
+    },
+    resize: (size) async {
+      if (_disposed) throw StateError('플레이어가 종료됐습니다');
+      await video.setSize(width: size?.width.toInt(), height: size?.height.toInt());
+    },
+  );
+
+  Size get upscalingSource {
+    final params = player.state.videoParams;
+    final w = (params.dw ?? player.state.width ?? 0).toDouble();
+    final h = (params.dh ?? player.state.height ?? 0).toDouble();
+    return (params.rotate ?? 0) % 180 == 0 ? Size(w, h) : Size(h, w);
+  }
+
+  void setUpscalingViewport(Size size, BoxFit fit) {
+    if (_disposed || size == _upscalingViewport && fit == _upscalingFit) return;
+    _upscalingViewport = size;
+    _upscalingFit = fit;
+    _queueUpscaling();
+  }
+
+  void _onUpscalingSettings() {
+    final value = AppSettings.instance.videoUpscaling;
+    if (_upscalingPreference == value) return;
+    _upscalingPreference = value;
+    _upscalingTimer?.cancel();
+    unawaited(_refreshUpscaling());
+  }
+
+  void _queueUpscaling() {
+    if (_disposed) return;
+    _upscalingTimer?.cancel();
+    _upscalingTimer = Timer(const Duration(milliseconds: 150), _refreshUpscaling);
+  }
+
+  Future<void> _refreshUpscaling() async {
+    if (_disposed || preparing) return;
+    final request = ++_upscalingRequest;
+    final source = upscalingSource;
+    final enabled = AppSettings.instance.videoUpscaling && !audioOnly && source.width > 0 && source.height > 0;
+    final target = enabled ? upscaleTarget(source, _upscalingViewport, _upscalingFit) : null;
+    upscalingBusy = true;
+    upscalingIssue = null;
+    notifyListeners();
+    try {
+      await _upscaler.apply(enabled, target);
+      if (_disposed || request != _upscalingRequest) return;
+      upscalingApplied = enabled;
+      upscalingOutput = target;
+    } catch (e) {
+      if (!_disposed && request == _upscalingRequest) {
+        upscalingApplied = false;
+        upscalingOutput = null;
+        upscalingIssue = '$e';
+      }
+    } finally {
+      if (!_disposed && request == _upscalingRequest) {
+        upscalingBusy = false;
+        notifyListeners();
+      }
+    }
+  }
+
   final _subs = <StreamSubscription>[];
   double _displayRate = 0;
   bool _lastAudioOnly = false;
@@ -375,6 +469,7 @@ class PlayerController extends ChangeNotifier {
     } finally {
       if (generation == _openGeneration) preparing = false;
       if (!_disposed && generation == _openGeneration) unawaited(_refreshInterpolation());
+      if (!_disposed && generation == _openGeneration) unawaited(_refreshUpscaling());
       notifyListeners();
     }
   }
@@ -932,6 +1027,10 @@ class PlayerController extends ChangeNotifier {
     if (release != null) unawaited(release().catchError((Object _) {}));
     ResourceLocks.instance.removeListener(_enforceResourceLock);
     AppSettings.instance.removeListener(_onInterpolationSettings);
+    AppSettings.instance.removeListener(_onUpscalingSettings);
+    _upscalingRequest++;
+    _upscalingTimer?.cancel();
+    if (_hasVideoController) video.rect.removeListener(_queueUpscaling);
     _interpolationRequest++;
     _interpolationCheck?.cancel();
     _disposed = true;

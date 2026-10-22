@@ -22,6 +22,7 @@ import 'player_orientation.dart';
 import 'widgets/controls_overlay.dart';
 import 'widgets/gesture_layer.dart';
 import 'widgets/side_panels.dart';
+import 'widgets/player_video.dart';
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
@@ -534,13 +535,10 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       padding: EdgeInsets.fromLTRB(16, 0, 16, MediaQuery.sizeOf(context).height * c.subtitleBottom + 8),
     );
 
-    Widget v(BoxFit fit) => Video(
-      controller: c.video,
-      controls: NoVideoControls,
+    Widget v(BoxFit fit) => PlayerVideo(
+      controller: c,
       fit: fit,
-      fill: Colors.black,
-      // Playback lifecycle is owned by this screen and PlaybackSession, including PiP.
-      pauseUponEnteringBackgroundMode: false,
+      renderScale: _pip.active ? 1 : c.zoom,
       subtitleViewConfiguration: subtitleCfg,
     );
 

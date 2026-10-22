@@ -104,6 +104,12 @@ class SettingsPage extends StatelessWidget {
               value: s.frameInterpolation,
               onChanged: (v) => s.update((x) => x.frameInterpolation = v),
             ),
+            SwitchListTile(
+              title: const Text('고화질 업스케일'),
+              subtitle: const Text('낮은 해상도 영상을 화면 크기로 선명하게 확대 · GPU 사용'),
+              value: s.videoUpscaling,
+              onChanged: (v) => s.update((x) => x.videoUpscaling = v),
+            ),
             _choice<DefaultAspect>(
               context,
               title: '기본 화면 비율',
