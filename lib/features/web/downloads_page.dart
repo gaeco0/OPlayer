@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
+import 'package:file_picker/file_picker.dart';
 
 import '../../app/theme.dart';
 import '../../core/media_item.dart';
@@ -13,6 +14,7 @@ import '../photos/photo_viewer.dart';
 import '../../sources/server_store.dart';
 import '../../sources/source_registry.dart';
 import '../player/player_screen.dart';
+import '../network/remote_folder_picker.dart';
 import 'download_manager.dart';
 
 String _dest(DownloadTask t) {
@@ -108,7 +110,7 @@ class _Tile extends StatelessWidget {
     final status = switch (t.status) {
       DownloadStatus.queued => '대기 중${_dest(t)}',
       DownloadStatus.running =>
-        t.kind == DownloadKind.hls && !t.uploading
+        t.kind == DownloadKind.hls && !t.uploading && !t.moving
             ? '${t.phase ?? ''}${t.total > 0 ? ' · ${t.done}/${t.total} 조각' : ''} · ${formatSize(t.received)} ${_speed(t.speed)}'
             : '${t.phase == null ? '' : '${t.phase} · '}${formatSize(t.received)}${t.total > 0 ? ' / ${formatSize(t.total)}' : ''} ${_speed(t.speed)}',
       DownloadStatus.paused => '일시정지 · ${((t.progress ?? 0) * 100).toStringAsFixed(0)}%',
@@ -197,6 +199,8 @@ class _Tile extends StatelessWidget {
                   await m.remove(t);
                 case 'delete':
                   await m.remove(t, deleteFile: true);
+                case 'move':
+                  await _changeDestination(context);
                 case 'info':
                   if (!context.mounted) return;
                   await showDialog<void>(
@@ -213,6 +217,7 @@ class _Tile extends StatelessWidget {
               }
             },
             itemBuilder: (_) => [
+              if (m.canChangeDestination(t)) const PopupMenuItem(value: 'move', child: Text('다른 저장소로 이동')),
               const PopupMenuItem(value: 'info', child: Text('정보')),
               const PopupMenuItem(value: 'remove', child: Text('목록에서 제거')),
               PopupMenuItem(
@@ -224,5 +229,64 @@ class _Tile extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _changeDestination(BuildContext context) async {
+    try {
+      final choice = await showModalBottomSheet<Object>(
+        context: context,
+        builder: (sheet) => SafeArea(
+          child: ListView(
+            shrinkWrap: true,
+            children: [
+              const ListTile(
+                title: Text('다른 저장소로 이동'),
+                subtitle: Text('이미 받은 파일을 사용합니다. 새 위치에 저장이 끝나면 기존 파일을 지웁니다. 이 항목에만 적용됩니다.'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.download_outlined),
+                title: const Text('이 기기 · 다운로드 폴더'),
+                onTap: () => Navigator.pop(sheet, 'default'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.folder_open),
+                title: const Text('이 기기 · 폴더 직접 선택'),
+                onTap: () => Navigator.pop(sheet, 'folder'),
+              ),
+              for (final server in ServerStore.instance.servers)
+                ListTile(
+                  leading: const Icon(Icons.dns_outlined),
+                  title: Text(server.name),
+                  subtitle: Text(server.type.label),
+                  onTap: () => Navigator.pop(sheet, server),
+                ),
+            ],
+          ),
+        ),
+      );
+      if (choice == null || !context.mounted) return;
+      String? serverId;
+      String? directory;
+      if (choice == 'default') {
+        directory = (await DownloadManager.downloadDir()).path;
+      } else if (choice == 'folder') {
+        directory = await FilePicker.getDirectoryPath(dialogTitle: '파일을 이동할 폴더');
+      } else if (choice is ServerConfig) {
+        final source = await SourceRegistry.instance.forServer(choice);
+        if (!source.canUpload) throw UnsupportedError('이 저장소는 업로드를 지원하지 않습니다');
+        if (!context.mounted) return;
+        directory = await RemoteFolderPicker.pick(context, source);
+        serverId = choice.id;
+      }
+      if (directory == null) return;
+      await DownloadManager.instance.changeDestination(task, serverId: serverId, directory: directory);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('새 저장소로 이동을 시작했습니다')));
+      }
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('저장소를 변경하지 못했습니다: $error')));
+      }
+    }
   }
 }
