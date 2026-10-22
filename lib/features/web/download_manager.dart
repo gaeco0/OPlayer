@@ -77,20 +77,25 @@ class DownloadTask {
   /// 원격 저장 위치 (추가 시점 설정을 고정)
   String? remoteServerId;
   String? remoteDir;
+  String? localDirectory;
 
   /// 로컬 받기 완료 여부 (업로드만 남은 상태에서 재시도할 때 다시 받지 않게)
   bool localDone = false;
 
   bool uploading = false;
+  bool moving = false;
 
   /// 업로드 완료 후 원격 재생 키 (smb://서버ID/경로 …)
   String? remoteKey;
 
   bool get isRemote => remoteServerId != null;
 
-  double? get progress => kind == DownloadKind.hls && !uploading
-      ? (total == 0 ? null : done / total)
-      : (total == 0 ? null : received / total);
+  double? get progress {
+    if (status == DownloadStatus.done) return 1;
+    return kind == DownloadKind.hls && !uploading && !moving
+        ? (total == 0 ? null : done / total)
+        : (total == 0 ? null : received / total);
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -111,8 +116,10 @@ class DownloadTask {
     'n': note,
     'rs': remoteServerId,
     'rd': remoteDir,
+    'localDir': localDirectory,
     'ld': localDone,
     'up': uploading,
+    'moving': moving,
     'rk': remoteKey,
     if (resourceEntry != null)
       'source': {
@@ -164,8 +171,10 @@ class DownloadTask {
         ..note = j['n'] as String?
         ..remoteServerId = j['rs'] as String?
         ..remoteDir = j['rd'] as String?
+        ..localDirectory = j['localDir'] as String?
         ..localDone = (j['ld'] as bool?) ?? false
         ..uploading = (j['up'] as bool?) ?? false
+        ..moving = j['moving'] == true
         ..remoteKey = j['rk'] as String?;
 }
 
@@ -327,6 +336,52 @@ class DownloadManager extends ChangeNotifier {
     _schedule();
   }
 
+  bool canChangeDestination(DownloadTask task) =>
+      tasks.contains(task) &&
+      !_running.contains(task.id) &&
+      [DownloadStatus.failed, DownloadStatus.paused, DownloadStatus.done].contains(task.status) &&
+      task.localDone &&
+      task.savePath != null &&
+      File(task.savePath!).existsSync();
+
+  /// Retarget only this retained file. Global download settings stay unchanged.
+  Future<void> changeDestination(DownloadTask task, {String? serverId, required String directory}) async {
+    void check() {
+      if (!canChangeDestination(task)) throw StateError('받은 파일이 있는 실패·일시정지·완료 항목만 이동할 수 있습니다');
+    }
+
+    check();
+    await ResourceLocks.instance.requireAccess(downloadsResourceKey);
+    await ResourceLocks.instance.requireAccess(task.savePath!);
+    if (directory.trim().isEmpty) throw const FormatException('저장할 폴더를 선택해 주세요');
+    if (serverId == null) {
+      await ResourceLocks.instance.requireAccess(Directory(directory).absolute.path);
+    } else {
+      final server = ServerStore.instance.server(serverId);
+      if (server == null) throw StateError('저장할 서버가 삭제되었습니다');
+      final source = await SourceRegistry.instance.forServer(server);
+      if (!source.canUpload) throw UnsupportedError('이 저장소는 업로드를 지원하지 않습니다');
+      if (source.scheme == 'smb' && directory == '/') throw StateError('SMB 공유 폴더를 선택해 주세요');
+      await ResourceLocks.instance.requireAccess(source.keyFor(directory));
+    }
+    // The item may have been resumed or removed while a picker/auth dialog was open.
+    check();
+    task
+      ..remoteServerId = serverId
+      ..remoteDir = serverId == null ? null : directory
+      ..localDirectory = serverId == null ? Directory(directory).absolute.path : null
+      ..remoteKey = null
+      ..uploading = false
+      ..moving = false
+      ..phase = null
+      ..note = null
+      ..error = null
+      ..speed = 0
+      ..status = DownloadStatus.queued;
+    _changed(immediate: true);
+    _schedule();
+  }
+
   Future<void> remove(DownloadTask t, {bool deleteFile = false}) async {
     if (t.status == DownloadStatus.running) pause(t);
     tasks.remove(t);
@@ -411,10 +466,10 @@ class DownloadManager extends ChangeNotifier {
           await _requireDestinationAccess('${serverResourceKey(server)}${t.remoteDir ?? '/'}');
         }
       } else {
-        await _requireDestinationAccess((await downloadDir()).path);
+        await _requireDestinationAccess(t.localDirectory ?? (await downloadDir()).path);
       }
       // 원격 저장이면 앱 캐시에 받은 뒤 업로드하고 지운다
-      final dir = t.isRemote ? await _pendingUploadDir() : await downloadDir();
+      final dir = t.isRemote ? await _pendingUploadDir() : await _localDirectory(t);
       t.savePath ??= await _uniquePath(dir, t.fileName, reserve: true);
       reservedPath = t.savePath;
       _reservedPaths.add(_reservationKey(reservedPath!));
@@ -445,11 +500,16 @@ class DownloadManager extends ChangeNotifier {
         await _convertTask(t);
       }
       _check(t);
-      if (t.isRemote) await _upload(t);
+      if (t.isRemote) {
+        await _upload(t);
+      } else {
+        await _saveLocally(t, dir);
+      }
       _check(t);
       t.status = DownloadStatus.done;
       t.speed = 0;
       t.phase = null;
+      t.moving = false;
     } on _Cancelled {
       // 일시정지
     } catch (e) {
@@ -488,6 +548,64 @@ class DownloadManager extends ChangeNotifier {
 
   void _check(DownloadTask t) {
     if (_cancel.contains(t.id)) throw _Cancelled();
+  }
+
+  Future<Directory> _localDirectory(DownloadTask task) async {
+    if (task.localDirectory == null) return downloadDir();
+    return Directory(task.localDirectory!).create(recursive: true);
+  }
+
+  Future<void> _saveLocally(DownloadTask task, Directory directory) async {
+    final original = File(task.savePath!);
+    if (p.equals(original.parent.absolute.path, directory.absolute.path)) return;
+    await _requireDestinationAccess(original.path);
+    _check(task);
+    final output = await _uniquePath(directory, task.fileName, reserve: true);
+    Directory? stagingDirectory;
+    task
+      ..moving = true
+      ..uploading = false
+      ..phase = '기기에 저장 중'
+      ..total = await original.length()
+      ..received = 0
+      ..speed = 0;
+    _changed(immediate: true);
+    try {
+      stagingDirectory = await directory.createTemp('.oplayer-move-');
+      final staging = File(p.join(stagingDirectory.path, 'file.part'));
+      final sink = staging.openWrite();
+      try {
+        await sink.addStream(
+          original.openRead().map((chunk) {
+            _check(task);
+            task.received += chunk.length;
+            _changed();
+            return chunk;
+          }),
+        );
+        await sink.flush();
+      } finally {
+        await sink.close();
+      }
+      _check(task);
+      if (await staging.length() != task.total) throw const FileSystemException('파일을 끝까지 복사하지 못했습니다');
+      // A late name collision must preserve both files, too.
+      final target = await File(output).exists() ? await _uniquePath(directory, task.fileName, reserve: true) : output;
+      await staging.rename(target);
+      task.savePath = target;
+      task.fileName = p.basename(target);
+      task.note = '이 기기에 저장됨: $target';
+      task.uploading = false;
+      // Keep the source until the new local file has been published successfully.
+      try {
+        await original.delete();
+      } catch (_) {
+        task.note = '이 기기에 저장됨: $target (기존 파일도 보관됨)';
+      }
+    } finally {
+      _reservedPaths.remove(_reservationKey(output));
+      if (stagingDirectory != null && await stagingDirectory.exists()) await stagingDirectory.delete(recursive: true);
+    }
   }
 
   Future<void> _resource(DownloadTask task) async {
