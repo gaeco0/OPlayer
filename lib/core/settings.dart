@@ -42,6 +42,7 @@ class AppSettings extends ChangeNotifier {
   ResumeMode resumeMode = ResumeMode.auto;
   bool autoPlayNext = true;
   bool hardwareDecoding = true;
+  bool frameInterpolation = false;
   double defaultSpeed = 1.0;
   DefaultAspect defaultAspect = DefaultAspect.fit;
   PlaybackOrientation playbackOrientation = PlaybackOrientation.landscape;
@@ -117,6 +118,7 @@ class AppSettings extends ChangeNotifier {
     'resumeMode': resumeMode.index,
     'autoPlayNext': autoPlayNext,
     'hw': hardwareDecoding,
+    'frameInterpolation': frameInterpolation,
     'speed': defaultSpeed,
     'aspect': defaultAspect.index,
     'playbackOrientation': playbackOrientation.name,
@@ -165,6 +167,7 @@ class AppSettings extends ChangeNotifier {
     resumeMode = ResumeMode.values[v('resumeMode', 0)];
     autoPlayNext = v('autoPlayNext', true);
     hardwareDecoding = v('hw', true);
+    frameInterpolation = j['frameInterpolation'] == true;
     defaultSpeed = (j['speed'] as num?)?.toDouble() ?? 1.0;
     defaultAspect = DefaultAspect.values[v('aspect', 0)];
     playbackOrientation = PlaybackOrientation.values.firstWhere(

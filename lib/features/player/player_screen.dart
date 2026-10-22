@@ -161,6 +161,21 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     _syncMediaSession();
   }
 
+  void _updateDisplayRefreshRate() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) c.setDisplayRefreshRate(View.of(context).display.refreshRate);
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _updateDisplayRefreshRate();
+  }
+
+  @override
+  void didChangeMetrics() => _updateDisplayRefreshRate();
+
   void _onSettingsChanged() {
     final mode = AppSettings.instance.playbackOrientation;
     if (_orient != mode) {
