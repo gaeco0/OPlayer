@@ -371,6 +371,31 @@ class _AspectPanel extends StatelessWidget {
   Widget build(BuildContext context) => ListView(
     children: [
       _Radios<AspectMode>(values: AspectMode.values, selected: c.aspect, label: (m) => m.label, onChanged: c.setAspect),
+      const _Section('업스케일'),
+      SwitchListTile(
+        title: const Text('고화질 업스케일', style: _white),
+        subtitle: Text(c.audioOnly ? '오디오 전용 재생에는 적용하지 않습니다' : '화면에 맞춰 선명하게 확대 · 설정 자동 저장', style: _label),
+        value: AppSettings.instance.videoUpscaling,
+        onChanged: c.upscalingBusy || c.audioOnly
+            ? null
+            : (v) => AppSettings.instance.update((s) => s.videoUpscaling = v),
+      ),
+      if (c.upscalingBusy) const LinearProgressIndicator(),
+      if (c.upscalingIssue != null)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          child: Text(c.upscalingIssue!, style: _label),
+        )
+      else if (c.upscalingApplied)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          child: Text(
+            c.upscalingOutput == null
+                ? '확대되는 화면에서 적용됩니다'
+                : '${c.upscalingSource.width.toInt()}×${c.upscalingSource.height.toInt()} → ${c.upscalingOutput!.width.toInt()}×${c.upscalingOutput!.height.toInt()}',
+            style: _label,
+          ),
+        ),
       const _Section('프레임 보간'),
       SwitchListTile(
         title: const Text('가벼운 프레임 혼합', style: _white),

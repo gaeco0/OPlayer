@@ -16,6 +16,7 @@ analyzer:
     - macos/**
     - linux/**
     - packages/quickjs_engine/**
+    - packages/media_kit_video/**
 include: package:flutter_lints/flutter.yaml
 
 linter:

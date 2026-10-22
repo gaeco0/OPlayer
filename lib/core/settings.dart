@@ -43,6 +43,7 @@ class AppSettings extends ChangeNotifier {
   bool autoPlayNext = true;
   bool hardwareDecoding = true;
   bool frameInterpolation = false;
+  bool videoUpscaling = false;
   double defaultSpeed = 1.0;
   DefaultAspect defaultAspect = DefaultAspect.fit;
   PlaybackOrientation playbackOrientation = PlaybackOrientation.landscape;
@@ -119,6 +120,7 @@ class AppSettings extends ChangeNotifier {
     'autoPlayNext': autoPlayNext,
     'hw': hardwareDecoding,
     'frameInterpolation': frameInterpolation,
+    'videoUpscaling': videoUpscaling,
     'speed': defaultSpeed,
     'aspect': defaultAspect.index,
     'playbackOrientation': playbackOrientation.name,
@@ -168,6 +170,7 @@ class AppSettings extends ChangeNotifier {
     autoPlayNext = v('autoPlayNext', true);
     hardwareDecoding = v('hw', true);
     frameInterpolation = j['frameInterpolation'] == true;
+    videoUpscaling = j['videoUpscaling'] == true;
     defaultSpeed = (j['speed'] as num?)?.toDouble() ?? 1.0;
     defaultAspect = DefaultAspect.values[v('aspect', 0)];
     playbackOrientation = PlaybackOrientation.values.firstWhere(

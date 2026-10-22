@@ -2,7 +2,7 @@ import '../core/resource_locks.dart';
 import 'dart:io';
 import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
-import 'package:media_kit_video/media_kit_video.dart';
+import '../features/player/widgets/player_video.dart';
 import '../core/mouse_nav.dart';
 import '../core/open_media.dart';
 import '../features/player/playback_session.dart';
@@ -77,7 +77,7 @@ class _MediaShellState extends State<MediaShell> {
                             height: 72,
                             child: c.audioOnly
                                 ? const ColoredBox(color: Colors.black, child: Icon(Icons.audiotrack))
-                                : Video(controller: c.video, controls: NoVideoControls, fit: BoxFit.contain),
+                                : PlayerVideo(controller: c),
                           ),
                         ),
                         Expanded(
