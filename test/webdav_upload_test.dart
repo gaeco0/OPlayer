@@ -51,6 +51,7 @@ void main() {
     final progress = <int>[];
     server.listen((request) async {
       expect(request.method, 'PUT');
+      expect(request.persistentConnection, true);
       expect(Uri.decodeFull(request.uri.path), '/videos/한 글.mp4');
       expect(request.headers.value('authorization'), 'Basic ${base64Encode(utf8.encode('user:password'))}');
       expect(request.contentLength, await file.length());
@@ -145,7 +146,7 @@ void main() {
         socket.destroy(); // Simulate a NAS/proxy disconnecting during PUT.
         return;
       }
-      expect(request.headers.value('connection'), 'close');
+      expect(request.persistentConnection, true);
       expect(request.contentLength, 32 * 1024 * 1024);
       expect(await sha256.bind(request).first, expected);
       request.response.statusCode = 201;
@@ -178,17 +179,49 @@ void main() {
 
   test('repeated disconnects stop after three attempts and retain the local original', () async {
     var puts = 0;
+    final attempts = <int>[];
+    final elapsed = Stopwatch()..start();
     server.listen((request) async {
       puts++;
+      attempts.add(elapsed.elapsedMilliseconds);
       final socket = await request.response.detachSocket(writeHeaders: false);
       socket.destroy();
     });
     await expectLater(
       source.upload(file, '/', 'retry.mp4'),
-      throwsA(isA<HttpException>().having((error) => error.message, 'message', contains('업로드 3회 시도'))),
+      throwsA(
+        isA<HttpException>()
+            .having((error) => error.message, 'message', contains('업로드 3회 시도'))
+            .having((error) => error.message, 'attempt diagnostics', contains('3회:'))
+            .having((error) => error.message, 'byte diagnostics', contains('/500000바이트')),
+      ),
     );
     expect(puts, 3);
+    expect(attempts[1] - attempts[0], greaterThanOrEqualTo(1900));
+    expect(attempts[2] - attempts[1], greaterThanOrEqualTo(3900));
     expect(await file.length(), 500000);
+  });
+
+  test('pause interrupts retry backoff without starting a second PUT', () async {
+    final disconnected = Completer<void>();
+    final cancel = Completer<void>();
+    var puts = 0;
+    server.listen((request) async {
+      puts++;
+      final socket = await request.response.detachSocket(writeHeaders: false);
+      socket.destroy();
+      disconnected.complete();
+    });
+    final check = expectLater(
+      source.upload(file, '/', 'retry.mp4', cancelled: cancel.future),
+      throwsA(isA<HttpException>()),
+    );
+    await disconnected.future.timeout(const Duration(seconds: 5));
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    cancel.complete();
+    await check.timeout(const Duration(seconds: 1));
+    expect(puts, 1);
+    expect(await file.exists(), true);
   });
 
   test('pause before a retry does not issue another PUT', () async {

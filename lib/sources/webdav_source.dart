@@ -158,24 +158,42 @@ class WebDavSource extends MediaSource {
       if (!finished) stopped = true;
     });
     try {
+      final length = await local.length();
+      final failures = <String>[];
       for (var attempt = 0; ; attempt++) {
         if (stopped) throw const HttpException('업로드 일시정지');
+        final elapsed = Stopwatch()..start();
+        var sent = 0;
         try {
           onProgress?.call(0);
-          await _put(local, path, onProgress: onProgress, cancelled: cancelled);
+          await _put(
+            local,
+            path,
+            onProgress: (bytes) {
+              sent = bytes;
+              onProgress?.call(bytes);
+            },
+            cancelled: cancelled,
+          );
           return path;
         } catch (error) {
           if (stopped || !_connectionLost(error)) rethrow;
+          final stage = sent >= length ? '파일 전체 전달 후(완료 미확인)' : '전송 중';
+          failures.add(
+            '${attempt + 1}회: ${(elapsed.elapsedMilliseconds / 1000).toStringAsFixed(1)}초, '
+            '$sent/$length바이트 전달, $stage',
+          );
           if (attempt >= 2) {
             throw HttpException(
               'WebDAV 연결이 반복해서 끊겼습니다 (업로드 3회 시도). 받은 원본은 보관됩니다. '
-              '서버·역방향 프록시의 연결 제한을 확인한 뒤 재개해 주세요. 원인: $error',
+              '${failures.join('; ')}. '
+              '전달량은 앱이 전송 스트림에 넘긴 양이며 서버 저장량과 다를 수 있습니다. 원인: $error',
             );
           }
           // PUT to the same target is idempotent. Reopen the file and connection;
           // never treat a lost final response as acknowledgement of storage.
           await Future.any<void>([
-            Future<void>.delayed(Duration(milliseconds: 250 * (attempt + 1))),
+            Future<void>.delayed(Duration(seconds: 2 * (attempt + 1))),
             if (cancelled != null) cancelled,
           ]);
         }
@@ -224,7 +242,8 @@ class WebDavSource extends MediaSource {
         throw interrupted!;
       }
       req.followRedirects = false;
-      req.persistentConnection = false;
+      // Keep the standard HTTP connection policy. This attempt already owns a
+      // fresh client; forcing Connection: close is unnecessary for isolation.
       req.contentLength = len;
       req.headers.set(HttpHeaders.contentTypeHeader, 'application/octet-stream');
       _auth.forEach(req.headers.set);
