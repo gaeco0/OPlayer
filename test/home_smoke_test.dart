@@ -91,7 +91,7 @@ void main() {
     expect(find.text('더블탭 탐색 간격'), findsOneWidget);
     await t.tap(find.text('다운로드').first);
     await t.pump();
-    expect(find.textContaining('다운로드한 동영상이 없습니다'), findsOneWidget);
+    expect(find.textContaining('다운로드한 파일이 없습니다'), findsOneWidget);
     t.view.physicalSize = const Size(400, 800);
     await t.pump();
     expect(find.byIcon(Icons.menu), findsOneWidget);

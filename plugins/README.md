@@ -183,6 +183,7 @@ Android는 WebView 요청 콜백, Windows는 DevTools 요청 차단, Apple WebVi
 - `accountName({})`: 계정 이름 문자열.
 - `list({path})`: `[{name,path,isDir,size,modified,thumbnailUrl}]`.
 - `stream({path})`: `{url, authenticated?: true}`. 인증을 요청하면 URL이 `authHosts`에 속해야 합니다.
+  원격 파일의 **기기에 다운로드**도 이 훅과 기존 인증 규약을 사용합니다. 재개할 때 새 URL을 얻고 파일 내용·확장자를 그대로 저장하므로 별도 다운로드 훅이나 확장앱 업데이트는 필요 없습니다. `list`의 파일 이름·크기를 정확하게 반환하고 `stream`은 HTML 페이지가 아닌 실제 파일 주소를 반환해야 합니다.
 - 선택적 `canDelete: true` 메타데이터와 `async delete({path,name,isDir})`를 함께 선언하면 목록에 스와이프 삭제 버튼이
   표시됩니다. 실제 서버 삭제가 성공한 뒤 정확히 `true`를 반환해야 합니다. 루트는 삭제할 수 없고, 응답 없는 함수·실패·
   부분 실패는 성공으로 처리하지 않습니다. 폴더 하위 항목 삭제는 확장앱이 처리하며 사용자의 쓰기 권한이 필요합니다.

@@ -119,7 +119,18 @@ class SmbSource extends MediaSource {
             refs.add(SubtitleRef(await _proxy(s.path), s.name));
           } catch (_) {}
         }
-        return MediaItem(key: key, uri: url, title: title, subtitles: refs);
+        return MediaItem(
+          key: key,
+          uri: url,
+          title: title,
+          subtitles: refs,
+          onRelease: () async {
+            StreamProxy.instance.unregister(url);
+            for (final ref in refs) {
+              StreamProxy.instance.unregister(ref.uri);
+            }
+          },
+        );
       },
     );
   }

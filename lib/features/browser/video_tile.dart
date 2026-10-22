@@ -166,6 +166,7 @@ Future<void> showVideoMenu(
   required String name,
   String? location,
   required VoidCallback onChanged,
+  VoidCallback? onDownload,
   List<Widget> extra = const [],
 }) async {
   final r = ResumeStore.instance.get(resumeKey);
@@ -181,6 +182,15 @@ Future<void> showVideoMenu(
             subtitle: location == null ? null : Text(location, maxLines: 1, overflow: TextOverflow.ellipsis),
           ),
           const Divider(height: 1),
+          if (onDownload != null)
+            ListTile(
+              leading: const Icon(Icons.download_outlined),
+              title: const Text('기기에 다운로드'),
+              onTap: () {
+                Navigator.pop(c);
+                onDownload();
+              },
+            ),
           ListTile(
             leading: const Icon(Icons.lock_outline),
             title: Text(ResourceLocks.instance.hasExact(resumeKey) ? '잠금 설정 해제' : '이 항목 잠금'),
@@ -231,6 +241,7 @@ class VideoListTile extends StatelessWidget {
     this.thumbnailUrl,
     this.location,
     this.hasSubtitle = false,
+    this.onDownload,
   });
 
   final String resumeKey;
@@ -241,6 +252,7 @@ class VideoListTile extends StatelessWidget {
   final String? thumbnailUrl;
   final String? location;
   final bool hasSubtitle;
+  final VoidCallback? onDownload;
   final VoidCallback onTap;
   final VoidCallback onChanged;
 
@@ -252,8 +264,14 @@ class VideoListTile extends StatelessWidget {
         ? null
         : '${m.year}.${m.month.toString().padLeft(2, '0')}.${m.day.toString().padLeft(2, '0')}';
     final meta = [if (size > 0) formatSize(size), if (date != null) date].join(' · ');
-    void menu() =>
-        showVideoMenu(context, resumeKey: resumeKey, name: name, location: location ?? localPath, onChanged: onChanged);
+    void menu() => showVideoMenu(
+      context,
+      resumeKey: resumeKey,
+      name: name,
+      location: location ?? localPath,
+      onChanged: onChanged,
+      onDownload: onDownload,
+    );
     return InkWell(
       onTap: onTap,
       onLongPress: menu,
@@ -331,6 +349,7 @@ class VideoGridTile extends StatelessWidget {
     this.size = 0,
     this.localPath,
     this.thumbnailUrl,
+    this.onDownload,
   });
   final String resumeKey;
   final String name;
@@ -339,25 +358,43 @@ class VideoGridTile extends StatelessWidget {
   final String? thumbnailUrl;
   final VoidCallback onTap;
   final VoidCallback onChanged;
+  final VoidCallback? onDownload;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       borderRadius: BorderRadius.circular(6),
       onTap: onTap,
-      onLongPress: () => showVideoMenu(context, resumeKey: resumeKey, name: name, onChanged: onChanged),
+      onLongPress: () =>
+          showVideoMenu(context, resumeKey: resumeKey, name: name, onChanged: onChanged, onDownload: onDownload),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           AspectRatio(
             aspectRatio: 16 / 9,
-            child: VideoThumb(
-              resumeKey: resumeKey,
-              name: name,
-              localPath: localPath,
-              thumbnailUrl: thumbnailUrl,
-              width: double.infinity,
-              height: null,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                VideoThumb(
+                  resumeKey: resumeKey,
+                  name: name,
+                  localPath: localPath,
+                  thumbnailUrl: thumbnailUrl,
+                  width: double.infinity,
+                  height: null,
+                ),
+                if (onDownload != null)
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: IconButton(
+                      tooltip: '기기에 다운로드',
+                      style: IconButton.styleFrom(backgroundColor: Colors.black54, foregroundColor: Colors.white),
+                      icon: const Icon(Icons.download_outlined),
+                      onPressed: onDownload,
+                    ),
+                  ),
+              ],
             ),
           ),
           const SizedBox(height: 6),
