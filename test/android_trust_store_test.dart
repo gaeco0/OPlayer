@@ -61,26 +61,59 @@ void main() {
     await File(
       '${dir.path}/server.ext',
     ).writeAsString('basicConstraints=critical,CA:FALSE\nsubjectAltName=DNS:localhost\nextendedKeyUsage=serverAuth\n');
-    for (final entry in {'localhost.pem': '2', 'expired-localhost.pem': '-1'}.entries) {
-      await run([
-        'x509',
-        '-req',
-        '-in',
-        'localhost.csr',
-        '-CA',
-        'ca.pem',
-        '-CAkey',
-        'ca-key.pem',
-        '-CAcreateserial',
-        '-out',
-        entry.key,
-        '-days',
-        entry.value,
-        '-sha256',
-        '-extfile',
-        'server.ext',
-      ]);
-    }
+    await run([
+      'x509',
+      '-req',
+      '-in',
+      'localhost.csr',
+      '-CA',
+      'ca.pem',
+      '-CAkey',
+      'ca-key.pem',
+      '-CAcreateserial',
+      '-out',
+      'localhost.pem',
+      '-days',
+      '2',
+      '-sha256',
+      '-extfile',
+      'server.ext',
+    ]);
+    // New OpenSSL versions reject negative -days. Give the expired fixture an
+    // explicit, correctly ordered validity interval in the past instead.
+    await File('${dir.path}/index.txt').writeAsString('');
+    await File('${dir.path}/serial').writeAsString('1000\n');
+    await File('${dir.path}/ca.cnf').writeAsString('''
+[ca]
+default_ca = test_ca
+[test_ca]
+database = index.txt
+serial = serial
+new_certs_dir = .
+certificate = ca.pem
+private_key = ca-key.pem
+default_md = sha256
+policy = test_policy
+[test_policy]
+commonName = supplied
+''');
+    await run([
+      'ca',
+      '-batch',
+      '-config',
+      'ca.cnf',
+      '-in',
+      'localhost.csr',
+      '-out',
+      'expired-localhost.pem',
+      '-startdate',
+      '20000101000000Z',
+      '-enddate',
+      '20000102000000Z',
+      '-extfile',
+      'server.ext',
+      '-notext',
+    ]);
     final ca = File('${dir.path}/ca.pem').readAsStringSync();
     var current = ca;
     messenger.setMockMethodCallHandler(AndroidTrustStore.channel, (call) async {
