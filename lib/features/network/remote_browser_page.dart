@@ -14,6 +14,7 @@ import '../browser/swipe_delete_tile.dart';
 import '../../core/file_deletion.dart';
 import '../player/player_screen.dart';
 import '../photos/photo_viewer.dart';
+import '../web/download_manager.dart';
 
 /// SMB / FTP / WebDAV / DLNA / 클라우드 공용 폴더 브라우저
 class RemoteBrowserPage extends StatefulWidget {
@@ -217,6 +218,22 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
     );
   }
 
+  Future<void> _download(RemoteEntry entry) async {
+    try {
+      final manager = DownloadManager.instance;
+      await manager.addResource(widget.source, entry);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${entry.name} 다운로드를 추가했습니다'),
+          action: SnackBarAction(label: '다운로드 보기', onPressed: manager.openDownloads),
+        ),
+      );
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('다운로드를 추가하지 못했습니다: $error')));
+    }
+  }
+
   Widget _body() {
     if (_loading) return const ScrollablePlaceholder(child: Center(child: CircularProgressIndicator()));
     if (_error != null) {
@@ -235,7 +252,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
 
     Widget fileTile(RemoteEntry e, {required bool grid}) {
       if (!e.isMedia) {
-        // 동영상만 표시를 끈 경우: 그 외 파일은 정보만
+        // Non-media files keep their original extension and bytes, too.
         return ListTile(
           leading: SizedBox(
             width: 96,
@@ -243,6 +260,11 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
           ),
           title: Text(e.name, maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: Text(formatSize(e.size), style: TextStyle(fontSize: 12, color: OColors.of(context).textSecondary)),
+          trailing: IconButton(
+            tooltip: '기기에 다운로드',
+            icon: const Icon(Icons.download_outlined),
+            onPressed: () => _download(e),
+          ),
         );
       }
       final key = e.directUrl ?? src.keyFor(e.path);
@@ -254,6 +276,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
           thumbnailUrl: e.thumbnailUrl,
           onTap: () => _play(e),
           onChanged: () => setState(() {}),
+          onDownload: () => _download(e),
         );
       }
       return VideoListTile(
@@ -266,6 +289,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
         hasSubtitle: MediaSource.matchSubtitles(e, _all).isNotEmpty,
         onTap: () => _play(e),
         onChanged: () => setState(() {}),
+        onDownload: () => _download(e),
       );
     }
 

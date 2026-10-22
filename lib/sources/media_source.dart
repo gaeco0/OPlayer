@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../core/media_item.dart';
 import '../core/media_utils.dart';
+import '../core/network/network_service.dart';
 
 /// 원격 폴더 항목
 class RemoteEntry {
@@ -58,6 +61,87 @@ abstract class MediaSource {
   Future<MediaItem?> itemForPath(String path, String title) async => null;
 
   String keyFor(String path) => '$scheme://$id$path';
+
+  /// Resolve fresh credentials/URLs on every attempt. The target is a private
+  /// .part file; the download manager publishes it only after successful EOF.
+  Future<void> download(
+    RemoteEntry entry,
+    File target, {
+    void Function(int received, int total)? onProgress,
+    Future<void>? cancelled,
+  }) async {
+    if (entry.isDir) throw UnsupportedError('폴더 다운로드는 지원하지 않습니다');
+    final client = IOClient(NetworkService.instance.createHttpClient());
+    MediaItem? item;
+    var stopped = false;
+    var finished = false;
+    cancelled?.then((_) {
+      if (finished) return;
+      stopped = true;
+      client.close();
+    });
+    void check() {
+      if (stopped) throw StateError('다운로드가 중단되었습니다');
+    }
+
+    try {
+      check();
+      item = await itemFor(entry, const []).resolve();
+      check();
+      final uri = Uri.parse(item.uri);
+      if (!['http', 'https'].contains(uri.scheme)) throw UnsupportedError('다운로드를 지원하지 않는 주소입니다');
+      var offset = await target.exists() ? await target.length() : 0;
+      final request = http.AbortableRequest('GET', uri, abortTrigger: cancelled)
+        ..headers.addAll(item.headers ?? const {});
+      request.headers['Accept-Encoding'] = 'identity';
+      if (offset > 0) {
+        request.headers['Range'] = 'bytes=$offset-';
+        if (entry.modified != null) request.headers['If-Range'] = HttpDate.format(entry.modified!.toUtc());
+      }
+      final response = await client.send(request).timeout(const Duration(seconds: 30));
+      check();
+      var total = response.contentLength ?? 0;
+      if (response.statusCode == 200) {
+        offset = 0; // Range unsupported or source changed: safely restart.
+      } else if (response.statusCode == 206) {
+        final range = RegExp(r'^bytes (\d+)-(\d+)/(\d+)$').firstMatch(response.headers['content-range'] ?? '');
+        if (range == null ||
+            int.parse(range[1]!) != offset ||
+            int.parse(range[2]!) < offset ||
+            int.parse(range[2]!) >= int.parse(range[3]!)) {
+          throw const HttpException('이어받기 응답 범위가 올바르지 않습니다');
+        }
+        total = int.parse(range[3]!);
+      } else {
+        // A 416 does not prove that an old partial file matches the new source.
+        if (response.statusCode == 416 && await target.exists()) await target.delete();
+        throw HttpException('원격 파일 다운로드 실패 (HTTP ${response.statusCode})');
+      }
+      var received = offset;
+      onProgress?.call(received, total);
+      final sink = target.openWrite(mode: offset > 0 ? FileMode.append : FileMode.write);
+      try {
+        await sink.addStream(
+          response.stream.timeout(const Duration(seconds: 60)).map((chunk) {
+            check();
+            received += chunk.length;
+            onProgress?.call(received, total);
+            return chunk;
+          }),
+        );
+        await sink.flush();
+      } finally {
+        await sink.close();
+      }
+      check();
+      if (total > 0 && received != total) throw const HttpException('원격 파일을 끝까지 받지 못했습니다');
+      onProgress?.call(received, received);
+    } finally {
+      finished = true;
+      client.close();
+      await item?.onRelease?.call();
+    }
+  }
 
   /// 업로드(다운로드 저장 위치로 사용) 지원 여부
   bool get canUpload => false;

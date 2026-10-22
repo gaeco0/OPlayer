@@ -9,6 +9,7 @@ import '../../core/media_utils.dart';
 import '../../core/resource_locks.dart';
 import '../settings/privacy_settings.dart';
 import '../settings/resource_access_view.dart';
+import '../photos/photo_viewer.dart';
 import '../../sources/server_store.dart';
 import '../../sources/source_registry.dart';
 import '../player/player_screen.dart';
@@ -76,7 +77,7 @@ class DownloadsPage extends StatelessWidget {
                 if (m.tasks.isEmpty) {
                   return Center(
                     child: Text(
-                      '다운로드한 동영상이 없습니다\n웹 브라우저에서 영상을 찾아 받아보세요',
+                      '다운로드한 파일이 없습니다\n웹 브라우저나 원격 저장소에서 파일을 다운로드해 보세요',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: OColors.of(context).textSecondary),
                     ),
@@ -112,7 +113,7 @@ class _Tile extends StatelessWidget {
             : '${t.phase == null ? '' : '${t.phase} · '}${formatSize(t.received)}${t.total > 0 ? ' / ${formatSize(t.total)}' : ''} ${_speed(t.speed)}',
       DownloadStatus.paused => '일시정지 · ${((t.progress ?? 0) * 100).toStringAsFixed(0)}%',
       DownloadStatus.done =>
-        '완료 · ${formatSize(t.total > 0 && t.kind == DownloadKind.direct ? t.total : t.received)}'
+        '완료 · ${formatSize(t.total > 0 && t.kind != DownloadKind.hls ? t.total : t.received)}'
             '${t.note == null ? '' : '\n${t.note}'}',
       DownloadStatus.failed => '실패: ${t.error ?? ''}',
     };
@@ -129,11 +130,15 @@ class _Tile extends StatelessWidget {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('파일을 찾을 수 없습니다')));
         return;
       }
-      await Navigator.of(context).push(PlayerScreen.route([item], 0));
+      if (isImage(t.fileName)) {
+        await Navigator.of(context).push(PhotoViewer.route([item], 0));
+      } else {
+        await Navigator.of(context).push(PlayerScreen.route([item], 0));
+      }
     }
 
     return ListTile(
-      onTap: t.status == DownloadStatus.done ? play : null,
+      onTap: t.status == DownloadStatus.done && (isPlayable(t.fileName) || isImage(t.fileName)) ? play : null,
       leading: SizedBox(
         width: 40,
         height: 40,
@@ -148,9 +153,19 @@ class _Tile extends StatelessWidget {
               ),
             Icon(
               switch (t.status) {
-                DownloadStatus.done => Icons.play_circle_outline,
+                DownloadStatus.done =>
+                  isImage(t.fileName)
+                      ? Icons.image_outlined
+                      : isPlayable(t.fileName)
+                      ? Icons.play_circle_outline
+                      : Icons.insert_drive_file_outlined,
                 DownloadStatus.failed => Icons.error_outline,
-                _ => t.kind == DownloadKind.hls ? Icons.stream : Icons.movie_outlined,
+                _ =>
+                  t.kind == DownloadKind.hls
+                      ? Icons.stream
+                      : t.kind == DownloadKind.resource
+                      ? Icons.download_outlined
+                      : Icons.movie_outlined,
               },
               size: t.status == DownloadStatus.done ? 32 : 20,
               color: t.status == DownloadStatus.failed ? Colors.redAccent : OColors.of(context).accent,

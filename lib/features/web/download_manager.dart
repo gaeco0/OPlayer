@@ -15,11 +15,12 @@ import '../../core/settings.dart';
 import '../../core/resource_locks.dart';
 import '../../sources/server_store.dart';
 import '../../sources/source_registry.dart';
+import '../../sources/media_source.dart';
 import 'hls.dart';
 import 'browser_download_transport.dart';
 import 'download_foreground.dart';
 
-enum DownloadKind { direct, hls }
+enum DownloadKind { direct, hls, resource }
 
 enum DownloadStatus { queued, running, paused, done, failed }
 
@@ -34,12 +35,18 @@ class DownloadTask {
     this.hlsPlaylists = const {},
     this.pageUrl,
     this.outputQuality = OutputQuality.original,
+    this.resourceSourceId,
+    this.resourceScheme,
+    this.resourceEntry,
     DateTime? createdAt,
   }) : createdAt = createdAt ?? DateTime.now();
 
   final String id;
   final String url;
   final OutputQuality outputQuality;
+  final String? resourceSourceId;
+  final String? resourceScheme;
+  final RemoteEntry? resourceEntry;
   bool outputDone = false;
   String fileName;
   DownloadKind kind;
@@ -107,6 +114,16 @@ class DownloadTask {
     'ld': localDone,
     'up': uploading,
     'rk': remoteKey,
+    if (resourceEntry != null)
+      'source': {
+        'id': resourceSourceId,
+        'scheme': resourceScheme,
+        'path': resourceEntry!.path,
+        'name': resourceEntry!.name,
+        'size': resourceEntry!.size,
+        'modified': resourceEntry!.modified?.millisecondsSinceEpoch,
+        'url': resourceEntry!.directUrl,
+      },
   };
 
   static DownloadTask fromJson(Map<String, dynamic> j) =>
@@ -122,6 +139,20 @@ class DownloadTask {
           headers: (j['h'] as Map?)?.cast<String, String>() ?? const {},
           pageUrl: j['page'] as String?,
           createdAt: DateTime.fromMillisecondsSinceEpoch(j['c'] as int),
+          resourceSourceId: j['source']?['id'] as String?,
+          resourceScheme: j['source']?['scheme'] as String?,
+          resourceEntry: j['source'] == null
+              ? null
+              : RemoteEntry(
+                  path: j['source']['path'] as String,
+                  name: j['source']['name'] as String,
+                  size: j['source']['size'] as int? ?? 0,
+                  modified: j['source']['modified'] == null
+                      ? null
+                      : DateTime.fromMillisecondsSinceEpoch(j['source']['modified'] as int),
+                  directUrl: j['source']['url'] as String?,
+                  isDir: false,
+                ),
         )
         ..outputDone = j['outputDone'] == true
         ..status = DownloadStatus.values[j['s'] as int]
@@ -151,6 +182,10 @@ class DownloadManager extends ChangeNotifier {
   final _cancel = <String>{};
   final _running = <String>{};
   final _uploadCancellation = <String, Completer<void>>{};
+  final _resourceCancellation = <String, Completer<void>>{};
+  final _resourceFinished = <String, Completer<void>>{};
+  final _discoveredSources = <String, MediaSource>{};
+  final _reservedPaths = <String>{};
   final _clients = <String, http.Client>{};
   final _browserClients = <http.Client, BrowserDownloadTransport>{};
   late SharedPreferences _prefs;
@@ -276,6 +311,8 @@ class DownloadManager extends ChangeNotifier {
       _cancel.add(t.id);
       final cancellation = _uploadCancellation[t.id];
       if (cancellation != null && !cancellation.isCompleted) cancellation.complete();
+      final resourceCancellation = _resourceCancellation[t.id];
+      if (resourceCancellation != null && !resourceCancellation.isCompleted) resourceCancellation.complete();
       _clients.remove(t.id)?.close();
     }
     t.status = DownloadStatus.paused;
@@ -293,6 +330,7 @@ class DownloadManager extends ChangeNotifier {
   Future<void> remove(DownloadTask t, {bool deleteFile = false}) async {
     if (t.status == DownloadStatus.running) pause(t);
     tasks.remove(t);
+    await _resourceFinished[t.id]?.future;
     final sp = t.savePath;
     if (sp != null) {
       // .part(받다 만 파일)는 항상, 원격 저장용 캐시 파일도 항상, 받은 파일은 요청할 때만 삭제
@@ -305,6 +343,28 @@ class DownloadManager extends ChangeNotifier {
     }
     await _cleanupTemp(t);
     _changed(immediate: true);
+  }
+
+  /// A resource file is copied byte-for-byte to the device, independent of the
+  /// browser's transcoding preset and remote upload destination.
+  Future<DownloadTask> addResource(MediaSource source, RemoteEntry entry) async {
+    if (entry.isDir) throw UnsupportedError('파일을 선택해 주세요. 폴더 다운로드는 지원하지 않습니다');
+    await ResourceLocks.instance.requireAccess(source.keyFor(entry.path));
+    await ResourceLocks.instance.requireAccess(downloadsResourceKey);
+    final task = DownloadTask(
+      id: DateTime.now().microsecondsSinceEpoch.toRadixString(36),
+      url: source.keyFor(entry.path),
+      fileName: resourceDownloadName(entry.name),
+      kind: DownloadKind.resource,
+      resourceSourceId: source.id,
+      resourceScheme: source.scheme,
+      resourceEntry: entry,
+    )..total = entry.size;
+    if (source.scheme == 'dlna') _discoveredSources[source.id] = source;
+    tasks.insert(0, task);
+    _changed(immediate: true);
+    _schedule();
+    return task;
   }
 
   /// 목록 정리. 진행 중·대기 중 항목은 남긴다.
@@ -336,8 +396,10 @@ class DownloadManager extends ChangeNotifier {
     t.status = DownloadStatus.running;
     _cancel.remove(t.id);
     _changed();
-    final client = IOClient(NetworkService.instance.createHttpClient(browser: true));
+    if (t.kind == DownloadKind.resource) _resourceFinished[t.id] = Completer<void>();
+    final client = IOClient(NetworkService.instance.createHttpClient(browser: t.kind != DownloadKind.resource));
     _clients[t.id] = client;
+    String? reservedPath;
     try {
       // Establish Android foreground priority before the first request or file write.
       await _foreground?.update(downloadNotificationState(tasks));
@@ -353,17 +415,22 @@ class DownloadManager extends ChangeNotifier {
       }
       // 원격 저장이면 앱 캐시에 받은 뒤 업로드하고 지운다
       final dir = t.isRemote ? await _pendingUploadDir() : await downloadDir();
-      t.savePath ??= await _uniquePath(dir, t.fileName);
+      t.savePath ??= await _uniquePath(dir, t.fileName, reserve: true);
+      reservedPath = t.savePath;
+      _reservedPaths.add(_reservationKey(reservedPath!));
       if (!(t.localDone && await File(t.savePath!).exists())) {
         t.uploading = false;
-        if (t.kind == DownloadKind.direct) {
+        if (t.kind == DownloadKind.resource) {
+          await _resource(t);
+        } else if (t.kind == DownloadKind.direct) {
           await _direct(t, client);
         } else {
           await _hls(t, client);
         }
         t.localDone = true;
       }
-      if (!t.outputDone &&
+      if (t.kind != DownloadKind.resource &&
+          !t.outputDone &&
           (t.outputQuality != OutputQuality.original ||
               (t.kind == DownloadKind.direct &&
                   ![
@@ -410,6 +477,10 @@ class DownloadManager extends ChangeNotifier {
         } catch (_) {} // Notification errors must not turn a saved file into a failed download.
       }
       _running.remove(t.id);
+      if (reservedPath != null) _reservedPaths.remove(_reservationKey(reservedPath));
+      if (t.savePath != null) _reservedPaths.remove(_reservationKey(t.savePath!));
+      _resourceCancellation.remove(t.id);
+      _resourceFinished.remove(t.id)?.complete();
       _changed(immediate: true);
       _schedule();
     }
@@ -417,6 +488,72 @@ class DownloadManager extends ChangeNotifier {
 
   void _check(DownloadTask t) {
     if (_cancel.contains(t.id)) throw _Cancelled();
+  }
+
+  Future<void> _resource(DownloadTask task) async {
+    final entry = task.resourceEntry;
+    if (entry == null) throw StateError('원격 파일 정보가 없습니다');
+    final cancellation = Completer<void>();
+    _resourceCancellation[task.id] = cancellation;
+    _check(task);
+    final server = ServerStore.instance.server(task.resourceSourceId!);
+    final account = ServerStore.instance.account(task.resourceSourceId!);
+    final MediaSource source;
+    if (server != null) {
+      await _requireDestinationAccess(serverResourceKey(server));
+      source = await SourceRegistry.instance.forServer(server, authorizedUpload: true);
+    } else if (account != null) {
+      source = SourceRegistry.instance.forAccount(account);
+    } else if (task.resourceScheme == 'dlna' && _discoveredSources.containsKey(task.resourceSourceId)) {
+      source = _discoveredSources[task.resourceSourceId]!;
+    } else {
+      throw StateError('원격 저장소가 삭제되었거나 연결되지 않았습니다. 원격 목록에서 다시 다운로드해 주세요');
+    }
+    if (source.scheme != task.resourceScheme) throw StateError('원격 저장소 종류가 변경되었습니다');
+    await _requireDestinationAccess(source.keyFor(entry.path));
+    _check(task);
+    task.phase = '${source.displayName}에서 파일 받는 중';
+    task.speed = 0;
+    _changed(immediate: true);
+    var previous = 0;
+    final elapsed = Stopwatch()..start();
+    var window = 0;
+    var first = true;
+    final part = File('${task.savePath}.part');
+    await source.download(
+      entry,
+      part,
+      cancelled: cancellation.future,
+      onProgress: (received, total) {
+        _check(task);
+        if (first || received < previous) {
+          previous = received;
+          window = 0;
+          elapsed.reset();
+          first = false;
+        }
+        window += received - previous;
+        previous = received;
+        task.received = received;
+        task.total = total;
+        if (elapsed.elapsedMilliseconds >= 1000) {
+          task.speed = window * 1000 / elapsed.elapsedMilliseconds;
+          elapsed.reset();
+          window = 0;
+        }
+        _changed();
+      },
+    );
+    _check(task);
+    // Never overwrite another file created while this transfer was paused.
+    if (await File(task.savePath!).exists()) {
+      task.savePath = await _uniquePath(File(task.savePath!).parent, task.fileName, reserve: true);
+    }
+    _check(task);
+    await part.rename(task.savePath!);
+    task.fileName = p.basename(task.savePath!);
+    task.received = task.total = await File(task.savePath!).length();
+    task.outputDone = true;
   }
 
   Future<void> _convertTask(DownloadTask t) async {
@@ -862,11 +999,17 @@ class DownloadManager extends ChangeNotifier {
     return t.length > 120 ? t.substring(0, 120) : t;
   }
 
-  static Future<String> _uniquePath(Directory dir, String name) async {
+  String _reservationKey(String path) => Platform.isWindows ? p.normalize(path).toLowerCase() : path;
+
+  Future<String> _uniquePath(Directory dir, String name, {bool reserve = false}) async {
     final base = p.basenameWithoutExtension(name), ext = p.extension(name);
     var candidate = p.join(dir.path, name);
     var i = 1;
-    while (await File(candidate).exists() || await File('$candidate.part').exists()) {
+    while (await File(candidate).exists() ||
+        await File('$candidate.part').exists() ||
+        (reserve
+            ? !_reservedPaths.add(_reservationKey(candidate))
+            : _reservedPaths.contains(_reservationKey(candidate)))) {
       candidate = p.join(dir.path, '$base ($i)$ext');
       i++;
     }
@@ -890,6 +1033,27 @@ class DownloadManager extends ChangeNotifier {
   }
 
   void _persist() => _prefs.setStringList(_k, tasks.map((t) => jsonEncode(t.toJson())).toList());
+}
+
+String resourceDownloadName(String name) {
+  String clip(String value, int limit) {
+    final result = StringBuffer();
+    var length = 0;
+    for (final rune in value.runes) {
+      final character = String.fromCharCode(rune);
+      length += utf8.encode(character).length;
+      if (length > limit) break;
+      result.write(character);
+    }
+    return result.toString();
+  }
+
+  var safe = name.replaceAll(RegExp(r'[\\/:*?"<>|\x00-\x1f]'), '_').trim().replaceFirst(RegExp(r'[. ]+$'), '');
+  if (safe.isEmpty) safe = 'download';
+  var base = p.basenameWithoutExtension(safe);
+  final extension = clip(p.extension(safe), 30);
+  if (RegExp(r'^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$', caseSensitive: false).hasMatch(base)) base = '_$base';
+  return '${clip(base, 200)}$extension';
 }
 
 Map<String, Object?> downloadNotificationState(List<DownloadTask> tasks) {
