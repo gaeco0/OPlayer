@@ -299,7 +299,9 @@ globalThis.plugin = {
 - API Key·비밀번호는 `type: "password"`로 선언하고 `OPlayer.secret`으로 참조합니다. 로그인·다운로드 URL 발급과
   서비스별 오류 처리는 JS에서 구현합니다. 자막 파일은 현재 재생 세션의 임시 파일로 관리됩니다.
 - 기본 OpenSubtitles는 첫 도입 시 추가되며 사용자가 삭제·비활성화할 수 있습니다. 삭제 후 매 실행마다
-  다시 설치하지 않습니다. API Key·계정 등록과 할당량은 [공식 API 안내](https://opensubtitles.tawk.help/article/getting-started)를 따릅니다.
+  다시 설치하지 않습니다. 1.0.1부터 API Key만으로 로그인 없이 검색·다운로드하며 사용자 이름·비밀번호는
+  선택 사항입니다. 계정을 입력하면 해당 계정으로 로그인합니다. 로그인 실패 시 익명 다운로드로 자동 전환하지
+  않으며 다운로드 POST를 자동 재전송하지 않습니다. 키 발급과 할당량은 [공식 API 안내](https://opensubtitles.tawk.help/article/getting-started)를 따릅니다.
 
 ## 테스트
 
