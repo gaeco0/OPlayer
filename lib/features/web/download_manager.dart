@@ -698,6 +698,14 @@ class DownloadManager extends ChangeNotifier {
       cancelled: cancellation.future,
       onProgress: (sent) {
         _check(t);
+        if (sent < last) {
+          // A WebDAV connection retry starts a new PUT from byte zero.
+          window = 0;
+          windowStart = DateTime.now();
+          last = 0;
+          t.speed = 0;
+          t.phase = '${cfg.name}(으)로 업로드 다시 시도 중';
+        }
         window += sent - last;
         last = sent;
         t.received = sent;

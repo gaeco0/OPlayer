@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:crypto/crypto.dart';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -116,7 +117,9 @@ void main() {
   });
 
   test('permission rejection produces an actionable error', () async {
+    var requests = 0;
     server.listen((request) async {
+      requests++;
       await request.drain<void>();
       request.response.statusCode = 403;
       await request.response.close();
@@ -125,6 +128,92 @@ void main() {
       source.upload(file, '/', 'video.mp4'),
       throwsA(isA<HttpException>().having((e) => e.message, 'message', contains('쓰기 권한'))),
     );
+    expect(requests, 1);
+  });
+
+  test('a broken connection retries a large PUT with a fresh connection and the complete file', () async {
+    final handle = await file.open(mode: FileMode.append);
+    await handle.truncate(32 * 1024 * 1024);
+    await handle.close();
+    final expected = await sha256.bind(file.openRead()).first;
+    var puts = 0;
+    final progress = <int>[];
+    server.listen((request) async {
+      puts++;
+      if (puts == 1) {
+        final socket = await request.response.detachSocket(writeHeaders: false);
+        socket.destroy(); // Simulate a NAS/proxy disconnecting during PUT.
+        return;
+      }
+      expect(request.headers.value('connection'), 'close');
+      expect(request.contentLength, 32 * 1024 * 1024);
+      expect(await sha256.bind(request).first, expected);
+      request.response.statusCode = 201;
+      await request.response.close();
+    });
+    expect(await source.upload(file, '/videos', 'retry.mp4', onProgress: progress.add), '/videos/retry.mp4');
+    expect(puts, 2);
+    expect(progress.where((n) => n == 0).length, 2);
+    expect(progress.last, 32 * 1024 * 1024);
+    expect(await file.exists(), true);
+  });
+
+  test('a lost final acknowledgement is retried, never assumed successful', () async {
+    var puts = 0;
+    server.listen((request) async {
+      puts++;
+      final body = await request.fold<List<int>>([], (body, chunk) => body..addAll(chunk));
+      expect(body, await file.readAsBytes());
+      if (puts == 1) {
+        final socket = await request.response.detachSocket(writeHeaders: false);
+        socket.destroy();
+      } else {
+        request.response.statusCode = 204;
+        await request.response.close();
+      }
+    });
+    expect(await source.upload(file, '/', 'retry.mp4'), '/retry.mp4');
+    expect(puts, 2);
+  });
+
+  test('repeated disconnects stop after three attempts and retain the local original', () async {
+    var puts = 0;
+    server.listen((request) async {
+      puts++;
+      final socket = await request.response.detachSocket(writeHeaders: false);
+      socket.destroy();
+    });
+    await expectLater(
+      source.upload(file, '/', 'retry.mp4'),
+      throwsA(isA<HttpException>().having((error) => error.message, 'message', contains('업로드 3회 시도'))),
+    );
+    expect(puts, 3);
+    expect(await file.length(), 500000);
+  });
+
+  test('pause before a retry does not issue another PUT', () async {
+    var puts = 0;
+    var starts = 0;
+    final cancel = Completer<void>();
+    server.listen((request) async {
+      puts++;
+      final socket = await request.response.detachSocket(writeHeaders: false);
+      socket.destroy();
+    });
+    await expectLater(
+      source.upload(
+        file,
+        '/',
+        'retry.mp4',
+        cancelled: cancel.future,
+        onProgress: (n) {
+          if (n == 0 && ++starts == 2) cancel.complete();
+        },
+      ),
+      throwsA(isA<HttpException>()),
+    );
+    expect(puts, 1);
+    expect(await file.exists(), true);
   });
 
   test('PUT also works through the app network proxy', () async {
