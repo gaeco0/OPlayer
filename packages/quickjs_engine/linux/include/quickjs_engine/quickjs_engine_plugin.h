@@ -5,14 +5,20 @@
 
 G_BEGIN_DECLS
 
+#ifdef FLUTTER_PLUGIN_IMPL
+#define QUICKJS_ENGINE_PLUGIN_EXPORT __attribute__((visibility("default")))
+#else
+#define QUICKJS_ENGINE_PLUGIN_EXPORT
+#endif
+
 typedef struct _QuickjsEnginePlugin QuickjsEnginePlugin;
 typedef struct {
   GObjectClass parent_class;
 } QuickjsEnginePluginClass;
 
-FLUTTER_PLUGIN_EXPORT GType quickjs_engine_plugin_get_type();
+QUICKJS_ENGINE_PLUGIN_EXPORT GType quickjs_engine_plugin_get_type();
 
-FLUTTER_PLUGIN_EXPORT void quickjs_engine_plugin_register_with_registrar(
+QUICKJS_ENGINE_PLUGIN_EXPORT void quickjs_engine_plugin_register_with_registrar(
     FlPluginRegistrar* registrar);
 
 G_END_DECLS
