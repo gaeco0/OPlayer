@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import '../../../app/theme.dart';
 import '../player_controller.dart';
 import 'controls_overlay.dart' show PanelKind;
+import 'online_subtitles_dialog.dart';
 
 /// nPlayer식 우측 슬라이드 패널 (배속 / 자막 / 오디오 / 화면비 / 재생목록 / 더보기)
 class SidePanel extends StatelessWidget {
@@ -210,11 +211,22 @@ class _SubtitlePanel extends StatelessWidget {
                 },
               ),
               const _Section('자막 트랙'),
+              ListTile(
+                leading: const Icon(Icons.travel_explore, color: Colors.white70),
+                title: const Text('온라인 자막 검색·적용', style: _white),
+                onTap: () => showOnlineSubtitles(context, c),
+              ),
+              if (c.onlineSubtitleBusy) const LinearProgressIndicator(),
+              if (c.onlineSubtitleError != null)
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(c.onlineSubtitleError!, style: _white),
+                ),
               _Radios<String>(
                 values: [for (final t in tracks) t.id],
                 selected: current?.id,
                 label: (id) => _trackName(tracks.firstWhere((t) => t.id == id)),
-                onChanged: (id) => c.player.setSubtitleTrack(tracks.firstWhere((t) => t.id == id)),
+                onChanged: (id) => c.selectSubtitleTrack(tracks.firstWhere((t) => t.id == id)),
               ),
               if (ext.isNotEmpty) ...[
                 const _Section('외부 자막 파일'),
@@ -223,7 +235,7 @@ class _SubtitlePanel extends StatelessWidget {
                     dense: true,
                     leading: const Icon(Icons.subtitles_outlined, color: Colors.white70),
                     title: Text(f.title, style: _white),
-                    onTap: () => c.loadExternalSubtitle(f),
+                    onTap: () => c.selectExternalSubtitle(f),
                   ),
               ],
               const _Section('싱크 (탭하면 초기화)'),

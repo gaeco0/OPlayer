@@ -14,6 +14,9 @@ import '../../core/settings.dart';
 import '../../core/resource_locks.dart';
 import '../../core/network/network_service.dart';
 import '../../core/network/local_proxy.dart';
+import '../../core/plugins/plugin.dart';
+import '../../core/plugins/plugin_store.dart';
+import '../../core/plugins/subtitle_plugins.dart';
 import '../cast/cast_controller.dart';
 
 /// 화면 비율 모드 (nPlayer: 화면 맞춤 → 가득 채우기 → 늘이기 → 16:9 → 4:3 → 원본)
@@ -151,6 +154,11 @@ class PlayerController extends ChangeNotifier {
   Timer? _sleepTimer;
   String? warning;
   final _pickedSubtitles = <SubtitleRef>[];
+  final _onlineSubtitleFiles = <File>[];
+  int _subtitleRequest = 0;
+  bool onlineSubtitleBusy = false;
+  String? onlineSubtitleError;
+  final onlineSubtitles = SubtitlePlugins(PluginStore.instance);
 
   /// 일반 재생 속도(롱프레스 2배속과 별개로 기억)
   double baseRate = 1.0;
@@ -230,6 +238,7 @@ class PlayerController extends ChangeNotifier {
       await player.setRate(baseRate);
       await _restorePlaybackSettings();
       if (st.subtitleAutoLoad) _attachSiblingSubtitles();
+      unawaited(_autoOnlineSubtitles(generation));
     } catch (e) {
       if (generation == _openGeneration) _startWatchdog?.cancel();
       if (generation == _openGeneration) error = '열 수 없습니다: $e';
@@ -312,12 +321,112 @@ class PlayerController extends ChangeNotifier {
   Future<void> loadExternalSubtitle(SubtitleRef s) => player.setSubtitleTrack(SubtitleTrack.uri(s.uri, title: s.title));
 
   Future<void> pickSubtitle(String path) async {
+    _cancelOnlineSubtitle();
     final subtitle = SubtitleRef(Uri.file(path).toString(), p.basename(path));
     if (!_pickedSubtitles.any((s) => s.uri == subtitle.uri)) {
       _pickedSubtitles.add(subtitle);
     }
     await loadExternalSubtitle(subtitle);
     notifyListeners();
+  }
+
+  void _cancelOnlineSubtitle() {
+    _subtitleRequest++;
+    onlineSubtitleBusy = false;
+    onlineSubtitleError = null;
+    notifyListeners();
+  }
+
+  Future<void> selectSubtitleTrack(SubtitleTrack track) {
+    _cancelOnlineSubtitle();
+    return player.setSubtitleTrack(track);
+  }
+
+  Future<void> selectExternalSubtitle(SubtitleRef subtitle) {
+    _cancelOnlineSubtitle();
+    return loadExternalSubtitle(subtitle);
+  }
+
+  Future<bool> applyOnlineSubtitle(
+    OPlugin plugin,
+    Map<String, dynamic> item, {
+    int? generation,
+    bool Function()? active,
+  }) async {
+    final expected = generation ?? _openGeneration;
+    if (_disposed || expected != _openGeneration) return false;
+    final ticket = ++_subtitleRequest;
+    onlineSubtitleBusy = true;
+    onlineSubtitleError = null;
+    notifyListeners();
+    File? file;
+    try {
+      final temp = await getTemporaryDirectory();
+      file = await onlineSubtitles.download(plugin, item, Directory('${temp.path}/oplayer-subtitles'));
+      if (_disposed ||
+          expected != _openGeneration ||
+          ticket != _subtitleRequest ||
+          active?.call() == false ||
+          !PluginStore.instance.enabled.any((p) => p.id == plugin.id)) {
+        return false;
+      }
+      final subtitle = SubtitleRef(Uri.file(file.path).toString(), '${plugin.name} · ${item['title']}');
+      await loadExternalSubtitle(subtitle);
+      if (_disposed || expected != _openGeneration || ticket != _subtitleRequest) return false;
+      _pickedSubtitles.add(subtitle);
+      _onlineSubtitleFiles.add(file);
+      file = null; // Owned until playback switches or the controller is disposed.
+      return true;
+    } catch (e) {
+      if (!_disposed && expected == _openGeneration && ticket == _subtitleRequest) onlineSubtitleError = '$e';
+      rethrow;
+    } finally {
+      if (file != null) await file.delete().catchError((Object _) => file!);
+      if (ticket == _subtitleRequest) {
+        onlineSubtitleBusy = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> _autoOnlineSubtitles(int generation) async {
+    if (audioOnly ||
+        externalSubtitles.isNotEmpty ||
+        player.state.tracks.subtitle.any((s) => s.id != 'auto' && s.id != 'no')) {
+      return;
+    }
+    final provider = onlineSubtitles.providers
+        .where((p) => PluginStore.instance.publicSettings(p)['autoApply'] == true)
+        .firstOrNull;
+    if (provider == null) return;
+    final ticket = ++_subtitleRequest;
+    onlineSubtitleBusy = true;
+    onlineSubtitleError = null;
+    notifyListeners();
+    try {
+      final language = '${PluginStore.instance.publicSettings(provider)['language'] ?? 'ko'}';
+      final results = await onlineSubtitles.search(provider, subtitleSearchTitle(title), language);
+      if (_disposed || generation != _openGeneration || ticket != _subtitleRequest) return;
+      if (results.items.isEmpty) {
+        onlineSubtitleError = '온라인 자막 검색 결과가 없습니다';
+      } else {
+        await applyOnlineSubtitle(provider, results.items.first, generation: generation);
+      }
+    } catch (e) {
+      if (!_disposed && generation == _openGeneration && ticket == _subtitleRequest) onlineSubtitleError = '$e';
+    } finally {
+      if (ticket == _subtitleRequest) {
+        onlineSubtitleBusy = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  void _clearOnlineSubtitleFiles() {
+    for (final file in _onlineSubtitleFiles) {
+      unawaited(file.delete().catchError((Object _) => file));
+    }
+    _onlineSubtitleFiles.clear();
   }
 
   void _onPosition(Duration pos) {
@@ -667,6 +776,10 @@ class PlayerController extends ChangeNotifier {
     videoContrast = ((values['contrast'] as num?)?.toDouble() ?? 0).clamp(-100, 100);
     videoSaturation = ((values['saturation'] as num?)?.toDouble() ?? 0).clamp(-100, 100);
     _pickedSubtitles.clear();
+    _subtitleRequest++;
+    onlineSubtitleBusy = false;
+    onlineSubtitleError = null;
+    _clearOnlineSubtitleFiles();
     await _applyAudioFilters();
     await _nativeProperty('audio-delay', '${audioDelay.inMilliseconds / 1000}');
     await _nativeProperty('sub-delay', '${subtitleDelay.inMilliseconds / 1000}');
@@ -681,6 +794,7 @@ class PlayerController extends ChangeNotifier {
   void dispose() {
     _startWatchdog?.cancel();
     _openGeneration++;
+    _subtitleRequest++;
     _mediaErrors?.cancel();
     final release = _releaseMedia;
     _releaseMedia = null;
@@ -693,7 +807,7 @@ class PlayerController extends ChangeNotifier {
       s.cancel();
     }
     saveNow();
-    player.dispose();
+    unawaited(player.dispose().whenComplete(_clearOnlineSubtitleFiles));
     super.dispose();
   }
 }

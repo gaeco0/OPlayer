@@ -25,6 +25,9 @@ class FlutterWindow : public Win32Window {
                          LPARAM const lparam) noexcept override;
 
  private:
+  void SetCompact(bool enabled);
+  bool SetFullscreen(bool enabled);
+
   // The project to run.
   flutter::DartProject project_;
 
@@ -36,6 +39,9 @@ class FlutterWindow : public Win32Window {
   std::unique_ptr<PrivacyBridge> privacy_bridge_;
   WINDOWPLACEMENT saved_placement_ = {sizeof(WINDOWPLACEMENT)};
   bool compact_ = false;
+  WINDOWPLACEMENT fullscreen_placement_ = {sizeof(WINDOWPLACEMENT)};
+  LONG_PTR fullscreen_style_ = 0;
+  bool fullscreen_ = false;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

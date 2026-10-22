@@ -36,7 +36,7 @@ String sitePluginScript(OPlugin p) =>
 
 List<ContentBlocker> pluginContentBlockers() => [
   if (!Platform.isAndroid && !Platform.isWindows)
-    for (final p in PluginStore.instance.enabled.where((p) => !p.cloud))
+    for (final p in PluginStore.instance.enabled.where((p) => p.site))
       for (final rule in (p.manifest['blockRules'] as List? ?? []).cast<Map>())
         ContentBlocker(
           trigger: ContentBlockerTrigger(
@@ -48,7 +48,7 @@ List<ContentBlocker> pluginContentBlockers() => [
 ];
 
 bool blockedBySitePlugin(String pageUrl, String requestUrl) => PluginStore.instance.enabled
-    .where((p) => !p.cloud && p.matches(pageUrl))
+    .where((p) => p.site && p.matches(pageUrl))
     .any(
       (p) => (p.manifest['blockRules'] as List? ?? []).cast<Map>().any(
         (r) => RegExp(r['urlFilter'] as String).hasMatch(requestUrl),
@@ -63,7 +63,7 @@ String siteUrlPattern(String site) {
 /// Resolves in the same pipeline for playback and download, preserving headers.
 Future<Map<String, dynamic>> resolveSiteMedia(Map<String, dynamic> media) async {
   var current = Map<String, dynamic>.of(media);
-  for (final p in PluginStore.instance.enabled.where((p) => !p.cloud).toList()) {
+  for (final p in PluginStore.instance.enabled.where((p) => p.site).toList()) {
     if (!p.matches('${media['pageUrl']}') && !p.matches('${media['referer'] ?? ''}')) continue;
     final value = await callPlugin(
       p,

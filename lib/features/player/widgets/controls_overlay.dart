@@ -25,6 +25,8 @@ class ControlsOverlay extends StatelessWidget {
     this.onCast,
     this.onMinimize,
     this.onCompact,
+    this.onFullscreen,
+    this.fullscreen = false,
   });
 
   final PlayerController c;
@@ -37,6 +39,8 @@ class ControlsOverlay extends StatelessWidget {
   final VoidCallback? onCast;
   final VoidCallback? onMinimize;
   final VoidCallback? onCompact;
+  final VoidCallback? onFullscreen;
+  final bool fullscreen;
 
   @override
   Widget build(BuildContext context) {
@@ -93,6 +97,8 @@ class ControlsOverlay extends StatelessWidget {
                     onCast: onCast,
                     onMinimize: onMinimize,
                     onCompact: onCompact,
+                    onFullscreen: onFullscreen,
+                    fullscreen: fullscreen,
                   ),
                   Expanded(
                     child: Row(
@@ -136,6 +142,8 @@ class _TopBar extends StatelessWidget {
     this.onCast,
     this.onMinimize,
     this.onCompact,
+    this.onFullscreen,
+    this.fullscreen = false,
   });
   final PlayerController c;
   final VoidCallback onBack;
@@ -144,6 +152,8 @@ class _TopBar extends StatelessWidget {
   final VoidCallback? onCast;
   final VoidCallback? onMinimize;
   final VoidCallback? onCompact;
+  final VoidCallback? onFullscreen;
+  final bool fullscreen;
 
   @override
   Widget build(BuildContext context) {
@@ -175,6 +185,12 @@ class _TopBar extends StatelessWidget {
             ),
           ),
           if (onMinimize != null) _IconBtn(icon: Icons.minimize, tooltip: '접어서 계속 재생', onTap: onMinimize),
+          if (onFullscreen != null)
+            _IconBtn(
+              icon: fullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+              tooltip: fullscreen ? '전체화면 해제 (Alt+Enter)' : '전체화면 (Alt+Enter)',
+              onTap: onFullscreen,
+            ),
           if (onCompact != null) _IconBtn(icon: Icons.picture_in_picture, tooltip: '작은 창', onTap: onCompact),
           if (onCast != null) _IconBtn(icon: Icons.cast, tooltip: '외부 기기로 재생', onTap: onCast),
           if (onPip != null) _IconBtn(icon: Icons.picture_in_picture_alt, tooltip: '화면 속 화면', onTap: onPip),

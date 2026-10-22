@@ -91,7 +91,8 @@ Future<bool> showPluginSettingsDialog(BuildContext context, OPlugin plugin) asyn
                               labelText: field['label'] as String,
                               helperText: field['description'] as String?,
                             ),
-                            onChanged: (v) => values[field['key'] as String] = v.trim(),
+                            onChanged: (v) =>
+                                values[field['key'] as String] = field['type'] == 'password' ? v : v.trim(),
                             validator: (v) {
                               final text = (v ?? '').trim();
                               if (field['required'] == true && text.isEmpty) return '${field['label']} 값을 입력해 주세요';

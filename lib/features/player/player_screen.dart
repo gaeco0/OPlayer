@@ -64,6 +64,8 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   bool _backgrounded = false;
   bool _hideNotification = false;
   bool _compactWindow = false;
+  bool _fullscreen = false;
+  bool _windowChanging = false;
   final _session = PlaybackSession.instance;
   final _pipSubscriptions = <StreamSubscription>[];
 
@@ -263,6 +265,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
 
   Future<void> _minimize({bool background = false}) async {
     if (_castingCurrent || _session.minimized) return;
+    if (_fullscreen) await _setFullscreen(false);
     if (_compactWindow) await _setCompact(false);
     await _session.minimize(c, background: background || Platform.isAndroid);
     if (!mounted) return;
@@ -271,11 +274,42 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   }
 
   Future<void> _setCompact(bool compact) async {
+    if (_windowChanging) return;
+    _windowChanging = true;
     try {
       await DesktopWindow.compact(compact);
-      if (mounted) setState(() => _compactWindow = compact);
+      if (!mounted) {
+        if (compact) await DesktopWindow.compact(false);
+      } else {
+        setState(() {
+          _compactWindow = compact;
+          if (compact) _fullscreen = false;
+        });
+      }
     } on PlatformException catch (e) {
       if (mounted) _showToast(e.message ?? '작은 창으로 전환할 수 없습니다');
+    } finally {
+      _windowChanging = false;
+    }
+  }
+
+  Future<void> _setFullscreen(bool enabled) async {
+    if (!Platform.isWindows || _windowChanging) return;
+    _windowChanging = true;
+    try {
+      await DesktopWindow.fullscreen(enabled);
+      if (!mounted) {
+        if (enabled) await DesktopWindow.fullscreen(false);
+      } else {
+        setState(() {
+          _fullscreen = enabled;
+          if (enabled) _compactWindow = false;
+        });
+      }
+    } on PlatformException catch (e) {
+      if (mounted) _showToast(e.message ?? '전체화면으로 전환할 수 없습니다');
+    } finally {
+      _windowChanging = false;
     }
   }
 
@@ -356,6 +390,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       c.dispose();
     }
     if (_compactWindow) DesktopWindow.compact(false);
+    if (_fullscreen) DesktopWindow.fullscreen(false);
     _focus.dispose();
     if (ownsSession) WakelockPlus.disable();
     if (isMobile && ownsSession) {
@@ -407,7 +442,11 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     final k = e.logicalKey;
     final shift = HardwareKeyboard.instance.isShiftPressed;
     final ks = AppSettings.instance.keyboardSeekSeconds;
-    if (k == LogicalKeyboardKey.space || k == LogicalKeyboardKey.keyK) {
+    if (Platform.isWindows &&
+        (k == LogicalKeyboardKey.enter || k == LogicalKeyboardKey.numpadEnter) &&
+        HardwareKeyboard.instance.isAltPressed) {
+      if (e is KeyDownEvent) unawaited(_setFullscreen(!_fullscreen));
+    } else if (k == LogicalKeyboardKey.space || k == LogicalKeyboardKey.keyK) {
       c.player.playOrPause();
       c.showControls();
     } else if (k == LogicalKeyboardKey.arrowLeft) {
@@ -448,7 +487,13 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       final m = c.tapAB();
       if (m != null) g?.flashText(m);
     } else if (k == LogicalKeyboardKey.escape) {
-      if (!_closePanelIfOpen()) Navigator.maybePop(context);
+      if (!_closePanelIfOpen()) {
+        if (_fullscreen) {
+          unawaited(_setFullscreen(false));
+        } else {
+          Navigator.maybePop(context);
+        }
+      }
     } else {
       return KeyEventResult.ignored;
     }
@@ -520,7 +565,12 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     ],
     child: Theme(
       data: OTheme.dark(),
-      child: Builder(builder: _buildContent),
+      child: Focus(
+        focusNode: _focus,
+        autofocus: true,
+        onKeyEvent: _onKey,
+        child: Builder(builder: _buildContent),
+      ),
     ),
   );
 
@@ -613,83 +663,80 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _closePanelIfOpen();
       },
-      child: Focus(
-        focusNode: _focus,
-        autofocus: true,
-        onKeyEvent: _onKey,
-        child: Scaffold(
-          backgroundColor: Colors.black,
-          body: Stack(
-            children: [
-              Positioned.fill(child: _video()),
-              if (!_pip.active) ...[
-                Positioned.fill(
-                  child: GestureLayer(
-                    key: _gestureKey,
-                    c: c,
-                    onTapOutsidePanel: _closePanelIfOpen,
-                    seekStep: AppSettings.instance.doubleTapSeekSeconds,
-                  ),
-                ),
-                if (c.error != null)
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(16),
-                      margin: const EdgeInsets.all(32),
-                      decoration: BoxDecoration(color: const Color(0xCC000000), borderRadius: BorderRadius.circular(8)),
-                      child: Text(
-                        c.error!,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ),
-                Positioned.fill(
-                  child: ControlsOverlay(
-                    c: c,
-                    onBack: () => Navigator.maybePop(context),
-                    onPanel: _openPanel,
-                    onToast: _showToast,
-                    onRotate: PlayerOrientation.supported ? _rotate : null,
-                    onPip: _pip.available && (c.audioOnly || (c.player.state.width ?? 0) > 0) ? _enterPip : null,
-                    onMinimize: _minimize,
-                    onCompact: Platform.isWindows ? () => _setCompact(true) : null,
-                    onCast: _openCast,
-                    orientationIcon: switch (_orient) {
-                      PlaybackOrientation.landscape => Icons.stay_current_landscape,
-                      PlaybackOrientation.portrait => Icons.stay_current_portrait,
-                      PlaybackOrientation.auto => Icons.screen_rotation,
-                    },
-                  ),
-                ),
-                if (_resumeOffer != null) _resumeChip(),
-                if (_toast != null)
-                  Positioned(
-                    top: 72,
-                    left: 0,
-                    right: 0,
-                    child: IgnorePointer(
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xCC000000),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(_toast!, style: const TextStyle(color: Colors.white, fontSize: 14)),
-                        ),
-                      ),
-                    ),
-                  ),
-                SidePanel(
-                  kind: _panel,
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Stack(
+          children: [
+            Positioned.fill(child: _video()),
+            if (!_pip.active) ...[
+              Positioned.fill(
+                child: GestureLayer(
+                  key: _gestureKey,
                   c: c,
-                  onClose: () => setState(() => _panel = PanelKind.none),
-                  onToast: _showToast,
+                  onTapOutsidePanel: _closePanelIfOpen,
+                  seekStep: AppSettings.instance.doubleTapSeekSeconds,
                 ),
-              ],
+              ),
+              if (c.error != null)
+                Center(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    margin: const EdgeInsets.all(32),
+                    decoration: BoxDecoration(color: const Color(0xCC000000), borderRadius: BorderRadius.circular(8)),
+                    child: Text(
+                      c.error!,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
+              Positioned.fill(
+                child: ControlsOverlay(
+                  c: c,
+                  onBack: () => Navigator.maybePop(context),
+                  onPanel: _openPanel,
+                  onToast: _showToast,
+                  onRotate: PlayerOrientation.supported ? _rotate : null,
+                  onPip: _pip.available && (c.audioOnly || (c.player.state.width ?? 0) > 0) ? _enterPip : null,
+                  onMinimize: _minimize,
+                  onCompact: Platform.isWindows ? () => _setCompact(true) : null,
+                  onFullscreen: Platform.isWindows ? () => _setFullscreen(!_fullscreen) : null,
+                  fullscreen: _fullscreen,
+                  onCast: _openCast,
+                  orientationIcon: switch (_orient) {
+                    PlaybackOrientation.landscape => Icons.stay_current_landscape,
+                    PlaybackOrientation.portrait => Icons.stay_current_portrait,
+                    PlaybackOrientation.auto => Icons.screen_rotation,
+                  },
+                ),
+              ),
+              if (_resumeOffer != null) _resumeChip(),
+              if (_toast != null)
+                Positioned(
+                  top: 72,
+                  left: 0,
+                  right: 0,
+                  child: IgnorePointer(
+                    child: Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xCC000000),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(_toast!, style: const TextStyle(color: Colors.white, fontSize: 14)),
+                      ),
+                    ),
+                  ),
+                ),
+              SidePanel(
+                kind: _panel,
+                c: c,
+                onClose: () => setState(() => _panel = PanelKind.none),
+                onToast: _showToast,
+              ),
             ],
-          ),
+          ],
         ),
       ),
     );

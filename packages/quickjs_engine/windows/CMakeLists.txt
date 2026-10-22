@@ -9,6 +9,9 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../native" "${CMAKE_BINARY_DIR}/qu
 
 add_library(${PLUGIN_NAME} SHARED "quickjs_engine_plugin.cpp")
 apply_standard_settings(${PLUGIN_NAME})
+if(MSVC)
+  target_compile_options(${PLUGIN_NAME} PRIVATE /utf-8)
+endif()
 set_target_properties(${PLUGIN_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
 target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_PLUGIN_IMPL)
 target_include_directories(${PLUGIN_NAME} INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
