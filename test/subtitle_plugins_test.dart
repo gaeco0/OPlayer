@@ -61,7 +61,7 @@ void main() {
         }
         expect(r.headers['api-key'], 'test-key');
         if (r.url.path.endsWith('/subtitles')) {
-          expect(r.url.queryParameters['query'], 'Example S01E02');
+          expect(r.url.queryParameters['query'], 'example s01e02');
           expect(r.url.queryParameters['languages'], 'ko');
           expect(r.url.queryParameters['page'], '2');
           return http.Response(
@@ -110,6 +110,119 @@ void main() {
       expect(jsonEncode(prefs.get(key)), isNot(contains('test-key')));
       expect(jsonEncode(prefs.get(key)), isNot(contains('test-password')));
     }
+  });
+
+  test('API-key-only settings search and download without login; canonical GET redirects are followed', () async {
+    await store.setCredentials(provider.id, {'apiKey': 'test-key'});
+    addTearDown(
+      () => store.setCredentials(provider.id, {
+        'apiKey': 'test-key',
+        'username': 'test-user',
+        'password': 'test-password',
+        'language': 'ko',
+      }),
+    );
+    final requests = <http.Request>[];
+    final service = SubtitlePlugins(
+      store,
+      clientFactory: () => MockClient((r) async {
+        requests.add(r);
+        expect(r.headers.containsKey('authorization'), false);
+        expect(r.url.path.endsWith('/login'), false);
+        if (r.url.host == 'dl.opensubtitles.com')
+          return http.Response('1\n00:00:00,000 --> 00:00:01,000\nAnonymous\n', 200);
+        expect(r.headers['api-key'], 'test-key');
+        if (r.url.path.endsWith('/subtitles')) {
+          expect(r.url.queryParameters['query'], 'example movie');
+          expect(r.url.query, contains('query=example+movie'));
+          if (!r.url.queryParameters.containsKey('canonical')) {
+            return http.Response('', 301, headers: {'location': '/api/v1/subtitles?canonical=1&query=example+movie'});
+          }
+          return http.Response(
+            jsonEncode({
+              'data': [
+                {
+                  'attributes': {
+                    'files': [
+                      {'file_id': 42, 'file_name': 'Example.srt'},
+                    ],
+                  },
+                },
+              ],
+            }),
+            200,
+          );
+        }
+        expect(r.url.path, '/api/v1/download');
+        expect(r.method, 'POST');
+        expect(jsonDecode(r.body)['file_id'], 42);
+        return http.Response(jsonEncode({'link': 'https://dl.opensubtitles.com/download/anonymous'}), 200);
+      }),
+    );
+    final results = await service.search(provider, 'Example Movie', 'ko');
+    final file = await service.download(provider, results.items.first, temp);
+    expect(await file.readAsString(), contains('Anonymous'));
+    expect(requests.length, 4);
+    expect(
+      provider.settings.where((f) => ['username', 'password'].contains(f['key'])).every((f) => f['required'] != true),
+      true,
+    );
+  });
+
+  test('failed account login never falls back to anonymous quota or repeats a download POST', () async {
+    var calls = 0;
+    final failedLogin = SubtitlePlugins(
+      store,
+      clientFactory: () => MockClient((r) async {
+        calls++;
+        expect(r.url.path, '/api/v1/login');
+        return http.Response('{}', 401);
+      }),
+    );
+    await expectLater(
+      failedLogin.download(provider, {
+        'data': {'fileId': 42},
+      }, temp),
+      throwsA(predicate((e) => '$e'.contains('계정 인증'))),
+    );
+    expect(calls, 1);
+    await store.setCredentials(provider.id, {'apiKey': 'test-key'});
+    addTearDown(
+      () => store.setCredentials(provider.id, {
+        'apiKey': 'test-key',
+        'username': 'test-user',
+        'password': 'test-password',
+        'language': 'ko',
+      }),
+    );
+    final redirectedPost = SubtitlePlugins(
+      store,
+      clientFactory: () => MockClient((r) async {
+        calls++;
+        expect(r.url.path, '/api/v1/download');
+        return http.Response('', 307, headers: {'location': '/api/v1/download'});
+      }),
+    );
+    await expectLater(
+      redirectedPost.download(provider, {
+        'data': {'fileId': 42},
+      }, temp),
+      throwsStateError,
+    );
+    expect(calls, 2);
+  });
+
+  test('canonical search redirects cannot forward API credentials to another origin', () async {
+    var calls = 0;
+    final service = SubtitlePlugins(
+      store,
+      clientFactory: () => MockClient((r) async {
+        calls++;
+        return http.Response('', 301, headers: {'location': 'https://dl.opensubtitles.com/leak'});
+      }),
+    );
+    await expectLater(service.search(provider, 'Movie', 'ko'), throwsStateError);
+    expect(calls, 1);
   });
 
   Future<OPlugin> custom(String download, {String search = "return {items:[],totalPages:1};"}) async {
