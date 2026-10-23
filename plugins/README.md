@@ -87,6 +87,20 @@ JSON 추가는 코드 설치·실행을 하지 않으며, 사용자가 항목을
 python tools/update_plugin_repository.py
 ```
 
+## disable-devtool 차단
+
+공식 저장소의 **disable-devtool 차단**(`site.disable-devtool`)을 선택 설치하고 켠 뒤 페이지를 새로고침합니다.
+현재 적용 도메인은 `tvchak208.com`과 그 하위 도메인입니다. 다른 사이트에 적용하려면 JS 첫 줄의 `sites`에
+해당 도메인을 추가한 별도 파일을 가져오거나 확장앱 업데이트로 적용 도메인을 추가합니다. 전체 사이트 권한을 요구하지 않습니다.
+
+별도 파일로 로드되는 `disable-devtool` 요청을 차단하고, 문서 시작 시 공개 `DisableDevtool`/`disableDevtool`
+API를 무효화합니다. 기본으로 콘솔의 log/debug/info/dir/dirxml/table/clear 출력을 억제해 콘솔 기반 감지 오작동을
+줄입니다. warn/error는 유지하며 콘솔 억제는 해당 확장앱 설정에서 끌 수 있습니다. 확장앱을 끈 뒤 페이지를 새로고침하면 원래 상태로 돌아갑니다.
+
+다른 코드에 합쳐지거나 이름을 숨긴 변형, 별도 타이밍·크기 감지까지 모두 차단하는 것은 보장하지 않습니다.
+타이머·fetch·XHR·history·일반 페이지 이동은 변경하지 않습니다. 호스트 API 4를 지원하는 기존 앱에 JS와 목록만
+배포하므로 APK 재설치·앱 릴리스는 필요 없습니다. 동작 검증은 `node test/disable_devtool_plugin_test.cjs`로 실행합니다.
+
 ## 유형별 공통 규약 (API 4)
 
 | 유형 (`kind`) | 기능 (`capabilities`) | 필수 함수 / 선언 | 앱에서 사용하는 곳 |
