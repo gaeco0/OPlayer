@@ -209,7 +209,7 @@ Android는 WebView 요청 콜백, Windows는 DevTools 요청 차단, Apple WebVi
   이 선언만으로 OAuth 권한이나 S3의 읽기 전용 서명 범위를 넓히지는 않습니다. 권한·지원 여부를 확인한 확장앱만 선언하세요.
 - `OPlayer.request(url, {method, body})`: 앱이 Bearer 인증을 붙이고 401 시 한 번 갱신합니다.
   플러그인에 토큰 문자열을 전달하지 않으며, 인증 리디렉션은 따라가지 않습니다.
-- 다음 앱 배포부터 선택적 `canRename: true`와 `async rename({path,name,newName})`를 함께 선언할 수 있습니다.
+- 앱 0.1.7-nightly.20261024.1부터 선택적 `canRename: true`와 `async rename({path,name,newName})`를 함께 선언할 수 있습니다.
   파일 이름변경 성공을 확인한 뒤 정확히 `true`를 반환합니다. `path`는 기존 `list`가 반환한 ID이며 이름변경 후에도
   유지해야 합니다. ID나 경로가 바뀌는 공급자는 이 규약을 선언하지 마세요. 폴더·루트 이름변경은 지원하지 않습니다.
   `newName`에는 파일명만 전달하며 기존 이름의 덮어쓰기를 거부하고 서비스의 변경 권한을 확인해야 합니다.
