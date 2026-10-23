@@ -49,21 +49,21 @@ const publish = require('./publish-release.cjs');
         fs.writeFileSync(`release-assets/OPlayer-0.1.0-android-${flavor}-${abi}.apk`, abi);
       }
     }
-    for (const file of ['windows-x64.zip', 'linux-x64.tar.gz', 'macos-arm64.zip']) {
+    for (const file of ['windows-x64.zip', 'windows-arm64.zip', 'linux-x64.tar.gz', 'linux-arm64.tar.gz', 'macos-arm64.zip']) {
       fs.writeFileSync(`release-assets/OPlayer-0.1.0-${file}`, file);
     }
     await publish(args);
-    assert.equal(calls.length, 11);
+    assert.equal(calls.length, 13);
     assert.equal(calls.at(-1), 'published');
     assert.ok(calls.includes('SHA256SUMS.txt'));
-    assert.equal(fs.readFileSync('release-assets/SHA256SUMS.txt', 'utf8').trim().split('\n').length, 9);
+    assert.equal(fs.readFileSync('release-assets/SHA256SUMS.txt', 'utf8').trim().split('\n').length, 11);
     // Only an explicitly pushed matching tag can replace existing assets; CI never moves tags.
     github.rest.repos.getReleaseByTag = async () => ({data: {id: 1, html_url: 'test'}});
     github.paginate = async method => method === github.rest.repos.listReleases ? releases : fs.readdirSync('release-assets').map((name, id) => ({id, name, digest: 'old'}));
     github.rest.repos.deleteReleaseAsset = async args => calls.push(`delete:${args.asset_id}`);
     calls.length = 0;
     await publish(args);
-    assert.equal(calls.filter(call => call.startsWith('delete:')).length, 10);
+    assert.equal(calls.filter(call => call.startsWith('delete:')).length, 12);
     assert.equal(calls.includes('tag'), false);
     assert.equal(calls.at(-1), 'published');
     releases.length = 0;

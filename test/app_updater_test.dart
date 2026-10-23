@@ -31,10 +31,12 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  test('semantic versions order prereleases numerically and isolate channels', () {
+  test('release versions order stage promotions and numeric identifiers and isolate channels', () {
     final beta2 = AppVersion.parse('v0.1.7-beta.2+2')!;
     expect(beta2.compareTo(AppVersion.parse('0.1.7-beta.10')!), lessThan(0));
     expect(beta2.compareTo(AppVersion.parse('0.1.7')!), lessThan(0));
+    expect(beta2.compareTo(AppVersion.parse('0.1.7-nightly.20261023.2')!), greaterThan(0));
+    expect(AppVersion.parse('0.1.6')!.compareTo(AppVersion.parse('0.1.7-nightly.1')!), lessThan(0));
     expect(AppVersion.parse('0.1.7-rc.1'), isNull);
     expect(AppVersion.parse('0.1.7-beta..1'), isNull);
     final releases = [
@@ -63,22 +65,72 @@ void main() {
     expect(valid.assetFor('android', abis: ['x86_64', 'arm64-v8a']), isNotNull);
     expect(valid.assetFor('android', tv: true, abis: ['arm64-v8a']), isNull);
     expect(valid.assetFor('windows-x64'), isNull);
+    final desktops = AppRelease.parse({
+      ...data,
+      'assets': [
+        assets.last,
+        for (final target in ['windows-arm64.zip', 'linux-arm64.tar.gz'])
+          {
+            'name': 'OPlayer-0.1.7-$target',
+            'size': 100,
+            'browser_download_url': 'https://github.com/gaeco0/OPlayer/releases/download/v0.1.7/OPlayer-0.1.7-$target',
+          },
+      ],
+    })!;
+    expect(desktops.assetFor('windows-arm64')!.name, endsWith('windows-arm64.zip'));
+    expect(desktops.assetFor('linux-arm64')!.name, endsWith('linux-arm64.tar.gz'));
+    expect(desktops.assetFor('windows-x64'), isNull);
   });
 
-  test('local builds default to nightly without overriding an explicit saved choice', () async {
+  test('build defaults to nightly but update selection defaults to stable and preserves user choice', () async {
     final updater = AppUpdater();
     expect(updater.installedChannel, UpdateChannel.nightly);
     final configured = AppUpdater(installedVersion: '0.1.7-nightly.1');
     await configured.init();
-    expect(configured.channel, UpdateChannel.nightly);
+    expect(configured.installedChannel, UpdateChannel.nightly);
+    expect(configured.channel, UpdateChannel.stable);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('appUpdateChannel', 'stable');
+    await prefs.setString('appUpdateChannel', 'nightly');
     final saved = AppUpdater(installedVersion: '0.1.7-nightly.1');
     await saved.init();
-    expect(saved.channel, UpdateChannel.stable);
+    expect(saved.channel, UpdateChannel.nightly);
     updater.dispose();
     configured.dispose();
     saved.dispose();
+  });
+
+  for (final stableVersion in ['0.1.6', '0.1.7']) {
+    test('nightly defaults to stable without offering older stable $stableVersion', () async {
+      final updater = AppUpdater(
+        installedVersion: '0.1.7-nightly.20261023.2',
+        clientFactory: () => MockClient((request) async {
+          expect(request.url.path.endsWith('/latest'), isTrue);
+          return http.Response(jsonEncode(releaseJson(stableVersion)), 200);
+        }),
+      );
+      await updater.check(force: true);
+      expect(updater.channel, UpdateChannel.stable);
+      expect(updater.available, stableVersion == '0.1.7');
+      updater.dispose();
+    });
+  }
+
+  test('nightly advances to beta while an older stage never triggers a downgrade notification', () async {
+    final updater = AppUpdater(
+      installedVersion: '0.1.7-nightly.20261023.2',
+      clientFactory: () => MockClient((request) async => http.Response(jsonEncode([releaseJson('0.1.7-beta.1')]), 200)),
+    );
+    await updater.setChannel(UpdateChannel.beta);
+    expect(updater.available, isTrue);
+    updater.dispose();
+    final stable = AppUpdater(
+      installedVersion: '0.1.7',
+      clientFactory: () =>
+          MockClient((request) async => http.Response(jsonEncode([releaseJson('0.1.7-nightly.20261023.3')]), 200)),
+    );
+    await stable.setChannel(UpdateChannel.nightly);
+    expect(stable.available, isFalse);
+    stable.dispose();
   });
 
   test('automatic check throttles, never downloads and stable excludes prereleases', () async {

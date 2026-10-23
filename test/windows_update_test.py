@@ -14,6 +14,7 @@ with tempfile.TemporaryDirectory(prefix='oplayer-installer-') as temporary:
     original.write_bytes(b'original executable fixture')
     (install / 'flutter_windows.dll').write_bytes(b'original library fixture')
     prefix = 'OPlayer-0.1.7-nightly.1-windows-x64/'
+    architecture = 'x64'
 
     def check(entries, expected_success, *, wrong_hash=False, validate=True):
         archive = base / 'update.zip'
@@ -24,7 +25,7 @@ with tempfile.TemporaryDirectory(prefix='oplayer-installer-') as temporary:
         command = ['powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
                    '-File', str(script), '-Archive', str(archive), '-InstallDir', str(install),
                    '-AppProcessId', '2147483647', '-ExpectedHash', '0' * 64 if wrong_hash else checksum,
-                   '-Version', '0.1.7-nightly.1']
+                   '-Version', '0.1.7-nightly.1', '-Architecture', architecture]
         if validate:
             command.append('-ValidateOnly')
         result = subprocess.run(command, capture_output=True, text=True, timeout=30)
@@ -44,4 +45,11 @@ with tempfile.TemporaryDirectory(prefix='oplayer-installer-') as temporary:
     # Starting the deliberately invalid replacement fails, so every replaced/new file must roll back.
     check(valid, False, validate=False)
     assert not (install / 'data/flutter_assets/test').exists()
+    architecture = 'arm64'
+    prefix = 'OPlayer-0.1.7-nightly.1-windows-arm64/'
+    valid = {prefix + 'oplayer.exe': b'new invalid executable fixture',
+             prefix + 'flutter_windows.dll': b'new library fixture',
+             prefix + 'data/flutter_assets/test': b'new data fixture'}
+    check(valid, True)
+    check(valid, False, validate=False)
 print('Windows installer checksum, traversal, bundle and rollback checks passed')

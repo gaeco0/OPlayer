@@ -20,10 +20,12 @@ else:
     name = f'OPlayer-{version}-{platform}'
     stage = Path('.dart_tool/release-packages') / name
     stage.mkdir(parents=True, exist_ok=True)
-    if platform == 'windows-x64':
-        shutil.copytree('build/windows/x64/runner/Release', stage, dirs_exist_ok=True)
-    elif platform == 'linux-x64':
-        shutil.copytree('build/linux/x64/release/bundle', stage, dirs_exist_ok=True, symlinks=True)
+    if platform in ('windows-x64', 'windows-arm64'):
+        architecture = platform.split('-')[1]
+        shutil.copytree(f'build/windows/{architecture}/runner/Release', stage, dirs_exist_ok=True)
+    elif platform in ('linux-x64', 'linux-arm64'):
+        architecture = platform.split('-')[1]
+        shutil.copytree(f'build/linux/{architecture}/release/bundle', stage, dirs_exist_ok=True, symlinks=True)
     elif platform == 'macos-arm64':
         apps = list(Path('build/macos/Build/Products/Release').glob('*.app'))
         if len(apps) != 1:
@@ -42,4 +44,4 @@ else:
     if platform == 'macos-arm64':
         subprocess.run(['ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', str(stage), str(output / f'{name}.zip')], check=True)
     else:
-        shutil.make_archive(str(output / name), 'gztar' if platform == 'linux-x64' else 'zip', stage.parent, stage.name)
+        shutil.make_archive(str(output / name), 'gztar' if platform.startswith('linux-') else 'zip', stage.parent, stage.name)

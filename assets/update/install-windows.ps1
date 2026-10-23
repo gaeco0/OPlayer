@@ -4,6 +4,7 @@ param(
   [Parameter(Mandatory=$true)][int]$AppProcessId,
   [Parameter(Mandatory=$true)][string]$ExpectedHash,
   [Parameter(Mandatory=$true)][string]$Version,
+  [ValidateSet('x64', 'arm64')][string]$Architecture = 'x64',
   [switch]$ValidateOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -40,7 +41,7 @@ try {
   $null = New-Item -ItemType Directory -Path $backup
   Add-Type -AssemblyName System.IO.Compression.FileSystem
   $zip = [IO.Compression.ZipFile]::OpenRead($archivePath)
-  $prefix = "OPlayer-$Version-windows-x64/"
+  $prefix = "OPlayer-$Version-windows-$Architecture/"
   try {
     foreach ($entry in $zip.Entries) {
       $name = $entry.FullName.Replace('\', '/')

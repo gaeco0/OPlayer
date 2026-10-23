@@ -38,6 +38,10 @@ if(MEDIA_KIT_LIBS_AVAILABLE)
   )
 
   apply_standard_settings(${PLUGIN_NAME})
+  if(FLUTTER_TARGET_PLATFORM STREQUAL "windows-arm64")
+    get_property(egl_aliases GLOBAL PROPERTY OPLAYER_ARM64_EGL_ALIASES)
+    target_compile_definitions(${PLUGIN_NAME} PRIVATE ${egl_aliases})
+  endif()
 
   set_target_properties(
     ${PLUGIN_NAME} PROPERTIES

@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const releaseMetadata = require('./release-metadata.cjs');
+const {pruneNightlies} = require('./prune-nightlies.cjs');
 
 module.exports = async ({github, context, core}) => {
   const match = fs.readFileSync('pubspec.yaml', 'utf8').match(/^version:\s*(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?:\+\d+)?\s*$/m);
@@ -18,11 +19,11 @@ module.exports = async ({github, context, core}) => {
   const repository = {owner: context.repo.owner, repo: context.repo.repo};
   const files = fs.readdirSync('release-assets').filter(name => name !== 'SHA256SUMS.txt').sort();
   if (files.filter(name => name.endsWith('.apk')).length !== 6 ||
-      files.filter(name => name.endsWith('.zip')).length !== 2 ||
-      files.filter(name => name.endsWith('.tar.gz')).length !== 1 || files.length !== 9) {
-    throw new Error('Expected six APKs and three desktop archives');
+      files.filter(name => name.endsWith('.zip')).length !== 3 ||
+      files.filter(name => name.endsWith('.tar.gz')).length !== 2 || files.length !== 11) {
+    throw new Error('Expected six APKs and five desktop archives');
   }
-  const expected = ['windows-x64.zip', 'linux-x64.tar.gz', 'macos-arm64.zip'];
+  const expected = ['windows-x64.zip', 'windows-arm64.zip', 'linux-x64.tar.gz', 'linux-arm64.tar.gz', 'macos-arm64.zip'];
   for (const flavor of ['mobile', 'tv']) {
     for (const abi of ['arm64-v8a', 'armeabi-v7a', 'x86_64']) expected.push(`android-${flavor}-${abi}.apk`);
   }
@@ -74,13 +75,14 @@ module.exports = async ({github, context, core}) => {
       releaseNotes, '', `업데이트 채널: ${metadata.channel}`, '', '---', '',
       'Windows · Android · Android TV · Linux · macOS 배포 빌드입니다.', '',
       '- Android: mobile APK / Android TV: tv APK (arm64-v8a, armeabi-v7a, x86_64)',
-      '- Windows x64: ZIP을 풀고 oplayer.exe 실행',
-      '- Linux x64: tar.gz 압축 해제 후 실행 (시스템 의존성은 README 참고)',
+      '- Windows x64 / ARM64(aarch64): ZIP을 풀고 oplayer.exe 실행',
+      '- Linux x64 / ARM64(aarch64): tar.gz 압축 해제 후 실행 (시스템 의존성은 README 참고)',
       '- macOS Apple Silicon: ZIP 안의 OPlayer.app (Developer ID 서명·공증 미포함)',
       '- SHA256SUMS.txt: 배포 파일 무결성 확인', '',
       `빌드 커밋: ${context.sha}`,
       `Actions: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
     ].join('\n'),
   });
+  if (metadata.channel === 'nightly') await pruneNightlies({github, context, core});
   await core.summary.addLink('Release downloads', release.html_url).write();
 };

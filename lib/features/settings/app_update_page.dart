@@ -86,7 +86,7 @@ class _AppUpdatePageState extends State<AppUpdatePage> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'stable: 정식 배포 · beta: 검증용 · nightly: 최신 개발 빌드\n선택한 채널의 배포만 확인합니다. 채널을 바꾸면 현재보다 이전 버전이 표시될 수도 있습니다.',
+            'stable: 정식 배포(기본값) · beta: 검증용 · nightly: 최신 개발 빌드\n선택한 채널에서 현재보다 새 버전만 알립니다. 같은 기본 버전은 nightly → beta → stable 순서로 판단합니다.',
           ),
           const SizedBox(height: 16),
           OutlinedButton.icon(

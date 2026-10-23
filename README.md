@@ -84,20 +84,22 @@ flutter run -d windows   # 또는 macos / android / ios
 
 ## GitHub Actions 빌드와 릴리스
 
-- 현재 nightly: [v0.1.7-nightly.20261023.1](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.7-nightly.20261023.1). 자동 업데이트·채널 선택 기능을 포함한다. 기존 v0.1.6 이하 앱은 이 버전을 한 번 직접 설치해야 하며, 설치 후 최초 업데이트 채널은 nightly다. 정식 최신 버전은 v0.1.6을 유지한다.
+- 현재 nightly: [v0.1.7-nightly.20261023.2](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.7-nightly.20261023.2). 자동 업데이트·채널 선택 기능을 포함한다. 기존 v0.1.6 이하 앱은 이 버전을 한 번 직접 설치해야 하며, 설치 후 업데이트 확인 기본 채널은 stable이다. 사용자가 직접 저장한 채널 선택은 유지한다. 정식 최신 버전은 v0.1.6을 유지한다.
 - 일반 빌드의 기본 채널은 **nightly**이며, 같은 기본 버전에서 **nightly → beta → stable** 순서로 배포한다. 예: `0.1.7-nightly.20261023.1+2` → `0.1.7-beta.1+2` → `0.1.7+2`. nightly·beta는 GitHub 사전 릴리스이고 stable만 Latest로 등록한다. beta 게시 전에는 같은 기본 버전의 공개 nightly가, stable 게시 전에는 공개 beta가 있어야 한다. 승격은 사용자 지시 후 새 버전·릴리즈노트·태그를 준비하고 다시 빌드하는 방식이며 자동 승격하지 않는다.
 - 각 단계의 태그는 `v0.1.7-nightly.20261023.1`, `v0.1.7-beta.1`, `v0.1.7` 형태다. Actions는 태그에서 채널을 확인하고 모든 플랫폼에 `--dart-define=OPLAYER_UPDATE_CHANNEL=채널`을 넣는다. 별도 지정 없이 로컬에서 빌드하면 nightly 채널이다. 내부 빌드 번호 `+2`와 기존 서명 키는 유지한다.
 - 브랜치 push·PR·버전 번호 변경만으로는 빌드하지 않는다. 사용자가 배포를 지시할 때만 해당 커밋에 `v0.1.1` 같은 버전 태그를 만들고 push한다. `v*` 태그 push를 받으면 Windows, Android(mobile), Android TV(tv), Linux(x64), macOS(Apple Silicon 러너)를 빌드한다. Android·TV는 같은 배포 키로 각각 서명하며 Windows에서 정적 분석·Dart 테스트·브라우저 JavaScript 테스트도 실행한다.
 - 다섯 빌드와 검증이 모두 성공하면 push된 태그에 GitHub Release와 배포 파일을 등록한다. 태그와 `pubspec.yaml` 버전이 다르면 게시를 거부한다. Actions는 태그를 생성하거나 이동하지 않는다. 기존 버전 교체도 사용자 지시가 있을 때만 해당 태그를 대상 커밋으로 갱신·push하며, 이 경우 같은 이름의 배포 파일을 교체한다.
 - v0.1.1 이후 릴리스부터는 태그를 만들기 전에 `CHANGELOG.md`에 `## [버전]` 제목으로 추가 기능·수정 사항·알려진 제한을 정리한다. Actions는 해당 버전의 내용을 릴리스 본문 맨 위에 게시하며, 노트가 누락되면 게시를 거부한다. 일반 코드 push에서는 빌드하지 않는다.
-- GitHub Release에 Android·Android TV의 ABI별 서명 APK 6개, Windows x64 ZIP, Linux x64 tar.gz, macOS Apple Silicon ZIP과 SHA256SUMS.txt를 첨부한다. 데스크톱 압축 파일은 실행 파일·라이브러리·데이터를 포함하므로 전체를 풀어 사용한다. 빌드 작업 간 전달용 Actions 아티팩트는 7일 동안 보관한다.
+- GitHub Release에 Android·Android TV의 ABI별 서명 APK 6개, Windows x64·ARM64 ZIP, Linux x64·ARM64 tar.gz, macOS Apple Silicon ZIP과 SHA256SUMS.txt를 첨부한다. 데스크톱 압축 파일은 실행 파일·라이브러리·데이터를 포함하므로 전체를 풀어 사용한다. 빌드 작업 간 전달용 Actions 아티팩트는 7일 동안 보관한다.
+- nightly는 새 릴리스의 전체 파일 게시가 성공한 뒤 최신 3개만 남긴다. 태그 버전 순서로 오래된 nightly 릴리스·첨부 파일·태그를 삭제하며 stable·beta·초안·브랜치·커밋 이력은 보존한다. Actions 전달 아티팩트는 별도로 7일 보관한다.
+- Windows·Linux의 x64와 ARM64(aarch64)를 별도 빌드한다. ARM 러너는 공식 Flutter 3.47.7 소스의 고정 커밋으로 네이티브 SDK를 준비한다. Windows ARM64에는 해당 아키텍처의 mpv·ANGLE·WebView2 로더를 사용하며, 게시 전에 각 DLL/SO와 실행 파일의 실제 아키텍처를 검사한다. [ARM64 의존성 소스·라이선스](third_party/angle-arm64/NOTICE.md)를 참고한다. Windows ARM64 ByeDPI는 기존 x64 보조 EXE를 OS 에뮬레이션으로 실행하므로 실기기 검증이 필요하다.
 - 저장소 Actions Secrets에 `ANDROID_KEYSTORE_BASE64`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_PASSWORD`, `ANDROID_KEY_ALIAS`를 등록한다. 키와 비밀번호는 빌드 중 임시 복원 후 삭제하며, 저장소·릴리스에 커밋하거나 업로드하지 않는다.
 
 ### 앱 업데이트
 
-- 설정 → 앱 업데이트에서 자동 확인, stable·beta·nightly 채널 선택, 수동 확인·다운로드·설치를 제공한다. 최초 채널은 설치 빌드의 채널이며 이후 사용자가 선택한 채널을 저장한다. 선택한 채널의 공개 릴리스만 확인하고 다른 채널의 새 버전은 섞지 않는다.
+- 설정 → 앱 업데이트에서 자동 확인, stable·beta·nightly 채널 선택, 수동 확인·다운로드·설치를 제공한다. 업데이트 확인 기본값은 설치 빌드와 무관하게 stable이며, 사용자가 선택한 채널을 저장한다. 일반 빌드·배포 기본값인 nightly와 구분한다. 선택한 채널의 공개 릴리스만 확인하고 다른 채널의 새 버전은 섞지 않는다.
 - 앱 시작·복귀 시 최대 6시간마다 GitHub 공식 저장소를 확인하고, 새 버전이 있으면 앱 안에 알림을 표시한다. 잠금 화면·백그라운드에서는 표시하지 않으며 잠금 해제 후 알린다. 자동 다운로드·자동 설치·백그라운드 주기 실행은 하지 않는다. 수동 확인은 확인 간격 제한 없이 가능하다.
-- 설치 파일은 플랫폼·Android ABI·mobile/TV에 맞춰 선택하고, 크기와 SHA256SUMS.txt 및 GitHub가 제공하는 SHA256을 검증한다. 취소·전송 실패·변조 시 설치하지 않는다. 채널 전환 시 이전 버전이 표시될 수 있으며 Android는 OS가 허용하는 빌드만 설치한다.
+- 설치 파일은 플랫폼·Android ABI·mobile/TV에 맞춰 선택하고, 크기와 SHA256SUMS.txt 및 GitHub가 제공하는 SHA256을 검증한다. 취소·전송 실패·변조 시 설치하지 않는다. 현재보다 새 버전만 알리며, 같은 기본 버전에서는 nightly → beta → stable을 승격 순서로 판단한다. Android는 OS가 허용하는 빌드만 설치한다.
 - Android·Android TV는 패키지명·서명을 추가 검증한 뒤 OS 설치 확인 화면을 연다. 첫 설치에는 ‘이 출처 허용’이 필요할 수 있다. Windows는 사용자 확인 후 압축 파일을 준비하고 앱 종료를 기다려 실행 파일·라이브러리·데이터를 교체한 다음 재시작한다. 교체 실패 시 덮어쓴 파일을 복구한다. 진행 중인 재생·다운로드를 마친 뒤 설치한다.
 - Linux·macOS는 검증된 압축 파일을 열고 사용자가 종료·압축 해제·교체한다. iOS 및 배포 파일이 없는 아키텍처는 인앱 설치를 지원하지 않는다. 확장앱 업데이트는 확장앱 저장소에서 별도로 관리한다.
 - 기본 `main`의 `LICENSE`는 `devel`과 `main`에서 그대로 유지한다. `third_party/`의 외부 구성요소는 각 디렉터리의 라이선스도 함께 적용된다.
