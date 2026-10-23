@@ -22,7 +22,14 @@ String resourceKey(String value) {
   if (!value.contains('://')) {
     try {
       value = File(value).resolveSymbolicLinksSync();
-    } catch (_) {}
+    } catch (_) {
+      // Rename destinations do not exist yet. Resolve their existing parent so
+      // Windows short paths and directory aliases use the same key after creation.
+      try {
+        final absolute = p.absolute(value);
+        value = p.join(Directory(p.dirname(absolute)).resolveSymbolicLinksSync(), p.basename(absolute));
+      } catch (_) {}
+    }
     var path = p.normalize(p.absolute(value)).replaceAll('\\', '/');
     if (Platform.isWindows) path = path.toLowerCase();
     return path.length > 1 ? path.replaceFirst(RegExp(r'/+$'), '') : path;
