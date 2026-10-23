@@ -23,12 +23,20 @@ String resourceKey(String value) {
     try {
       value = File(value).resolveSymbolicLinksSync();
     } catch (_) {
-      // Rename destinations do not exist yet. Resolve their existing parent so
-      // Windows short paths and directory aliases use the same key after creation.
-      try {
-        final absolute = p.absolute(value);
-        value = p.join(Directory(p.dirname(absolute)).resolveSymbolicLinksSync(), p.basename(absolute));
-      } catch (_) {}
+      // Missing descendants must share their existing ancestor's canonical key,
+      // including through Windows short paths and directory aliases.
+      var ancestor = p.absolute(value);
+      final suffix = <String>[];
+      while (true) {
+        final parent = p.dirname(ancestor);
+        if (parent == ancestor) break;
+        suffix.add(p.basename(ancestor));
+        ancestor = parent;
+        try {
+          value = p.joinAll([Directory(ancestor).resolveSymbolicLinksSync(), ...suffix.reversed]);
+          break;
+        } catch (_) {}
+      }
     }
     var path = p.normalize(p.absolute(value)).replaceAll('\\', '/');
     if (Platform.isWindows) path = path.toLowerCase();
