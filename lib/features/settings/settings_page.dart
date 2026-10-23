@@ -15,6 +15,7 @@ import 'network_settings.dart';
 import 'privacy_settings.dart';
 import 'appearance_settings.dart';
 import 'plugins_page.dart';
+import 'app_update_page.dart';
 import '../player/desktop_window.dart';
 import '../player/player_orientation.dart';
 
@@ -285,6 +286,12 @@ class SettingsPage extends StatelessWidget {
               onChanged: (v) => s.update((x) => x.hlsParallelSegments = v),
             ),
             const _Header('정보'),
+            ListTile(
+              leading: const Icon(Icons.system_update),
+              title: const Text('앱 업데이트'),
+              subtitle: const Text('새 버전 자동 확인 · stable / beta / nightly'),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const AppUpdatePage())),
+            ),
             const ListTile(title: Text('OPlayer'), subtitle: Text('Flutter + media_kit (libmpv)')),
           ],
         ),

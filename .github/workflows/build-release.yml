@@ -24,6 +24,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Resolve update channel
+        run: node .github/scripts/release-metadata.cjs
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -40,8 +42,10 @@ jobs:
       - run: node test/web_sniffer_test.cjs
       - run: node test/disable_devtool_plugin_test.cjs
       - run: node .github/scripts/publish-release.test.cjs
+      - run: node .github/scripts/release-metadata.test.cjs
+      - run: python test/windows_update_test.py
       - run: python .github/scripts/package-release.test.py
-      - run: flutter build windows --release --no-pub
+      - run: flutter build windows --release --no-pub --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
       - name: Package complete application
         if: github.event_name != 'pull_request'
         run: python .github/scripts/package-release.py windows-x64
@@ -78,6 +82,8 @@ jobs:
         with:
           packages: platform-tools
           log-accepted-android-sdk-licenses: false
+      - name: Resolve update channel
+        run: node .github/scripts/release-metadata.cjs
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -118,7 +124,7 @@ jobs:
           PY
       - name: Build signed release APKs
         if: github.event_name != 'pull_request'
-        run: flutter build apk --release --flavor "${{ matrix.flavor }}" --split-per-abi --no-pub
+        run: flutter build apk --release --flavor "${{ matrix.flavor }}" --split-per-abi --no-pub --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
       - name: Verify APK signatures
         if: github.event_name != 'pull_request'
         run: |
@@ -127,7 +133,7 @@ jobs:
           done
       - name: Build pull request without signing secrets
         if: github.event_name == 'pull_request'
-        run: flutter build apk --debug --flavor "${{ matrix.flavor }}" --no-pub
+        run: flutter build apk --debug --flavor "${{ matrix.flavor }}" --no-pub --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
       - name: Package signed APKs
         if: github.event_name != 'pull_request'
         run: python3 .github/scripts/package-release.py "${{ matrix.flavor }}"
@@ -155,13 +161,15 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libstdc++-12-dev libsecret-1-dev libjsoncpp-dev libmpv-dev libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libjpeg-dev libpulse-dev libasound2-dev libepoxy-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev
+      - name: Resolve update channel
+        run: node .github/scripts/release-metadata.cjs
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter build linux --release --no-pub
+      - run: flutter build linux --release --no-pub --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
       - name: Package complete application
         if: github.event_name != 'pull_request'
         run: python .github/scripts/package-release.py linux-x64
@@ -182,6 +190,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Resolve update channel
+        run: node .github/scripts/release-metadata.cjs
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -189,7 +199,7 @@ jobs:
           cache: true
       - run: flutter config --no-enable-swift-package-manager
       - run: flutter pub get
-      - run: flutter build macos --release --no-pub
+      - run: flutter build macos --release --no-pub --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
       - name: Package complete application
         if: github.event_name != 'pull_request'
         run: python .github/scripts/package-release.py macos-arm64

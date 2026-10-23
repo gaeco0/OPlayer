@@ -6,6 +6,8 @@ import '../features/player/widgets/player_video.dart';
 import '../core/mouse_nav.dart';
 import '../core/open_media.dart';
 import '../core/external_files.dart';
+import '../core/app_updater.dart';
+import '../features/settings/app_update_page.dart';
 import 'package:flutter/services.dart';
 import '../features/player/playback_session.dart';
 import 'theme.dart';
@@ -24,11 +26,15 @@ class _MediaShellState extends State<MediaShell> with WidgetsBindingObserver {
   bool _initialOpened = false;
   final _external = <List<ExternalFile>>[];
   bool _openingExternal = false;
+  final _updateNotices = <String>{};
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    AppUpdater.instance.addListener(_noticeUpdate);
+    ResourceLocks.instance.addListener(_noticeUpdate);
+    AppUpdater.instance.check();
     externalFilesChannel.setMethodCallHandler((call) async {
       if (call.method == 'open') _receiveExternal(call.arguments);
     });
@@ -39,7 +45,59 @@ class _MediaShellState extends State<MediaShell> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _openInitialFiles();
+    if (state == AppLifecycleState.resumed) {
+      _openInitialFiles();
+      AppUpdater.instance.check();
+      _noticeUpdate();
+    }
+  }
+
+  void _noticeUpdate() {
+    final updates = AppUpdater.instance;
+    final locks = ResourceLocks.instance;
+    if (!mounted ||
+        !updates.automatic ||
+        !updates.available ||
+        updates.busy ||
+        locks.shielded ||
+        locks.unavailable ||
+        locks.inBackground) {
+      return;
+    }
+    final version = updates.release!.version.name;
+    final key = '${updates.channel.name}:$version';
+    if (_updateNotices.contains(key)) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = MouseNav.navigatorKey.currentContext;
+      if (!mounted ||
+          context == null ||
+          !updates.available ||
+          !updates.automatic ||
+          updates.busy ||
+          '${updates.channel.name}:${updates.release?.version.name}' != key ||
+          locks.shielded ||
+          locks.unavailable ||
+          locks.inBackground ||
+          _updateNotices.contains(key)) {
+        return;
+      }
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      if (messenger == null) return;
+      _updateNotices.add(key);
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text('OPlayer $version 업데이트가 있습니다'),
+          duration: const Duration(seconds: 12),
+          action: SnackBarAction(
+            label: '보기',
+            onPressed: () {
+              MouseNav.navigatorKey.currentState?.push(MaterialPageRoute<void>(builder: (_) => const AppUpdatePage()));
+            },
+          ),
+        ),
+      );
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   Future<void> _loadExternal() async {
@@ -96,6 +154,8 @@ class _MediaShellState extends State<MediaShell> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    AppUpdater.instance.removeListener(_noticeUpdate);
+    ResourceLocks.instance.removeListener(_noticeUpdate);
     WidgetsBinding.instance.removeObserver(this);
     externalFilesChannel.setMethodCallHandler(null);
     ResourceLocks.instance.removeListener(_openInitialFiles);

@@ -43,6 +43,7 @@ dependencies:
   wakelock_plus: ^1.4.0
   shared_preferences: ^2.5.5
   path_provider: ^2.1.5
+  package_info_plus: ^9.0.1
   permission_handler: ^13.0.2
   file_picker: ^11.0.3
   path: ^1.9.1
@@ -90,6 +91,7 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
+    - pubspec.yaml
     - plugins/cloud.gdrive.js
     - plugins/cloud.dropbox.js
     - plugins/cloud.onedrive.js
@@ -98,6 +100,7 @@ flutter:
     - plugins/cloud.mybox.js
     - plugins/subtitle.opensubtitles.js
     - assets/branding/oplayer.png
+    - assets/update/install-windows.ps1
     - assets/licenses/ffmpeg-kit.txt
     - assets/licenses/byedpi.txt
     - assets/licenses/quickjs.txt
