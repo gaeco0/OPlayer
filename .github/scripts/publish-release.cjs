@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const releaseMetadata = require('./release-metadata.cjs');
 
 module.exports = async ({github, context, core}) => {
   const match = fs.readFileSync('pubspec.yaml', 'utf8').match(/^version:\s*(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)(?:\+\d+)?\s*$/m);
@@ -9,6 +10,7 @@ module.exports = async ({github, context, core}) => {
   if (context.eventName !== 'push' || context.ref !== `refs/tags/${tag}`) {
     throw new Error(`Release requires a pushed ${tag} tag matching pubspec.yaml`);
   }
+  const metadata = releaseMetadata(fs.readFileSync('pubspec.yaml', 'utf8'), context.ref);
   const section = fs.readFileSync('CHANGELOG.md', 'utf8').split(/^## /m)
     .find(value => value.split(/\r?\n/, 1)[0].trim() === `[${match[1]}]`);
   const releaseNotes = section?.split(/\r?\n/).slice(1).join('\n').trim();
@@ -20,12 +22,27 @@ module.exports = async ({github, context, core}) => {
       files.filter(name => name.endsWith('.tar.gz')).length !== 1 || files.length !== 9) {
     throw new Error('Expected six APKs and three desktop archives');
   }
+  const expected = ['windows-x64.zip', 'linux-x64.tar.gz', 'macos-arm64.zip'];
+  for (const flavor of ['mobile', 'tv']) {
+    for (const abi of ['arm64-v8a', 'armeabi-v7a', 'x86_64']) expected.push(`android-${flavor}-${abi}.apk`);
+  }
+  if (files.join('\n') !== expected.map(suffix => `OPlayer-${metadata.version}-${suffix}`).sort().join('\n')) {
+    throw new Error('Release asset names must match the tagged version and platform');
+  }
   const checksums = files.map(name => {
     const digest = crypto.createHash('sha256').update(fs.readFileSync(path.join('release-assets', name))).digest('hex');
     return `${digest}  ${name}\n`;
   }).join('');
   fs.writeFileSync('release-assets/SHA256SUMS.txt', checksums);
   files.push('SHA256SUMS.txt');
+  const predecessor = {beta: 'nightly', stable: 'beta'}[metadata.channel];
+  if (predecessor) {
+    const releases = await github.paginate(github.rest.repos.listReleases, {...repository, per_page: 100});
+    const prefix = `v${metadata.version.split('-')[0]}-${predecessor}.`;
+    if (!releases.some(item => !item.draft && item.prerelease && item.tag_name.startsWith(prefix))) {
+      throw new Error(`${metadata.channel} requires a published ${prefix} release first`);
+    }
+  }
   let release;
   try {
     release = (await github.rest.repos.getReleaseByTag({...repository, tag})).data;
@@ -33,7 +50,7 @@ module.exports = async ({github, context, core}) => {
     if (error.status !== 404) throw error;
     release = (await github.rest.repos.createRelease({
       ...repository, tag_name: tag, target_commitish: context.sha,
-      name: `OPlayer ${tag}`, draft: true, prerelease: match[1].includes('-'),
+      name: `OPlayer ${tag} (${metadata.channel})`, draft: true, prerelease: metadata.prerelease,
     })).data;
   }
   const assets = await github.paginate(github.rest.repos.listReleaseAssets, {...repository, release_id: release.id});
@@ -52,8 +69,9 @@ module.exports = async ({github, context, core}) => {
   }
   await github.rest.repos.updateRelease({
     ...repository, release_id: release.id, draft: false,
+    prerelease: metadata.prerelease, make_latest: metadata.channel === 'stable' ? 'true' : 'false',
     body: [
-      releaseNotes, '', '---', '',
+      releaseNotes, '', `업데이트 채널: ${metadata.channel}`, '', '---', '',
       'Windows · Android · Android TV · Linux · macOS 배포 빌드입니다.', '',
       '- Android: mobile APK / Android TV: tv APK (arm64-v8a, armeabi-v7a, x86_64)',
       '- Windows x64: ZIP을 풀고 oplayer.exe 실행',

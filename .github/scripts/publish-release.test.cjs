@@ -14,13 +14,16 @@ const publish = require('./publish-release.cjs');
     fs.writeFileSync('CHANGELOG.md', changelog);
     fs.mkdirSync('release-assets');
     const calls = [];
-    const github = {paginate: async () => [], rest: {repos: {
+    const releases = [{tag_name: 'v0.1.0-beta.1', draft: false, prerelease: true}];
+    const github = {paginate: async method => method === github.rest.repos.listReleases ? releases : [], rest: {repos: {
       getReleaseByTag: async () => {throw Object.assign(new Error('missing'), {status: 404});},
       createRelease: async args => {assert.equal(args.draft, true); return {data: {id: 1, html_url: 'test'}};},
       listReleaseAssets: () => {},
+      listReleases: () => {},
       uploadReleaseAsset: async args => calls.push(args.name),
       updateRelease: async args => {
         assert.equal(args.draft, false);
+        assert.equal(args.make_latest, args.prerelease ? 'false' : 'true');
         assert.ok(args.body.includes('새 기능 설명'));
         assert.ok(!args.body.includes('이전 변경'));
         calls.push('published');
@@ -56,13 +59,31 @@ const publish = require('./publish-release.cjs');
     assert.equal(fs.readFileSync('release-assets/SHA256SUMS.txt', 'utf8').trim().split('\n').length, 9);
     // Only an explicitly pushed matching tag can replace existing assets; CI never moves tags.
     github.rest.repos.getReleaseByTag = async () => ({data: {id: 1, html_url: 'test'}});
-    github.paginate = async () => fs.readdirSync('release-assets').map((name, id) => ({id, name, digest: 'old'}));
+    github.paginate = async method => method === github.rest.repos.listReleases ? releases : fs.readdirSync('release-assets').map((name, id) => ({id, name, digest: 'old'}));
     github.rest.repos.deleteReleaseAsset = async args => calls.push(`delete:${args.asset_id}`);
     calls.length = 0;
     await publish(args);
     assert.equal(calls.filter(call => call.startsWith('delete:')).length, 10);
     assert.equal(calls.includes('tag'), false);
     assert.equal(calls.at(-1), 'published');
+    releases.length = 0;
+    await assert.rejects(() => publish(args), /stable requires a published.*beta/);
+    for (const channel of ['nightly', 'beta']) {
+      const version = `0.1.0-${channel}.1`;
+      fs.writeFileSync('pubspec.yaml', `version: ${version}+2\n`);
+      fs.writeFileSync('CHANGELOG.md', `## [${version}]\n\n새 기능 설명\n`);
+      args.context.ref = `refs/tags/v${version}`;
+      for (const name of fs.readdirSync('release-assets').filter(name => name.startsWith('OPlayer-'))) {
+        const suffix = name.replace(/^OPlayer-.*?-(android-|windows-|linux-|macos-)/, '$1');
+        fs.renameSync(path.join('release-assets', name), path.join('release-assets', `OPlayer-${version}-${suffix}`));
+      }
+      github.paginate = async () => releases;
+      if (channel === 'beta') {
+        await assert.rejects(() => publish(args), /beta requires a published.*nightly/);
+        releases.push({tag_name: 'v0.1.0-nightly.1', draft: false, prerelease: true});
+      }
+      await publish(args);
+    }
     console.log('Release publication checks passed');
   } finally {
     process.chdir(original);
