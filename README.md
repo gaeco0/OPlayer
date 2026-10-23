@@ -84,6 +84,7 @@ flutter run -d windows   # 또는 macos / android / ios
 
 ## GitHub Actions 빌드와 릴리스
 
+- 현재 nightly: [v0.1.7-nightly.20261023.1](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.7-nightly.20261023.1). 자동 업데이트·채널 선택 기능을 포함한다. 기존 v0.1.6 이하 앱은 이 버전을 한 번 직접 설치해야 하며, 설치 후 최초 업데이트 채널은 nightly다. 정식 최신 버전은 v0.1.6을 유지한다.
 - 일반 빌드의 기본 채널은 **nightly**이며, 같은 기본 버전에서 **nightly → beta → stable** 순서로 배포한다. 예: `0.1.7-nightly.20261023.1+2` → `0.1.7-beta.1+2` → `0.1.7+2`. nightly·beta는 GitHub 사전 릴리스이고 stable만 Latest로 등록한다. beta 게시 전에는 같은 기본 버전의 공개 nightly가, stable 게시 전에는 공개 beta가 있어야 한다. 승격은 사용자 지시 후 새 버전·릴리즈노트·태그를 준비하고 다시 빌드하는 방식이며 자동 승격하지 않는다.
 - 각 단계의 태그는 `v0.1.7-nightly.20261023.1`, `v0.1.7-beta.1`, `v0.1.7` 형태다. Actions는 태그에서 채널을 확인하고 모든 플랫폼에 `--dart-define=OPLAYER_UPDATE_CHANNEL=채널`을 넣는다. 별도 지정 없이 로컬에서 빌드하면 nightly 채널이다. 내부 빌드 번호 `+2`와 기존 서명 키는 유지한다.
 - 브랜치 push·PR·버전 번호 변경만으로는 빌드하지 않는다. 사용자가 배포를 지시할 때만 해당 커밋에 `v0.1.1` 같은 버전 태그를 만들고 push한다. `v*` 태그 push를 받으면 Windows, Android(mobile), Android TV(tv), Linux(x64), macOS(Apple Silicon 러너)를 빌드한다. Android·TV는 같은 배포 키로 각각 서명하며 Windows에서 정적 분석·Dart 테스트·브라우저 JavaScript 테스트도 실행한다.
