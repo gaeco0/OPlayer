@@ -15,3 +15,5 @@ this Android GPU output support. Other platform implementations are unchanged.
 
 Keep this change when updating the upstream package, or remove the local package
 when upstream provides equivalent Android setSize behavior.
+
+Windows ARM64: use the pinned ARM64 ANGLE import library and EGL export aliases supplied by windows/arm64-libraries.cmake; x64 rendering is unchanged.

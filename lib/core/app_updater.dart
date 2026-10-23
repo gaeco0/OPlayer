@@ -65,14 +65,15 @@ class AppUpdater extends ChangeNotifier {
   http.Client? _checkClient, _downloadClient;
   Completer<void>? _abort;
   DateTime? _lastAttempt;
-  bool get available =>
-      release != null && (release!.version.channel != installedChannel || release!.version.compareTo(current) > 0);
+  bool get available => release != null && release!.version.compareTo(current) > 0;
   ReleaseAsset? get asset => release?.assetFor(target, tv: tv, abis: abis);
 
   static String _target() => switch (Abi.current()) {
     Abi.androidArm || Abi.androidArm64 || Abi.androidX64 || Abi.androidIA32 => 'android',
     Abi.windowsX64 => 'windows-x64',
+    Abi.windowsArm64 => 'windows-arm64',
     Abi.linuxX64 => 'linux-x64',
+    Abi.linuxArm64 => 'linux-arm64',
     Abi.macosArm64 => 'macos-arm64',
     _ => 'unsupported',
   };
@@ -102,7 +103,7 @@ class AppUpdater extends ChangeNotifier {
     automatic = _prefs!.getBool('appUpdateAutomatic') ?? true;
     channel = UpdateChannel.values.firstWhere(
       (c) => c.name == _prefs!.getString('appUpdateChannel'),
-      orElse: () => installedChannel,
+      orElse: () => UpdateChannel.stable,
     );
     notifyListeners();
   }
@@ -352,6 +353,8 @@ class AppUpdater extends ChangeNotifier {
         _verifiedHash!,
         '-Version',
         release!.version.name,
+        '-Architecture',
+        target == 'windows-arm64' ? 'arm64' : 'x64',
       ], mode: ProcessStartMode.detached);
       for (var i = 0; i < 300; i++) {
         if (await failed.exists()) throw StateError(await failed.readAsString());

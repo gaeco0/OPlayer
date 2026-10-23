@@ -26,6 +26,9 @@ class AppVersion implements Comparable<AppVersion> {
       final result = parts[i].compareTo(other.parts[i]);
       if (result != 0) return result;
     }
+    // Within one base version, our release stages advance nightly -> beta -> stable.
+    final stage = other.channel.index.compareTo(channel.index);
+    if (stage != 0) return stage;
     if (pre.isEmpty || other.pre.isEmpty) {
       return pre.isEmpty == other.pre.isEmpty
           ? 0
@@ -116,7 +119,7 @@ class AppRelease {
     final prefix = 'OPlayer-${version.name}-';
     final names = target == 'android'
         ? [for (final abi in abis) '${prefix}android-${tv ? 'tv' : 'mobile'}-$abi.apk']
-        : ['$prefix$target${target == 'linux-x64' ? '.tar.gz' : '.zip'}'];
+        : ['$prefix$target${target.startsWith('linux-') ? '.tar.gz' : '.zip'}'];
     for (final name in names) {
       for (final asset in assets) {
         if (asset.name == name) return asset;

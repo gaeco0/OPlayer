@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 0.1.7-nightly.20261023.1+2
+version: 0.1.7-nightly.20261023.2+2
 
 environment:
   sdk: ^3.9.2
@@ -66,6 +66,8 @@ dependencies:
     path: packages/quickjs_engine
 
 dependency_overrides:
+  media_kit_libs_windows_video:
+    path: packages/media_kit_libs_windows_video
   # smb_connect 0.0.9가 pointycastle ^3에 묶여 있어 dartssh2 4.x(새 Dart 호환)와 충돌 → 4.x로 통일
   pointycastle: ^4.0.0
 
