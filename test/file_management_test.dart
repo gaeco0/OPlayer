@@ -166,6 +166,25 @@ void main() {
     final file = File(p.join(parent, 'not-yet-created.mp4'));
     final before = resourceKey(file.path);
     expect(before, resourceKey(p.join(root.resolveSymbolicLinksSync(), 'not-yet-created.mp4')));
+    final missingPath = p.join(parent, 'missing', 'nested', 'movie.mp4');
+    expect(
+      resourceKey(missingPath),
+      resourceKey(p.join(root.resolveSymbolicLinksSync(), 'missing', 'nested', 'movie.mp4')),
+    );
+    final locks = ResourceLocks();
+    await locks.init();
+    await locks.setPin('123456');
+    var prompts = 0;
+    locks.onAuthenticate = (_) {
+      prompts++;
+      return locks.verifyPin('123456');
+    };
+    await locks.toggle(p.join(parent, 'missing'), 'missing');
+    locks.relock();
+    prompts = 0;
+    await locks.requireAccess(missingPath);
+    expect(prompts, 1);
+    FlutterSecureStorage.setMockInitialValues({});
     await file.writeAsString('test');
     expect(resourceKey(file.path), before);
   });
