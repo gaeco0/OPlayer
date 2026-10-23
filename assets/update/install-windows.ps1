@@ -14,6 +14,9 @@ $root = $null
 $backup = $null
 $readyFile = "$Archive.ready"
 $errorFile = "$Archive.error"
+function UpdateStatus([string]$Status) {
+  try { [IO.File]::WriteAllText("$Archive.progress", $Status) } catch { }
+}
 function ChildPath([string]$Base, [string]$Relative) {
   $basePath = [IO.Path]::GetFullPath($Base).TrimEnd('\') + '\'
   $resolved = [IO.Path]::GetFullPath([IO.Path]::Combine($basePath, $Relative))
@@ -30,6 +33,7 @@ try {
   $root = (Get-Item -LiteralPath $InstallDir).FullName
   if (-not (Test-Path -LiteralPath (Join-Path $root 'oplayer.exe') -PathType Leaf)) { throw 'OPlayer executable was not found' }
   if ((Get-Item -LiteralPath $root).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Install directory is a reparse point' }
+  UpdateStatus 'hash'
   $hashAlgorithm = [Security.Cryptography.SHA256]::Create()
   $archiveStream = [IO.File]::OpenRead($archivePath)
   try { $actualHash = [BitConverter]::ToString($hashAlgorithm.ComputeHash($archiveStream)).Replace('-', '') }
@@ -51,12 +55,14 @@ try {
       if ((($entry.ExternalAttributes -shr 16) -band 0xF000) -eq 0xA000) { throw 'Archive links are not supported' }
     }
   } finally { $zip.Dispose() }
+  UpdateStatus 'extract'
   [IO.Compression.ZipFile]::ExtractToDirectory($archivePath, $stage)
   $incoming = ChildPath $stage $prefix.TrimEnd('/')
   if (-not (Test-Path -LiteralPath (Join-Path $incoming 'oplayer.exe')) -or
       -not (Test-Path -LiteralPath (Join-Path $incoming 'flutter_windows.dll')) -or
       -not (Test-Path -LiteralPath (Join-Path $incoming 'data'))) { throw 'Incomplete update bundle' }
   $files = @(Get-ChildItem -LiteralPath $incoming -File -Recurse)
+  UpdateStatus 'inspect'
   foreach ($file in $files) {
     $relative = $file.FullName.Substring($incoming.Length).TrimStart('\')
     $destination = ChildPath $root $relative
@@ -78,7 +84,13 @@ try {
   [IO.File]::WriteAllText($probe, '')
   Remove-Item -LiteralPath $probe
   [IO.File]::WriteAllText($readyFile, 'ready')
-  if (Get-Process -Id $AppProcessId -ErrorAction SilentlyContinue) { Wait-Process -Id $AppProcessId -Timeout 120 }
+  UpdateStatus 'waiting'
+  # The app can exit between checking its PID and Wait-Process attaching to it.
+  $exitDeadline = [DateTime]::UtcNow.AddSeconds(120)
+  while (Get-Process -Id $AppProcessId -ErrorAction SilentlyContinue) {
+    if ([DateTime]::UtcNow -ge $exitDeadline) { throw 'OPlayer did not exit before the update timeout' }
+    Start-Sleep -Milliseconds 200
+  }
   foreach ($file in $files) {
     $relative = $file.FullName.Substring($incoming.Length).TrimStart('\')
     $destination = ChildPath $root $relative

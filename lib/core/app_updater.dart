@@ -16,6 +16,20 @@ import 'app_release.dart';
 
 const appUpdateChannel = MethodChannel('oplayer/updates');
 
+// Windows PowerShell does not reliably initialize with DETACHED_PROCESS.
+// Keep its standard handles during startup; the child survives the app exiting.
+Future<Process> startWindowsInstaller(String script, List<String> arguments) => Process.start('powershell.exe', [
+  '-NoProfile',
+  '-NonInteractive',
+  '-WindowStyle',
+  'Hidden',
+  '-ExecutionPolicy',
+  'Bypass',
+  '-File',
+  script,
+  ...arguments,
+]);
+
 class AppUpdater extends ChangeNotifier {
   AppUpdater({
     http.Client Function()? clientFactory,
@@ -305,6 +319,7 @@ class AppUpdater extends ChangeNotifier {
   Future<void> install() async {
     if (busy || verifiedFile == null) return;
     installing = true;
+    phase = '업데이트 파일 재검증 중';
     notifyListeners();
     try {
       await _install();
@@ -331,18 +346,13 @@ class AppUpdater extends ChangeNotifier {
       await script.writeAsString(await rootBundle.loadString('assets/update/install-windows.ps1'), flush: true);
       final ready = File('${file.path}.ready');
       final failed = File('${file.path}.error');
-      for (final flag in [ready, failed]) {
+      final progress = File('${file.path}.progress');
+      for (final flag in [ready, failed, progress]) {
         if (await flag.exists()) await flag.delete();
       }
-      final helper = await Process.start('powershell.exe', [
-        '-NoProfile',
-        '-NonInteractive',
-        '-WindowStyle',
-        'Hidden',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-File',
-        script.path,
+      phase = 'Windows 설치기 시작 중';
+      notifyListeners();
+      final helper = await startWindowsInstaller(script.path, [
         '-Archive',
         file.path,
         '-InstallDir',
@@ -355,17 +365,60 @@ class AppUpdater extends ChangeNotifier {
         release!.version.name,
         '-Architecture',
         target == 'windows-arm64' ? 'arm64' : 'x64',
-      ], mode: ProcessStartMode.detached);
-      for (var i = 0; i < 300; i++) {
-        if (await failed.exists()) throw StateError(await failed.readAsString());
-        if (await ready.exists()) {
-          await SystemNavigator.pop();
-          return;
+      ]);
+      await helper.stdin.close();
+      final log = File('${file.path}.install.log').openWrite();
+      final logDone = log.done.catchError((Object e) => debugPrint('Update log: $e'));
+      var errorOutput = '';
+      final output = helper.stdout.listen(log.add);
+      final errors = helper.stderr.listen((bytes) {
+        log.add(bytes);
+        errorOutput += systemEncoding.decode(bytes);
+        if (errorOutput.length > 4096) errorOutput = errorOutput.substring(errorOutput.length - 4096);
+      });
+      int? helperExit;
+      helper.exitCode.then((code) => helperExit = code);
+      try {
+        for (var i = 0; i < 1200; i++) {
+          if (await failed.exists()) throw StateError(await failed.readAsString());
+          if (await ready.exists()) {
+            phase = '설치 준비 완료 · 앱 종료 후 교체합니다';
+            notifyListeners();
+            await SystemNavigator.pop();
+            return;
+          }
+          if (helperExit != null) {
+            throw StateError('Windows 설치기가 종료됐습니다 (코드 $helperExit). ${errorOutput.trim()}');
+          }
+          try {
+            if (await progress.exists()) {
+              final next = const {
+                'hash': '업데이트 체크섬 확인 중',
+                'extract': '업데이트 압축 해제 중',
+                'inspect': '설치 경로와 파일 확인 중',
+              }[(await progress.readAsString()).trim()];
+              if (next != null && phase != next) {
+                phase = next;
+                notifyListeners();
+              }
+            }
+          } on FileSystemException {
+            /* The helper may be replacing the status file. */
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 100));
         }
-        await Future<void>.delayed(const Duration(milliseconds: 100));
+        helper.kill();
+        throw StateError('Windows 설치기 응답이 지연되고 있습니다. 설치 로그: ${file.path}.install.log');
+      } finally {
+        await output.cancel();
+        await errors.cancel();
+        try {
+          await log.close();
+        } on FileSystemException catch (_) {
+          /* Best-effort diagnostics. */
+        }
+        await logDone;
       }
-      Process.killPid(helper.pid);
-      throw StateError('업데이트 준비가 지연되고 있습니다. 앱을 종료하지 말고 다시 확인해 주세요');
     } else {
       if (!await launchUrl(file.uri, mode: LaunchMode.externalApplication)) throw StateError('업데이트 압축 파일을 열지 못했습니다');
     }

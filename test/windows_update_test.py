@@ -2,6 +2,7 @@
 import hashlib
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import zipfile
 
@@ -52,4 +53,62 @@ with tempfile.TemporaryDirectory(prefix='oplayer-installer-') as temporary:
              prefix + 'data/flutter_assets/test': b'new data fixture'}
     check(valid, True)
     check(valid, False, validate=False)
-print('Windows installer checksum, traversal, bundle and rollback checks passed')
+
+    # The normal child process must survive its app parent exiting, replace the
+    # bundle, and launch it. The fixture executable only writes a local marker.
+    replacement = base / 'replacement.exe'
+    compile_script = base / 'compile.ps1'
+    compile_script.write_text('''param([string]$Output)
+Add-Type -OutputAssembly $Output -OutputType WindowsApplication -TypeDefinition @'
+public class Program {
+  public static void Main() {
+    System.IO.File.WriteAllText(System.IO.Path.Combine(
+      System.AppDomain.CurrentDomain.BaseDirectory, "started.txt"), "new");
+  }
+}
+'@
+''', encoding='ascii')
+    subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-File',
+                    str(compile_script), str(replacement)], check=True, capture_output=True, timeout=30)
+    archive = base / 'success.zip'
+    with zipfile.ZipFile(archive, 'w') as bundle:
+        bundle.writestr(prefix + 'oplayer.exe', replacement.read_bytes())
+        bundle.writestr(prefix + 'flutter_windows.dll', b'updated library')
+        bundle.writestr(prefix + 'data/updated', b'updated data')
+    checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
+    parent = '''
+import os, pathlib, subprocess, sys, time
+script, archive, install, checksum, architecture = sys.argv[1:]
+helper = subprocess.Popen(['powershell.exe', '-NoProfile', '-NonInteractive',
+    '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', script,
+    '-Archive', archive, '-InstallDir', install, '-ExpectedHash', checksum,
+    '-Version', '0.1.7-nightly.1', '-Architecture', architecture,
+    '-AppProcessId', str(os.getpid())], stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+helper.stdin.close()
+for _ in range(300):
+    if pathlib.Path(archive + '.ready').exists():
+        sys.exit(0)
+    if helper.poll() is not None:
+        raise RuntimeError(helper.stderr.read().decode(errors='replace'))
+    time.sleep(.1)
+helper.kill()
+raise RuntimeError('installer did not become ready')
+'''
+    subprocess.run([sys.executable, '-c', parent, str(script), str(archive),
+                    str(install), checksum, architecture], check=True, timeout=40)
+    import time
+    for _ in range(300):
+        if Path(str(archive) + '.error').exists():
+            break
+        if (install / 'started.txt').exists() and not list(base.glob('stage-*')):
+            break
+        time.sleep(.1)
+    failure = Path(str(archive) + '.error')
+    assert not failure.exists(), failure.read_text(encoding='utf-8-sig') if failure.exists() else ''
+    assert (install / 'started.txt').read_text() == 'new'
+    assert original.read_bytes() == replacement.read_bytes()
+    assert (install / 'flutter_windows.dll').read_bytes() == b'updated library'
+    assert (install / 'data/updated').read_bytes() == b'updated data'
+    assert not list(base.glob('stage-*')), 'successful staging was not cleaned'
+print('Windows installer validation, rollback, parent exit and replacement checks passed')
