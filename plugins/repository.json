@@ -142,6 +142,27 @@
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     },
     {
+      "id": "site.disable-devtool",
+      "name": "disable-devtool 차단",
+      "version": "1.0.0",
+      "kind": "browser",
+      "capabilities": [
+        "page",
+        "blockRequests"
+      ],
+      "pluginApi": 4,
+      "author": "OPlayer",
+      "features": [
+        "disable-devtool 요청 차단",
+        "전역 API 실행 억제",
+        "콘솔 감지 완화"
+      ],
+      "description": "tvchak208.com의 개발자 도구 감지로 인한 강제 이동을 억제합니다. 다른 코드에 합쳐진 변형은 일부만 대응합니다.",
+      "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/site.disable-devtool.js",
+      "sha256": "84980f6cb2ef61ec09a8013486664ea7f07111b5427fbf07cd366f04024215a9",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+    },
+    {
       "id": "subtitle.opensubtitles",
       "name": "OpenSubtitles",
       "version": "1.0.3",
