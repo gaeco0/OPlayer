@@ -1,4 +1,5 @@
-// @oplayer {"api":4,"id":"subtitle.opensubtitles","name":"OpenSubtitles","version":"1.0.3","kind":"player","hosts":["api.opensubtitles.com","vip-api.opensubtitles.com","dl.opensubtitles.com"],"authHosts":["api.opensubtitles.com","vip-api.opensubtitles.com"],"settings":[{"key":"apiKey","type":"password","label":"API Key","required":true},{"key":"username","type":"text","label":"OpenSubtitles.com 사용자 이름 (선택)","description":"비워 두면 로그인 없이 다운로드합니다. 계정을 사용하려면 비밀번호도 입력하세요."},{"key":"password","type":"password","label":"비밀번호 (선택)"},{"key":"userAgent","type":"text","label":"User-Agent","default":"OPlayer v0.1.5","required":true},{"key":"language","type":"text","label":"기본 자막 언어 코드","default":"ko","required":true,"description":"예: ko, en, ja"},{"key":"autoApply","type":"boolean","label":"재생 시작 시 자동 검색·적용","default":false,"description":"사용할 자막이 없으면 영상 제목으로 검색해 첫 결과를 적용합니다. 검색은 영상 제목을 이 서비스에 전송합니다."}],"setup":{"help":"API Consumers에서 발급한 API Key를 입력하세요. 사용자 이름·비밀번호는 선택 사항입니다. 비워 두면 익명 할당량으로, 계정을 입력하면 해당 계정의 할당량으로 다운로드합니다. 영상 정보로는 제목만 전송하며 파일 경로·브라우저 헤더는 보내지 않습니다.","consoleUrl":"https://www.opensubtitles.com/consumers"},"capabilities":["subtitles"]}
+// @oplayer {"api":4,"id":"subtitle.opensubtitles","name":"OpenSubtitles","version":"1.0.4","kind":"player","hosts":["*.opensubtitles.org","*.opensubtitles.com","api.opensubtitles.com","vip-api.opensubtitles.com"],"authHosts":["api.opensubtitles.com","vip-api.opensubtitles.com"],"settings":[{"key":"apiKey","type":"password","label":"API Key","required":true},{"key":"username","type":"text","label":"OpenSubtitles.com 사용자 이름 (선택)","description":"비워 두면 로그인 없이 다운로드합니다. 계정을 사용하려면 비밀번호도 입력하세요."},{"key":"password","type":"password","label":"비밀번호 (선택)"},{"key":"userAgent","type":"text","label":"User-Agent","default":"OPlayer v0.1.5","required":true},{"key":"language","type":"text","label":"기본 자막 언어 코드","default":"ko","required":true,"description":"예: ko, en, ja"},{"key":"autoApply","type":"boolean","label":"재생 시작 시 자동 검색·적용","default":false,"description":"사용할 자막이 없으면 영상 제목으로 검색해 첫 결과를 적용합니다. 검색은 영상 제목을 이 서비스에 전송합니다."}],"setup":{"help":"API Consumers에서 발급한 API Key를 입력하세요. 사용자 이름·비밀번호는 선택 사항입니다. 비워 두면 익명 할당량으로, 계정을 입력하면 해당 계정의 할당량으로 다운로드합니다. 영상 정보로는 제목만 전송하며 파일 경로·브라우저 헤더는 보내지 않습니다.","consoleUrl":"https://www.opensubtitles.com/consumers"},"capabilities":["subtitles"]}
+// Exact API entries remain in hosts for existing API-4 auth-host validation.
 globalThis.plugin = {
   validateSettings() {
     return /^[a-z]{2,3}(?:-[a-z]{2,4})?$/.test(OPlayer.config.language || 'ko')
@@ -56,6 +57,8 @@ globalThis.plugin = {
     }
     const download = await plugin._api('download', {base, token, body:{file_id:fileId, sub_format:'srt'}});
     if (typeof download.link !== 'string') throw Error('자막 다운로드 주소가 없습니다');
-    return {url:download.link, format:'srt', title:download.file_name || item.title};
+    // Upgrade only declared OpenSubtitles subdomains; signed paths/queries stay intact.
+    const url = download.link.replace(/^http:\/\/((?:[a-z0-9-]+\.)+opensubtitles\.(?:com|org))(?::80)?(?=\/|$)/i, 'https://$1');
+    return {url, format:'srt', title:download.file_name || item.title};
   }
 };

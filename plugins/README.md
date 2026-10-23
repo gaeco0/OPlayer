@@ -379,6 +379,12 @@ globalThis.plugin = {
   다시 설치하지 않습니다. 1.0.1부터 API Key만으로 로그인 없이 검색·다운로드하며 사용자 이름·비밀번호는
   선택 사항입니다. 계정을 입력하면 해당 계정으로 로그인합니다. 로그인 실패 시 익명 다운로드로 자동 전환하지
   않으며 다운로드 POST를 자동 재전송하지 않습니다. 키 발급과 할당량은 [공식 API 안내](https://opensubtitles.tawk.help/article/getting-started)를 따릅니다.
+- OpenSubtitles 1.0.4는 `*.opensubtitles.org`·`*.opensubtitles.com` 하위 도메인의 다운로드를 허용합니다.
+  API가 해당 하위 도메인의 HTTP 주소를 반환하면 HTTPS로 바꾸고 서명된 경로·쿼리를 보존합니다.
+  API Key·로그인 토큰은 기존 두 API 호스트에만 보내며 CDN에는 보내지 않습니다.
+  기존 API 4 앱의 권한 검사와 호환되도록 `hosts`에는 두 API 호스트도 명시합니다.
+  기존 설치는 설정 → 확장앱에서 목록을 새로고침하고 공식 저장소의 OpenSubtitles **교체**를 눌러
+  업데이트합니다. 저장한 설정은 유지되며 APK·데스크톱 앱을 다시 설치할 필요가 없습니다.
 
 ## 테스트
 
