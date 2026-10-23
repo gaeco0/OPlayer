@@ -38,6 +38,7 @@ jobs:
       - run: flutter test --no-pub
       - run: node test/browser_interactions_test.cjs
       - run: node test/web_sniffer_test.cjs
+      - run: node test/disable_devtool_plugin_test.cjs
       - run: node .github/scripts/publish-release.test.cjs
       - run: python .github/scripts/package-release.test.py
       - run: flutter build windows --release --no-pub
