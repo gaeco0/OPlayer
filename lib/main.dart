@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +8,7 @@ import 'package:media_kit/media_kit.dart';
 import 'app/theme.dart';
 import 'app/media_shell.dart';
 import 'core/mouse_nav.dart';
+import 'core/linux_file_associations.dart';
 import 'core/resume_store.dart';
 import 'core/settings.dart';
 import 'core/plugins/plugin_store.dart';
@@ -47,6 +50,7 @@ Future<void> main(List<String> args) async {
     if (enabled != AppSettings.instance.preventCapture) AppSettings.instance.update((s) => s.preventCapture = enabled);
   }
   MouseNav.installKeyHandler();
+  unawaited(registerLinuxFileAssociations());
   runApp(OPlayerApp(initialFiles: args));
 }
 
