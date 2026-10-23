@@ -65,7 +65,6 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     await store.init();
-    await store.setEnabled('subtitle.opensubtitles', false);
     await store.load(
       '// @oplayer ${jsonEncode({
         'api': 4,

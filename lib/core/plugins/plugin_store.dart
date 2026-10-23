@@ -35,6 +35,8 @@ class PluginListing {
 
 class PluginStore extends ChangeNotifier {
   PluginStore._();
+  @visibleForTesting
+  PluginStore.forTesting();
   static final instance = PluginStore._();
   final Map<String, OPlugin> installed = {};
   final Set<String> disabled = {};
@@ -88,13 +90,7 @@ class PluginStore extends ChangeNotifier {
     _prefs = await SharedPreferences.getInstance();
     repositories.addAll(_prefs!.getStringList('pluginRepositories') ?? [defaultPluginRepository]);
     disabled.addAll(_prefs!.getStringList('disabledPlugins') ?? []);
-    final saved = _prefs!.getStringList('plugins');
-    final sources =
-        saved ??
-        [
-          for (final id in ['gdrive', 'dropbox', 'onedrive']) await rootBundle.loadString('plugins/cloud.$id.js'),
-        ];
-    final addSubtitles = !(_prefs!.getBool('defaultSubtitlePluginAdded') ?? false);
+    final sources = _prefs!.getStringList('plugins') ?? <String>[];
     for (final source in sources) {
       try {
         final p = await _settingsDefinition(OPlugin.parse(source));
@@ -102,14 +98,6 @@ class PluginStore extends ChangeNotifier {
       } catch (e) {
         errors['load'] = '$e';
       }
-    }
-    if (addSubtitles) {
-      if (!installed.containsKey('subtitle.opensubtitles')) {
-        final subtitle = OPlugin.parse(await rootBundle.loadString('plugins/subtitle.opensubtitles.js'));
-        installed[subtitle.id] = subtitle;
-      }
-      await _prefs!.setStringList('plugins', installed.values.map((p) => p.source).toList());
-      await _prefs!.setBool('defaultSubtitlePluginAdded', true);
     }
   }
 

@@ -15,6 +15,7 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final store = PluginStore.instance;
       await store.init();
+      expect(store.installed, isEmpty);
       final source = await File('plugins/examples/site.example.js').readAsString();
       final bytes = utf8.encode(source);
       final server = await HttpServer.bind('127.0.0.1', 0);
