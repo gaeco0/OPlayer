@@ -1,4 +1,4 @@
-// @oplayer {"api":4,"id":"site.disable-devtool","name":"disable-devtool 차단","version":"1.0.0","kind":"browser","capabilities":["page","blockRequests"],"sites":["tvchak208.com","*.tvchak208.com"],"hosts":[],"blockRules":[{"urlFilter":"^https?://[^/?#]+/[^?#]*disable[-_.]?devtool([@/?.#_-]|$)"}],"settings":[{"key":"consoleGuard","type":"boolean","label":"콘솔 기반 개발자 도구 감지 억제","default":true}],"features":["disable-devtool 요청 차단","전역 API 실행 억제","콘솔 감지 완화"],"description":"tvchak208.com의 개발자 도구 감지로 인한 강제 이동을 억제합니다. 다른 코드에 합쳐진 변형은 일부만 대응합니다."}
+// @oplayer {"api":4,"id":"site.disable-devtool","name":"disable-devtool 차단","version":"1.1.0","kind":"browser","capabilities":["page","blockRequests"],"sites":["*"],"hosts":[],"blockRules":[{"urlFilter":"^https?://[^/?#]+/[^?#]*disable[-_.]?devtool([@/?.#_-]|$)"}],"settings":[{"key":"consoleGuard","type":"boolean","label":"콘솔 기반 개발자 도구 감지 억제","default":true}],"features":["모든 사이트·iframe 적용","disable-devtool 요청 차단","전역 API 실행 억제","콘솔 감지 완화"],"description":"모든 웹사이트에서 개발자 도구 감지로 인한 강제 이동을 억제합니다. 다른 코드에 합쳐진 변형은 일부만 대응합니다."}
 
 globalThis.plugin = {
   page(api) {

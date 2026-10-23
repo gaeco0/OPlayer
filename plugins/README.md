@@ -90,8 +90,8 @@ python tools/update_plugin_repository.py
 ## disable-devtool 차단
 
 공식 저장소의 **disable-devtool 차단**(`site.disable-devtool`)을 선택 설치하고 켠 뒤 페이지를 새로고침합니다.
-현재 적용 도메인은 `tvchak208.com`과 그 하위 도메인입니다. 다른 사이트에 적용하려면 JS 첫 줄의 `sites`에
-해당 도메인을 추가한 별도 파일을 가져오거나 확장앱 업데이트로 적용 도메인을 추가합니다. 전체 사이트 권한을 요구하지 않습니다.
+1.1.0부터 `sites: ["*"]` 권한으로 모든 웹사이트와 서로 다른 도메인의 iframe에 적용합니다.
+설치 권한 화면에 **모든 웹사이트**로 표시됩니다. 임의 도메인에 대한 호스트 HTTP 요청 권한(`hosts`)은 추가하지 않습니다.
 
 별도 파일로 로드되는 `disable-devtool` 요청을 차단하고, 문서 시작 시 공개 `DisableDevtool`/`disableDevtool`
 API를 무효화합니다. 기본으로 콘솔의 log/debug/info/dir/dirxml/table/clear 출력을 억제해 콘솔 기반 감지 오작동을
@@ -99,7 +99,8 @@ API를 무효화합니다. 기본으로 콘솔의 log/debug/info/dir/dirxml/tabl
 
 다른 코드에 합쳐지거나 이름을 숨긴 변형, 별도 타이밍·크기 감지까지 모두 차단하는 것은 보장하지 않습니다.
 타이머·fetch·XHR·history·일반 페이지 이동은 변경하지 않습니다. 호스트 API 4를 지원하는 기존 앱에 JS와 목록만
-배포하므로 APK 재설치·앱 릴리스는 필요 없습니다. 동작 검증은 `node test/disable_devtool_plugin_test.cjs`로 실행합니다.
+배포합니다. 다만 전체 사이트 권한을 지원하지 않는 이전 앱에는 호스트 업데이트가 한 번 필요합니다.
+지원 호스트에서는 이후 확장앱 업데이트만으로 반영합니다. 동작 검증은 `node test/disable_devtool_plugin_test.cjs`로 실행합니다.
 
 ## 유형별 공통 규약 (API 4)
 
@@ -162,7 +163,9 @@ globalThis.plugin = {
 첫 줄은 `// @oplayer `와 JSON 메타데이터이며 나머지는 `globalThis.plugin = {...}`입니다.
 `id`, `name`, `version`, `api: 4`, `kind: "player" | "browser" | "resource"`, `capabilities`를 지정합니다.
 기존 `site`·`cloud`·`subtitle` 선언/API 1~3은 호환용으로 읽지만 새 확장앱에는 사용하지 마세요. ID를 유지하면 계정·설정도 유지됩니다.
-도메인은 정확한 호스트 또는 `*.example.com` 형식입니다. 와일드카드는 하위 호스트만 포함합니다.
+도메인은 정확한 호스트 또는 `*.example.com` 형식입니다. `*.example.com`은 하위 호스트만 포함합니다.
+브라우저의 `sites`에는 전체 웹사이트 권한 `*`도 허용합니다. 문서 주입·요청 차단·WebKit 콘텐츠 차단에
+같은 범위를 적용하며 빈 호스트의 `about:blank`·로컬 파일은 포함하지 않습니다. `hosts`·`authHosts`에는 `*`를 허용하지 않습니다.
 
 ### 사이트 기능
 

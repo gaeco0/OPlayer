@@ -17,7 +17,7 @@ String sitePluginScript(OPlugin p) => !p.site || !p.supports('page')
     : '''(() => {
   const domains = ${jsonEncode(p.sites)};
   const host = location.hostname.toLowerCase();
-  if (!domains.some(d => d.startsWith('*.') ? host.endsWith(d.slice(1)) : host === d)) return;
+  if (!host || !domains.some(d => d === '*' || (d.startsWith('*.') ? host.endsWith(d.slice(1)) : host === d))) return;
   const marker = ${jsonEncode('__oplayer_${p.id}')};
   if (window[marker]) return; window[marker] = true;
   try {
@@ -57,6 +57,7 @@ bool blockedBySitePlugin(String pageUrl, String requestUrl) => PluginStore.insta
     );
 
 String siteUrlPattern(String site) {
+  if (site == '*') return '^https?://[^/]+/';
   final host = site.startsWith('*.') ? '([a-zA-Z0-9-]+\\.)+${RegExp.escape(site.substring(2))}' : RegExp.escape(site);
   return '^https?://$host(:[0-9]+)?/';
 }

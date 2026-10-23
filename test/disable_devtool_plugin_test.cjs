@@ -3,6 +3,19 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync('plugins/site.disable-devtool.js', 'utf8');
 const manifest = JSON.parse(source.split('\n')[0].slice(12));
+assert.deepEqual(manifest.sites, ['*']);
+// Exercise the actual host gate emitted by the page-script SDK, including
+// unrelated top-level pages and cross-origin iframe hosts.
+const sdk = fs.readFileSync('lib/features/web/site_plugins.dart', 'utf8');
+const gate = sdk.match(/  const host = [\s\S]*?return;/)[0];
+function allowed(hostname, domains) {
+  return vm.runInNewContext(`(()=>{${gate}return true;})()`, {location: {hostname}, domains});
+}
+for (const host of ['tvchak208.com', 'player.example.org', 'example.xyz', 'localhost', '127.0.0.1', '[::1]']) {
+  assert.equal(allowed(host, manifest.sites), true, host);
+}
+assert.equal(allowed('', manifest.sites), undefined);
+assert.equal(allowed('other.example', ['tvchak208.com']), undefined);
 const rule = new RegExp(manifest.blockRules[0].urlFilter);
 for (const url of [
   'https://cdn.jsdelivr.net/npm/disable-devtool@latest',

@@ -4,10 +4,47 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:oplayer/core/plugins/plugin_store.dart';
+import 'package:oplayer/core/plugins/plugin.dart';
 import 'package:oplayer/features/web/site_plugins.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('all-sites page permission blocks across domains without granting network access', () async {
+    final source = await File('plugins/site.disable-devtool.js').readAsString();
+    final plugin = OPlugin.parse(source);
+    final store = PluginStore.instance;
+    SharedPreferences.setMockInitialValues({});
+    await store.init();
+    await store.load(source);
+    const detector = 'https://cdn.jsdelivr.net/npm/disable-devtool@latest';
+    for (final url in [
+      'https://example.org/watch',
+      'https://player.example.xyz/',
+      'http://localhost/',
+      'https://[::1]/',
+    ]) {
+      expect(plugin.matches(url), true);
+      expect(blockedBySitePlugin(url, detector), true);
+      expect(RegExp(siteUrlPattern('*')).hasMatch(url), true);
+      expect(plugin.allows(url), false);
+      expect(blockedBySitePlugin(url, 'https://cdn.example.com/player.js'), false);
+    }
+    expect(plugin.matches('about:blank'), false);
+    expect(plugin.matches('file:///video.mp4'), false);
+    for (final key in ['hosts', 'authHosts']) {
+      final metadata = {
+        ...plugin.manifest,
+        key: ['*'],
+      };
+      expect(
+        () => OPlugin.parse('// @oplayer ${jsonEncode(metadata)}\nglobalThis.plugin={page(){}}'),
+        throwsFormatException,
+      );
+    }
+    await store.setEnabled(plugin.id, false);
+    expect(blockedBySitePlugin('https://example.org/', detector), false);
+    await store.remove(plugin.id);
+  });
   test('site extensions filter their pages, preserve headers and stop affecting requests when disabled', () async {
     SharedPreferences.setMockInitialValues({});
     final store = PluginStore.instance;
