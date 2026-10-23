@@ -22,7 +22,7 @@ void main() {
     await AppSettings.instance.init();
     await PluginStore.instance.init();
     PluginStore.instance.repositories.clear(); // No remote repository requests in widget tests.
-    for (final id in ['box', 'mybox', 's3']) {
+    for (final id in ['gdrive', 'dropbox', 'onedrive', 'box', 'mybox', 's3']) {
       await PluginStore.instance.load(await File('plugins/cloud.$id.js').readAsString());
     }
   });

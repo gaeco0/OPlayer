@@ -25,6 +25,9 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     await AppSettings.instance.init();
     await PluginStore.instance.init();
+    for (final id in ['gdrive', 'dropbox', 'onedrive']) {
+      await PluginStore.instance.load(await File('plugins/cloud.$id.js').readAsString());
+    }
   });
 
   test('desktop authorization validates state before consuming callback and uses PKCE', () async {

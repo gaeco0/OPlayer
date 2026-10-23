@@ -21,6 +21,7 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     await store.init();
+    await store.load(await File('plugins/subtitle.opensubtitles.js').readAsString());
     provider = store.installed['subtitle.opensubtitles']!;
     await store.setCredentials(provider.id, {
       'apiKey': 'test-key',
@@ -355,6 +356,6 @@ void main() {
           .any((s) => s.contains('subtitle.opensubtitles')),
       false,
     );
-    expect((await SharedPreferences.getInstance()).getBool('defaultSubtitlePluginAdded'), true);
+    expect((await SharedPreferences.getInstance()).getBool('defaultSubtitlePluginAdded'), isNull);
   });
 }
