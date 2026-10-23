@@ -112,6 +112,50 @@ void main() {
     }
   });
 
+  test('OpenSubtitles allows its subdomains, upgrades HTTP links and follows declared CDN redirects', () async {
+    expect(provider.hosts, containsAll(['*.opensubtitles.org', '*.opensubtitles.com']));
+    expect(provider.allows('https://dl.opensubtitles.org/sub'), true);
+    expect(provider.allows('https://dl.opensubtitles.org/sub', auth: true), false);
+    expect(provider.allows('https://cdn.opensubtitles.com/sub', auth: true), false);
+    expect(provider.allows('https://dl.opensubtitles.org.evil.example/sub'), false);
+    expect(provider.allows('https://dl.opensubtitles.com.evil.example/sub'), false);
+    expect(provider.allows('https://user@dl.opensubtitles.org/sub'), false);
+    for (final link in [
+      'https://dl.opensubtitles.org/sub?token=signed%2Fvalue&name=a+b',
+      'http://dl.opensubtitles.org/sub?token=signed%2Fvalue&name=a+b',
+      'http://dl.opensubtitles.com:80/sub?token=signed%2Fvalue&name=a+b',
+      'https://dl.opensubtitles.com/redirect',
+      'https://vip-dl.opensubtitles.com/sub?token=signed%2Fvalue&name=a+b',
+      'http://cdn.eu.opensubtitles.org:80/sub?token=signed%2Fvalue&name=a+b',
+    ]) {
+      var cdnRequests = 0;
+      final service = SubtitlePlugins(
+        store,
+        clientFactory: () => MockClient((r) async {
+          if (r.url.path.endsWith('/login')) return http.Response('{"token":"test-token"}', 200);
+          if (r.url.path == '/api/v1/download') return http.Response(jsonEncode({'link': link}), 200);
+          cdnRequests++;
+          expect(r.url.scheme, 'https');
+          expect(r.url.port, 443);
+          expect(provider.allows(r.url.toString()), true);
+          expect(r.headers.containsKey('api-key'), false);
+          expect(r.headers.containsKey('authorization'), false);
+          if (r.url.path == '/redirect') {
+            return http.Response('', 302, headers: {'location': 'https://dl.opensubtitles.org/sub'});
+          }
+          if (r.url.hasQuery) expect(r.url.query, 'token=signed%2Fvalue&name=a+b');
+          return http.Response('1\n00:00:00,000 --> 00:00:01,000\nSubtitle\n', 200);
+        }),
+      );
+      final file = await service.download(provider, {
+        'id': '42',
+        'data': {'fileId': 42},
+      }, temp);
+      expect(await file.readAsString(), contains('Subtitle'));
+      expect(cdnRequests, link.endsWith('/redirect') ? 2 : 1);
+    }
+  });
+
   test('API-key-only settings search and download without login; canonical GET redirects are followed', () async {
     await store.setCredentials(provider.id, {'apiKey': 'test-key'});
     addTearDown(

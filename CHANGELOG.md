@@ -5,7 +5,7 @@
 
 ## [Unreleased]
 
-아직 배포하지 않은 변경 사항이 없습니다.
+- OpenSubtitles 확장앱 `1.0.4`에서 다운로드 허용 범위를 `*.opensubtitles.org`·`*.opensubtitles.com`으로 변경했습니다. 해당 하위 도메인의 HTTP 링크는 서명된 경로·쿼리를 유지한 채 HTTPS로 바꾸며, API Key·로그인 토큰은 기존 두 API 서버에만 보냅니다. 앱 재설치 없이 확장앱 저장소를 새로고침한 뒤 OpenSubtitles를 교체해 적용합니다.
 
 ## [0.1.7-nightly.20261023.5]
 
