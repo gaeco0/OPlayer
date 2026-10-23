@@ -26,7 +26,7 @@ void main() {
     final parsed = OPlugin.parse(source);
     final body = source.substring(source.indexOf('\n') + 1);
     final header = '// @oplayer ${jsonEncode({...parsed.manifest, 'canRename': true})}\n';
-    final renamed = OPlugin.parse('${header}${body}\nplugin.rename = async ({path,newName}) => true;');
+    final renamed = OPlugin.parse('$header$body\nplugin.rename = async ({path,newName}) => true;');
     expect(renamed.allowedMethods, contains('rename'));
     expect(renamed.manifest['canDelete'], isNot(true));
     await callPlugin(renamed, 'validate', {}, validateOnly: true);
