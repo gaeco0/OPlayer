@@ -491,6 +491,31 @@ class ResourceLocks extends ChangeNotifier {
     _lockInterface();
   }
 
+  /// Protect the destination before moving a locked file, including across crashes.
+  Future<void> renameFile(String from, String to, Future<void> Function() operation) async {
+    await requireAccess(from);
+    await requireAccess(to);
+    final oldKey = resourceKey(from);
+    final newKey = resourceKey(to);
+    if (oldKey == newKey || !_resources.containsKey(oldKey)) return operation();
+    final previous = Map<String, String>.of(_resources);
+    _resources[newKey] = _resources[oldKey]!;
+    try {
+      await _save();
+      await operation();
+    } catch (_) {
+      _resources = previous;
+      await _save();
+      rethrow;
+    }
+    _resources.remove(oldKey);
+    _unlockedResources.remove(oldKey);
+    _unlockedResources.remove(newKey);
+    await _save();
+    _playbackGeneration++;
+    notifyListeners();
+  }
+
   void _lockInterface() {
     _authorized = false;
     _unlockedResources.clear();

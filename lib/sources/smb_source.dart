@@ -152,6 +152,21 @@ class SmbSource extends MediaSource {
   bool get canDelete => true;
 
   @override
+  bool get canRename => true;
+
+  @override
+  Future<String> rename(RemoteEntry entry, String name) async {
+    final target = renamedPath(entry, name);
+    final client = await _connect();
+    try {
+      await client.rename(await client.file(deletionPath(entry)), target);
+      return target;
+    } finally {
+      await client.close();
+    }
+  }
+
+  @override
   bool canDeleteEntry(RemoteEntry entry) =>
       super.canDeleteEntry(entry) && entry.path.split('/').where((part) => part.isNotEmpty).length > 1;
 

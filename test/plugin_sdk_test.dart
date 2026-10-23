@@ -21,6 +21,21 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final store = PluginStore.instance;
   late OPlugin plugin;
+  test('resource rename is opt-in, independent of deletion, and requires its hook', () async {
+    final source = await File('plugins/examples/cloud.custom.example.js').readAsString();
+    final parsed = OPlugin.parse(source);
+    final body = source.substring(source.indexOf('\n') + 1);
+    final header = '// @oplayer ${jsonEncode({...parsed.manifest, 'canRename': true})}\n';
+    final renamed = OPlugin.parse('${header}${body}\nplugin.rename = async ({path,newName}) => true;');
+    expect(renamed.allowedMethods, contains('rename'));
+    expect(renamed.manifest['canDelete'], isNot(true));
+    await callPlugin(renamed, 'validate', {}, validateOnly: true);
+    await expectLater(callPlugin(OPlugin.parse('$header$body'), 'validate', {}, validateOnly: true), throwsStateError);
+    expect(
+      () => OPlugin.parse('// @oplayer ${jsonEncode({...parsed.manifest, 'canRename': 'yes'})}\n$body'),
+      throwsFormatException,
+    );
+  });
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});

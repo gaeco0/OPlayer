@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../core/media_item.dart';
 import '../core/media_utils.dart';
+import '../core/file_renaming.dart';
 import '../core/network/network_service.dart';
 
 /// 원격 폴더 항목
@@ -147,6 +148,16 @@ abstract class MediaSource {
   bool get canUpload => false;
 
   bool get canDelete => false;
+
+  bool get canRename => false;
+  bool canRenameEntry(RemoteEntry entry) => canRename && !entry.isDir && canDeleteEntry(entry);
+  Future<String> rename(RemoteEntry entry, String name) => throw UnsupportedError('$scheme 는 이름변경을 지원하지 않습니다');
+
+  String renamedPath(RemoteEntry entry, String name) {
+    if (!canRenameEntry(entry)) throw UnsupportedError('이 항목은 이름을 바꿀 수 없습니다');
+    validateFileName(name);
+    return p.posix.join(p.posix.dirname(deletionPath(entry)), name);
+  }
 
   bool canDeleteEntry(RemoteEntry entry) {
     if (!canDelete) return false;

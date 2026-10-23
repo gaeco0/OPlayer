@@ -70,6 +70,9 @@ Future<Object?> callPlugin(
       if (plugin.manifest['canDelete'] == true && !methods.contains('delete')) {
         throw StateError('삭제를 지원하는 확장앱에는 delete 함수가 필요합니다');
       }
+      if (plugin.manifest['canRename'] == true && !methods.contains('rename')) {
+        throw StateError('이름변경을 지원하는 확장앱에는 rename 함수가 필요합니다');
+      }
       if (plugin.cloud
           ? !['accountName', 'list', 'stream'].every(methods.contains)
           : plugin.kind == 'player'

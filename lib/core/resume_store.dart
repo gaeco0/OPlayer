@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'resource_locks.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -104,6 +105,33 @@ class ResumeStore {
   Future<void> remove(String path) async {
     _entries.remove(path);
     await _prefs.setString(_kResume, jsonEncode(_entries.map((k, v) => MapEntry(k, v.toJson()))));
+  }
+
+  Future<void> toggleWatched(String path, {String? title}) async {
+    await ResourceLocks.instance.requireAccess(path);
+    final previous = get(path);
+    final duration = previous?.duration ?? const Duration(seconds: 1);
+    await save(
+      path,
+      previous?.finished == true ? Duration.zero : duration,
+      duration,
+      title: title ?? previous?.title,
+      browserMedia: previous?.browserMedia ?? false,
+    );
+  }
+
+  Future<void> relocate(String oldPath, String newPath, String title) async {
+    if (oldPath != newPath) {
+      final settings = _prefs.getString('playback_settings_$oldPath');
+      if (settings != null) {
+        await _prefs.setString('playback_settings_$newPath', settings);
+        await _prefs.remove('playback_settings_$oldPath');
+      }
+    }
+    final entry = _entries.remove(oldPath);
+    if (entry != null) {
+      await save(newPath, entry.position, entry.duration, title: title, browserMedia: entry.browserMedia);
+    }
   }
 
   List<String> get folders => _prefs.getStringList(_kFolders) ?? [];

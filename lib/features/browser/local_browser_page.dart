@@ -15,6 +15,10 @@ import 'home_screen.dart';
 import 'video_tile.dart';
 import 'swipe_delete_tile.dart';
 import '../../core/file_deletion.dart';
+import '../../core/file_renaming.dart';
+import '../../core/playlist_store.dart';
+import 'file_actions.dart';
+import 'playlists_page.dart';
 
 class FsItem {
   FsItem(this.entity, this.stat);
@@ -55,6 +59,81 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
   bool _foldersFirst = true;
   bool _grid = false;
   int _loadGeneration = 0;
+  bool _selecting = false;
+  bool _busy = false;
+  final _selected = <String>{};
+  List<FsItem> get _selectedFiles => _items.where((e) => !e.isDir && _selected.contains(e.path)).toList();
+  void _toggle(String path) => setState(() {
+    if (!_selected.add(path)) _selected.remove(path);
+  });
+  void _closeSelection() => setState(() {
+    _selecting = false;
+    _selected.clear();
+  });
+  Future<void> _run(Future<void> Function() action) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await runFileAction(context, action);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _addSelected() => runFileAction(
+    context,
+    () => addToPlaylist(
+      context,
+      _selectedFiles.where((e) => isPlayable(e.path)).map((e) => PlaylistTrack(e.path, e.name)).toList(),
+    ),
+  );
+  Future<void> _deleteSelected() async {
+    final files = _selectedFiles;
+    if (!await confirmFileDeletion(context, files.length) || !mounted) return;
+    await _run(() async {
+      final failures = <String>[];
+      for (final file in files) {
+        try {
+          await deleteLocalEntry(file.path, parent: _cwd);
+          _selected.remove(file.path);
+        } catch (error) {
+          failures.add('${file.name}: $error');
+        }
+      }
+      if (mounted) await _load();
+      if (failures.isNotEmpty) throw StateError(failures.join('\n'));
+    });
+  }
+
+  Future<void> _rename(FsItem item) async {
+    final name = await askName(context, '파일 이름변경', initial: item.name);
+    if (name == null || !mounted) return;
+    await _run(() async {
+      try {
+        await renameLocalFile(item.path, name, parent: _cwd);
+      } finally {
+        if (mounted) await _load();
+      }
+    });
+  }
+
+  Future<void> _deleteFromMenu(FsItem item) async {
+    if (await confirmFileDeletion(context, 1) && mounted) await _run(() => _delete(item));
+  }
+
+  Widget _wrap(FsItem item, Widget tile) => FileSelectionTile(
+    active: _selecting && !item.isDir,
+    selected: _selected.contains(item.path),
+    onToggle: () => _toggle(item.path),
+    child: SwipeDeleteTile(
+      key: ValueKey(item.path),
+      onDelete: _selecting || _busy ? null : () => _delete(item),
+      watchedKey: !_selecting && !item.isDir && isPlayable(item.path) ? item.path : null,
+      watchedTitle: item.name,
+      onChanged: () => setState(() {}),
+      child: tile,
+    ),
+  );
 
   String get _cwd => _stack.last;
 
@@ -113,6 +192,7 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
       if (!mounted || generation != _loadGeneration) return;
       _allFiles = files;
       _items = items;
+      _selected.removeWhere((path) => !items.any((e) => !e.isDir && e.path == path));
       _applySort();
     } catch (e) {
       if (!mounted || generation != _loadGeneration) return;
@@ -134,11 +214,17 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
   }
 
   void _enter(String dir) {
+    _closeSelection();
     _stack.add(dir);
     _load();
   }
 
   bool _up() {
+    if (_selecting) {
+      _closeSelection();
+      return true;
+    }
+    if (_busy) return true;
     if (_stack.length <= 1) return false;
     _stack.removeLast();
     _load();
@@ -176,13 +262,15 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
     final relative = p.relative(_cwd, from: widget.rootPath);
 
     return PopScope(
-      canPop: _stack.length <= 1,
+      canPop: !_selecting && !_busy && _stack.length <= 1,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _up();
       },
       child: Scaffold(
         appBar: AppBar(
-          leading: _stack.length > 1
+          leading: _selecting
+              ? IconButton(tooltip: '선택 취소', icon: const Icon(Icons.close), onPressed: _busy ? null : _closeSelection)
+              : _stack.length > 1
               ? IconButton(icon: const Icon(Icons.arrow_back), onPressed: _up)
               : (shouldShowDrawerButton(context)
                     ? IconButton(icon: const Icon(Icons.menu), onPressed: widget.onOpenDrawer)
@@ -191,7 +279,7 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(_selecting ? '${_selected.length}개 선택' : title, maxLines: 1, overflow: TextOverflow.ellipsis),
               if (relative != '.')
                 Text(
                   '/$relative',
@@ -202,49 +290,75 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
             ],
           ),
           actions: [
-            if (_stack.length > 1 && shouldShowDrawerButton(context))
-              IconButton(tooltip: '메뉴', icon: const Icon(Icons.menu), onPressed: widget.onOpenDrawer),
-            sortMenu(
-              sort: _sort,
-              asc: _asc,
-              foldersFirst: _foldersFirst,
-              onFoldersFirst: () => setState(() {
-                _foldersFirst = !_foldersFirst;
-                _applySort();
-                _saveSort();
-              }),
-              onSort: (v) => setState(() {
-                _asc = _sort == v ? !_asc : true;
-                _sort = v;
-                _applySort();
-                _saveSort();
-              }),
-              extra: [
-                const PopupMenuDivider(),
-                CheckedPopupMenuItem(
-                  value: 'hidden',
-                  checked: AppSettings.instance.showHiddenFiles,
-                  child: const Text('숨김 파일 표시'),
-                ),
-              ],
-              onExtra: (v) {
-                AppSettings.instance.update((s) => s.showHiddenFiles = !s.showHiddenFiles);
-                _load();
-              },
-            ),
-            IconButton(
-              tooltip: _grid ? '목록 보기' : '격자 보기',
-              icon: Icon(_grid ? Icons.view_list : Icons.grid_view),
-              onPressed: () => setState(() => _grid = !_grid),
-            ),
-            IconButton(tooltip: '새로고침', icon: const Icon(Icons.refresh), onPressed: _load),
+            if (_selecting)
+              FileSelectionActions(
+                onSelectAll: () => setState(() {
+                  final files = _items.where((e) => !e.isDir).map((e) => e.path).toSet();
+                  if (_selected.containsAll(files)) {
+                    _selected.clear();
+                  } else {
+                    _selected.addAll(files);
+                  }
+                }),
+                onAdd: !_busy && _selectedFiles.any((e) => isPlayable(e.path)) ? _addSelected : null,
+                onDelete: !_busy && _selected.isNotEmpty ? _deleteSelected : null,
+              )
+            else ...[
+              IconButton(
+                tooltip: '선택모드',
+                icon: const Icon(Icons.checklist),
+                onPressed: () => setState(() => _selecting = true),
+              ),
+              if (_stack.length > 1 && shouldShowDrawerButton(context))
+                IconButton(tooltip: '메뉴', icon: const Icon(Icons.menu), onPressed: widget.onOpenDrawer),
+              sortMenu(
+                sort: _sort,
+                asc: _asc,
+                foldersFirst: _foldersFirst,
+                onFoldersFirst: () => setState(() {
+                  _foldersFirst = !_foldersFirst;
+                  _applySort();
+                  _saveSort();
+                }),
+                onSort: (v) => setState(() {
+                  _asc = _sort == v ? !_asc : true;
+                  _sort = v;
+                  _applySort();
+                  _saveSort();
+                }),
+                extra: [
+                  const PopupMenuDivider(),
+                  CheckedPopupMenuItem(
+                    value: 'hidden',
+                    checked: AppSettings.instance.showHiddenFiles,
+                    child: const Text('숨김 파일 표시'),
+                  ),
+                ],
+                onExtra: (v) {
+                  AppSettings.instance.update((s) => s.showHiddenFiles = !s.showHiddenFiles);
+                  _load();
+                },
+              ),
+              IconButton(
+                tooltip: _grid ? '목록 보기' : '격자 보기',
+                icon: Icon(_grid ? Icons.view_list : Icons.grid_view),
+                onPressed: () => setState(() => _grid = !_grid),
+              ),
+              IconButton(tooltip: '새로고침', icon: const Icon(Icons.refresh), onPressed: _load),
+            ],
           ],
+          bottom: _busy
+              ? const PreferredSize(preferredSize: Size.fromHeight(3), child: LinearProgressIndicator())
+              : null,
         ),
-        body: ResourceAccessView(
-          resources: [_cwd],
-          onRefresh: _load,
-          child: SlidableAutoCloseBehavior(
-            child: RefreshIndicator(onRefresh: _load, child: _body()),
+        body: AbsorbPointer(
+          absorbing: _busy,
+          child: ResourceAccessView(
+            resources: [_cwd],
+            onRefresh: _load,
+            child: SlidableAutoCloseBehavior(
+              child: RefreshIndicator(onRefresh: _load, child: _body()),
+            ),
           ),
         ),
       ),
@@ -288,8 +402,17 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
                   size: it.stat.size,
                   onTap: () => _play(it),
                   onChanged: () => setState(() {}),
+                  onRename: () => _rename(it),
+                  onDelete: () => _deleteFromMenu(it),
+                  onAddToPlaylist: isPlayable(it.path)
+                      ? () => runFileAction(context, () => addToPlaylist(context, [PlaylistTrack(it.path, it.name)]))
+                      : null,
+                  onSelect: () => setState(() {
+                    _selecting = true;
+                    _selected.add(it.path);
+                  }),
                 );
-          return SwipeDeleteTile(key: ValueKey(it.path), onDelete: () => _delete(it), child: tile);
+          return _wrap(it, tile);
         },
       );
     }
@@ -312,8 +435,17 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
                 hasSubtitle: siblingSubtitles(it.path, _allFiles).isNotEmpty,
                 onTap: () => _play(it),
                 onChanged: () => setState(() {}),
+                onRename: () => _rename(it),
+                onDelete: () => _deleteFromMenu(it),
+                onAddToPlaylist: isPlayable(it.path)
+                    ? () => runFileAction(context, () => addToPlaylist(context, [PlaylistTrack(it.path, it.name)]))
+                    : null,
+                onSelect: () => setState(() {
+                  _selecting = true;
+                  _selected.add(it.path);
+                }),
               );
-        return SwipeDeleteTile(key: ValueKey(it.path), onDelete: () => _delete(it), child: tile);
+        return _wrap(it, tile);
       },
     );
   }

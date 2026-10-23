@@ -50,7 +50,12 @@ class OPlugin {
   Set<String> get allowedMethods => {
     'validateSettings',
     for (final capability in capabilities) ...contracts[kind]![capability]!,
-    if (cloud) ...['authenticate', 'refresh', if (manifest['canDelete'] == true) 'delete'],
+    if (cloud) ...[
+      'authenticate',
+      'refresh',
+      if (manifest['canDelete'] == true) 'delete',
+      if (manifest['canRename'] == true) 'rename',
+    ],
   };
   List<String> get hosts => (manifest['hosts'] as List).cast<String>();
   List<String> get authHosts => (manifest['authHosts'] as List? ?? []).cast<String>();
@@ -122,7 +127,7 @@ class OPlugin {
         throw const FormatException('유형에 맞는 API 4 기능(capabilities)을 선언하세요');
       }
       if (!plugin.site && (meta.containsKey('sites') || meta.containsKey('blockRules')) ||
-          !plugin.cloud && ['oauth', 'auth', 'canDelete'].any(meta.containsKey)) {
+          !plugin.cloud && ['oauth', 'auth', 'canDelete', 'canRename'].any(meta.containsKey)) {
         throw const FormatException('다른 유형의 확장앱 권한은 사용할 수 없습니다');
       }
       if (plugin.site && !plugin.supports('blockRequests') && meta.containsKey('blockRules')) {
@@ -131,6 +136,9 @@ class OPlugin {
     }
     if (meta['canDelete'] != null && meta['canDelete'] is! bool) {
       throw const FormatException('잘못된 삭제 지원 선언');
+    }
+    if (meta['canRename'] != null && meta['canRename'] is! bool) {
+      throw const FormatException('잘못된 이름변경 지원 선언');
     }
     if (meta['platforms'] != null &&
         (meta['platforms'] is! List ||

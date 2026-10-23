@@ -12,6 +12,10 @@ import '../browser/local_browser_page.dart' show ErrorView, ScrollablePlaceholde
 import '../browser/video_tile.dart';
 import '../browser/swipe_delete_tile.dart';
 import '../../core/file_deletion.dart';
+import '../../core/file_renaming.dart';
+import '../../core/playlist_store.dart';
+import '../browser/file_actions.dart';
+import '../browser/playlists_page.dart';
 import '../player/player_screen.dart';
 import '../photos/photo_viewer.dart';
 import '../web/download_manager.dart';
@@ -46,6 +50,93 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
   bool _grid = false;
   bool _videosOnly = true;
   int _loadGeneration = 0;
+  bool _selecting = false;
+  bool _busy = false;
+  final _selected = <String>{};
+  List<RemoteEntry> get _selectedFiles => _items.where((e) => !e.isDir && _selected.contains(e.path)).toList();
+  void _toggle(String path) => setState(() {
+    if (!_selected.add(path)) _selected.remove(path);
+  });
+  void _closeSelection() => setState(() {
+    _selecting = false;
+    _selected.clear();
+  });
+  Future<void> _run(Future<void> Function() action) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await runFileAction(context, action);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  PlaylistTrack _track(RemoteEntry e) => PlaylistTrack(e.directUrl ?? widget.source.keyFor(e.path), e.name);
+  Future<void> _addSelected() => runFileAction(
+    context,
+    () => addToPlaylist(context, _selectedFiles.where((e) => e.isPlayableMedia).map(_track).toList()),
+  );
+  Future<void> _deleteSelected() async {
+    final files = _selectedFiles;
+    if (!await confirmFileDeletion(context, files.length) || !mounted) return;
+    await _run(() async {
+      final failures = <String>[];
+      for (final file in files) {
+        try {
+          await authorizeDeletion(widget.source.keyFor(file.path), directory: false);
+          await widget.source.delete(file);
+          _selected.remove(file.path);
+        } catch (error) {
+          failures.add('${file.name}: $error');
+        }
+      }
+      _cache.clear();
+      if (mounted) await _load(force: true);
+      if (failures.isNotEmpty) throw StateError(failures.join('\n'));
+    });
+  }
+
+  Future<void> _rename(RemoteEntry entry) async {
+    final name = await askName(context, '파일 이름변경', initial: entry.name);
+    if (name == null || name == entry.name || !mounted) return;
+    await _run(() async {
+      validateFileName(name);
+      final source = widget.source;
+      await ResourceLocks.instance.requireAccess(source.keyFor(entry.path));
+      // Refresh before renaming so a stale cached list cannot hide a collision.
+      if ((await source.list(_stack.last.path)).any((e) => e.name == name)) throw StateError('같은 이름의 항목이 이미 있습니다');
+      String? target;
+      // Filesystem-backed sources keep the same parent. Opaque-ID providers preserve their key.
+      final destination = source.renamedPath(entry, name);
+      try {
+        await ResourceLocks.instance.renameFile(source.keyFor(entry.path), source.keyFor(destination), () async {
+          target = await source.rename(entry, name);
+        });
+        await updateRenamedFile(source.keyFor(entry.path), source.keyFor(target!), name);
+      } finally {
+        _cache.clear();
+        if (mounted) await _load(force: true);
+      }
+    });
+  }
+
+  Future<void> _deleteFromMenu(RemoteEntry entry) async {
+    if (await confirmFileDeletion(context, 1) && mounted) await _run(() => _delete(entry));
+  }
+
+  Widget _wrap(RemoteEntry entry, Widget tile) => FileSelectionTile(
+    active: _selecting && !entry.isDir,
+    selected: _selected.contains(entry.path),
+    onToggle: () => _toggle(entry.path),
+    child: SwipeDeleteTile(
+      key: ValueKey(entry.path),
+      onDelete: !_selecting && !_busy && widget.source.canDeleteEntry(entry) ? () => _delete(entry) : null,
+      watchedKey: !_selecting && entry.isPlayableMedia ? _track(entry).key : null,
+      watchedTitle: entry.name,
+      onChanged: () => setState(() {}),
+      child: tile,
+    ),
+  );
 
   String get _sortKey => 'remote:${jsonEncode([widget.source.scheme, widget.source.id, _stack.last.path])}';
 
@@ -80,6 +171,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
       _cache[path] = list;
       _all = list;
       _apply();
+      _selected.removeWhere((path) => !_items.any((e) => !e.isDir && e.path == path));
     } catch (e) {
       if (!mounted || generation != _loadGeneration) return;
       _error = '불러오지 못했습니다\n$e';
@@ -101,11 +193,17 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
   }
 
   void _enter(RemoteEntry e) {
+    _closeSelection();
     _stack.add(_Crumb(e.path, e.name));
     _load();
   }
 
   void _up() {
+    if (_busy) return;
+    if (_selecting) {
+      _closeSelection();
+      return;
+    }
     if (_stack.length <= 1) return;
     _stack.removeLast();
     _load();
@@ -142,14 +240,16 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
   Widget build(BuildContext context) {
     final crumbs = _stack.skip(1).map((c) => c.title).join(' / ');
     return PopScope(
-      canPop: _stack.length <= 1,
+      canPop: !_selecting && !_busy && _stack.length <= 1,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _up();
       },
       child: Scaffold(
         appBar: AppBar(
           automaticallyImplyLeading: false,
-          leading: _stack.length > 1
+          leading: _selecting
+              ? IconButton(tooltip: '선택 취소', icon: const Icon(Icons.close), onPressed: _busy ? null : _closeSelection)
+              : _stack.length > 1
               ? IconButton(icon: const Icon(Icons.arrow_back), onPressed: _up)
               : (widget.onOpenDrawer != null && shouldShowDrawerButton(context)
                     ? IconButton(icon: const Icon(Icons.menu), onPressed: widget.onOpenDrawer)
@@ -158,7 +258,11 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _stack.length == 1 ? widget.source.displayName : _stack.last.title,
+                _selecting
+                    ? '${_selected.length}개 선택'
+                    : _stack.length == 1
+                    ? widget.source.displayName
+                    : _stack.last.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -172,46 +276,74 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
             ],
           ),
           actions: [
-            if (_stack.length > 1 && widget.onOpenDrawer != null && shouldShowDrawerButton(context))
-              IconButton(tooltip: '메뉴', icon: const Icon(Icons.menu), onPressed: widget.onOpenDrawer),
-            sortMenu(
-              sort: _sort,
-              asc: _asc,
-              foldersFirst: _foldersFirst,
-              onFoldersFirst: () => setState(() {
-                _foldersFirst = !_foldersFirst;
-                _apply();
-                _saveSort();
-              }),
-              onSort: (v) => setState(() {
-                _asc = _sort == v ? !_asc : true;
-                _sort = v;
-                _apply();
-                _saveSort();
-              }),
-              extra: [
-                const PopupMenuDivider(),
-                CheckedPopupMenuItem(value: 'videos', checked: _videosOnly, child: const Text('미디어만 표시')),
-              ],
-              onExtra: (_) => setState(() {
-                _videosOnly = !_videosOnly;
-                _apply();
-              }),
-            ),
-            IconButton(
-              tooltip: _grid ? '목록 보기' : '격자 보기',
-              icon: Icon(_grid ? Icons.view_list : Icons.grid_view),
-              onPressed: () => setState(() => _grid = !_grid),
-            ),
-            IconButton(tooltip: '새로고침', icon: const Icon(Icons.refresh), onPressed: () => _load(force: true)),
-            ...widget.actions,
+            if (_selecting)
+              FileSelectionActions(
+                onSelectAll: () => setState(() {
+                  final files = _items.where((e) => !e.isDir).map((e) => e.path).toSet();
+                  if (_selected.containsAll(files)) {
+                    _selected.clear();
+                  } else {
+                    _selected.addAll(files);
+                  }
+                }),
+                onAdd: !_busy && _selectedFiles.any((e) => e.isPlayableMedia) ? _addSelected : null,
+                onDelete: !_busy && _selectedFiles.isNotEmpty && _selectedFiles.every(widget.source.canDeleteEntry)
+                    ? _deleteSelected
+                    : null,
+              )
+            else ...[
+              IconButton(
+                tooltip: '선택모드',
+                icon: const Icon(Icons.checklist),
+                onPressed: () => setState(() => _selecting = true),
+              ),
+              if (_stack.length > 1 && widget.onOpenDrawer != null && shouldShowDrawerButton(context))
+                IconButton(tooltip: '메뉴', icon: const Icon(Icons.menu), onPressed: widget.onOpenDrawer),
+              sortMenu(
+                sort: _sort,
+                asc: _asc,
+                foldersFirst: _foldersFirst,
+                onFoldersFirst: () => setState(() {
+                  _foldersFirst = !_foldersFirst;
+                  _apply();
+                  _saveSort();
+                }),
+                onSort: (v) => setState(() {
+                  _asc = _sort == v ? !_asc : true;
+                  _sort = v;
+                  _apply();
+                  _saveSort();
+                }),
+                extra: [
+                  const PopupMenuDivider(),
+                  CheckedPopupMenuItem(value: 'videos', checked: _videosOnly, child: const Text('미디어만 표시')),
+                ],
+                onExtra: (_) => setState(() {
+                  _videosOnly = !_videosOnly;
+                  _apply();
+                }),
+              ),
+              IconButton(
+                tooltip: _grid ? '목록 보기' : '격자 보기',
+                icon: Icon(_grid ? Icons.view_list : Icons.grid_view),
+                onPressed: () => setState(() => _grid = !_grid),
+              ),
+              IconButton(tooltip: '새로고침', icon: const Icon(Icons.refresh), onPressed: () => _load(force: true)),
+              ...widget.actions,
+            ],
           ],
+          bottom: _busy
+              ? const PreferredSize(preferredSize: Size.fromHeight(3), child: LinearProgressIndicator())
+              : null,
         ),
-        body: ResourceAccessView(
-          resources: [widget.source.keyFor(_stack.last.path)],
-          onRefresh: () => _load(force: true),
-          child: SlidableAutoCloseBehavior(
-            child: RefreshIndicator(onRefresh: () => _load(force: true), child: _body()),
+        body: AbsorbPointer(
+          absorbing: _busy,
+          child: ResourceAccessView(
+            resources: [widget.source.keyFor(_stack.last.path)],
+            onRefresh: () => _load(force: true),
+            child: SlidableAutoCloseBehavior(
+              child: RefreshIndicator(onRefresh: () => _load(force: true), child: _body()),
+            ),
           ),
         ),
       ),
@@ -260,10 +392,29 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
           ),
           title: Text(e.name, maxLines: 1, overflow: TextOverflow.ellipsis),
           subtitle: Text(formatSize(e.size), style: TextStyle(fontSize: 12, color: OColors.of(context).textSecondary)),
-          trailing: IconButton(
-            tooltip: '기기에 다운로드',
-            icon: const Icon(Icons.download_outlined),
-            onPressed: () => _download(e),
+          onTap: _selecting ? () => _toggle(e.path) : null,
+          trailing: PopupMenuButton<String>(
+            onSelected: (v) {
+              switch (v) {
+                case 'download':
+                  _download(e);
+                case 'select':
+                  setState(() {
+                    _selecting = true;
+                    _selected.add(e.path);
+                  });
+                case 'rename':
+                  _rename(e);
+                case 'delete':
+                  _deleteFromMenu(e);
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'download', child: Text('기기에 다운로드')),
+              const PopupMenuItem(value: 'select', child: Text('선택모드')),
+              PopupMenuItem(value: 'rename', enabled: src.canRenameEntry(e), child: const Text('이름변경')),
+              PopupMenuItem(value: 'delete', enabled: src.canDeleteEntry(e), child: const Text('파일 삭제')),
+            ],
           ),
         );
       }
@@ -277,6 +428,15 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
           onTap: () => _play(e),
           onChanged: () => setState(() {}),
           onDownload: () => _download(e),
+          onRename: src.canRenameEntry(e) ? () => _rename(e) : null,
+          onDelete: src.canDeleteEntry(e) ? () => _deleteFromMenu(e) : null,
+          onAddToPlaylist: e.isPlayableMedia
+              ? () => runFileAction(context, () => addToPlaylist(context, [_track(e)]))
+              : null,
+          onSelect: () => setState(() {
+            _selecting = true;
+            _selected.add(e.path);
+          }),
         );
       }
       return VideoListTile(
@@ -290,6 +450,15 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
         onTap: () => _play(e),
         onChanged: () => setState(() {}),
         onDownload: () => _download(e),
+        onRename: src.canRenameEntry(e) ? () => _rename(e) : null,
+        onDelete: src.canDeleteEntry(e) ? () => _deleteFromMenu(e) : null,
+        onAddToPlaylist: e.isPlayableMedia
+            ? () => runFileAction(context, () => addToPlaylist(context, [_track(e)]))
+            : null,
+        onSelect: () => setState(() {
+          _selecting = true;
+          _selected.add(e.path);
+        }),
       );
     }
 
@@ -309,11 +478,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
           final tile = e.isDir
               ? FolderGridTile(name: e.name, resource: src.keyFor(e.path), onTap: () => _enter(e))
               : fileTile(e, grid: true);
-          return SwipeDeleteTile(
-            key: ValueKey(e.path),
-            onDelete: src.canDeleteEntry(e) ? () => _delete(e) : null,
-            child: tile,
-          );
+          return _wrap(e, tile);
         },
       );
     }
@@ -327,11 +492,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
         final tile = e.isDir
             ? FolderListTile(name: e.name, resource: src.keyFor(e.path), onTap: () => _enter(e))
             : fileTile(e, grid: false);
-        return SwipeDeleteTile(
-          key: ValueKey(e.path),
-          onDelete: src.canDeleteEntry(e) ? () => _delete(e) : null,
-          child: tile,
-        );
+        return _wrap(e, tile);
       },
     );
   }

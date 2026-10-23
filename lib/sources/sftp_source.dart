@@ -211,6 +211,20 @@ class SftpSource extends MediaSource {
   bool get canDelete => true;
 
   @override
+  bool get canRename => true;
+
+  @override
+  Future<String> rename(RemoteEntry entry, String name) async {
+    final target = renamedPath(entry, name);
+    final client = await _client();
+    if ((await client.listdir(p.url.dirname(target))).any((e) => e.filename == name)) {
+      throw StateError('같은 이름의 항목이 이미 있습니다');
+    }
+    await client.rename(deletionPath(entry), target);
+    return target;
+  }
+
+  @override
   Future<void> delete(RemoteEntry entry) async {
     final path = deletionPath(entry);
     final client = await _client();

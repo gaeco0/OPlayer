@@ -10,6 +10,7 @@ import 'app/media_shell.dart';
 import 'core/mouse_nav.dart';
 import 'core/linux_file_associations.dart';
 import 'core/resume_store.dart';
+import 'core/playlist_store.dart';
 import 'core/settings.dart';
 import 'core/plugins/plugin_store.dart';
 import 'core/resource_locks.dart';
@@ -37,6 +38,7 @@ Future<void> main(List<String> args) async {
   MediaKit.ensureInitialized();
   await Future.wait([
     ResumeStore.instance.init(),
+    PlaylistStore.instance.init(),
     AppSettings.instance.init(),
     ServerStore.instance.init(),
     DownloadManager.instance.init(),
