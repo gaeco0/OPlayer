@@ -35,6 +35,7 @@ class MainActivity : FlutterActivity() {
     private var privacyBridge: PrivacyBridge? = null
     private var googleDriveBridge: GoogleDriveBridge? = null
     private var networkTrustBridge: NetworkTrustBridge? = null
+    private var externalFilesBridge: ExternalFilesBridge? = null
     private var byeDpiPid: Int? = null
     private lateinit var downloadChannel: MethodChannel
     private var notificationRequested = false
@@ -58,6 +59,8 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        externalFilesBridge = ExternalFilesBridge(this, flutterEngine.dartExecutor.binaryMessenger)
+        externalFilesBridge?.accept(intent)
         networkTrustBridge = NetworkTrustBridge(flutterEngine.dartExecutor.binaryMessenger)
         googleDriveBridge = GoogleDriveBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         privacyBridge = PrivacyBridge(this, flutterEngine.dartExecutor.binaryMessenger)
@@ -302,6 +305,8 @@ class MainActivity : FlutterActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
+        externalFilesBridge?.accept(intent)
         if (intent.getBooleanExtra(DownloadService.OPEN, false) && ::downloadChannel.isInitialized) {
             downloadChannel.invokeMethod("open", null)
         }

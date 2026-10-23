@@ -2,6 +2,53 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key><string>com.oplayer.media.video</string>
+			<key>UTTypeConformsTo</key><array><string>public.movie</string></array>
+			<key>UTTypeTagSpecification</key><dict>
+				<key>public.filename-extension</key><array><string>mp4</string><string>mkv</string><string>avi</string><string>mov</string><string>wmv</string><string>flv</string><string>webm</string><string>m4v</string><string>ts</string><string>m2ts</string><string>mts</string><string>3gp</string><string>mpg</string><string>mpeg</string><string>vob</string><string>ogv</string><string>rmvb</string><string>asf</string></array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key><string>com.oplayer.media.audio</string>
+			<key>UTTypeConformsTo</key><array><string>public.audio</string></array>
+			<key>UTTypeTagSpecification</key><dict>
+				<key>public.filename-extension</key><array><string>mp3</string><string>m4a</string><string>aac</string><string>flac</string><string>wav</string><string>ogg</string><string>opus</string><string>wma</string><string>aiff</string><string>alac</string><string>mka</string></array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key><string>com.oplayer.media.image</string>
+			<key>UTTypeConformsTo</key><array><string>public.image</string></array>
+			<key>UTTypeTagSpecification</key><dict>
+				<key>public.filename-extension</key><array><string>jpg</string><string>jpeg</string><string>png</string><string>webp</string><string>gif</string><string>bmp</string><string>avif</string></array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key><string>com.oplayer.media.playlist</string>
+			<key>UTTypeConformsTo</key><array><string>public.text</string></array>
+			<key>UTTypeTagSpecification</key><dict>
+				<key>public.filename-extension</key><array><string>m3u8</string></array>
+			</dict>
+		</dict>
+	</array>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key><string>Media files</string>
+			<key>CFBundleTypeRole</key><string>Viewer</string>
+			<key>LSHandlerRank</key><string>Alternate</string>
+			<key>LSItemContentTypes</key>
+			<array><string>public.movie</string><string>public.audio</string><string>public.image</string><string>com.apple.mpegurl</string><string>com.oplayer.media.playlist</string><string>com.oplayer.media.image</string><string>com.oplayer.media.audio</string><string>com.oplayer.media.video</string></array>
+			<key>CFBundleTypeExtensions</key>
+			<array>
+				<string>mp4</string><string>mkv</string><string>avi</string><string>mov</string><string>wmv</string><string>flv</string><string>webm</string><string>m4v</string><string>ts</string><string>m2ts</string><string>mts</string><string>3gp</string><string>mpg</string><string>mpeg</string><string>vob</string><string>ogv</string><string>rmvb</string><string>asf</string>
+				<string>mp3</string><string>m4a</string><string>aac</string><string>flac</string><string>wav</string><string>ogg</string><string>opus</string><string>wma</string><string>aiff</string><string>alac</string><string>mka</string><string>m3u8</string>
+				<string>jpg</string><string>jpeg</string><string>png</string><string>webp</string><string>gif</string><string>bmp</string><string>avif</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleExecutable</key>

@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../features/player/widgets/player_video.dart';
 import '../core/mouse_nav.dart';
 import '../core/open_media.dart';
+import '../core/external_files.dart';
+import 'package:flutter/services.dart';
 import '../features/player/playback_session.dart';
 import 'theme.dart';
 
@@ -16,19 +18,70 @@ class MediaShell extends StatefulWidget {
   State<MediaShell> createState() => _MediaShellState();
 }
 
-class _MediaShellState extends State<MediaShell> {
+class _MediaShellState extends State<MediaShell> with WidgetsBindingObserver {
   bool _dragging = false;
   bool _opening = false;
   bool _initialOpened = false;
+  final _external = <List<ExternalFile>>[];
+  bool _openingExternal = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    externalFilesChannel.setMethodCallHandler((call) async {
+      if (call.method == 'open') _receiveExternal(call.arguments);
+    });
+    _loadExternal();
     ResourceLocks.instance.addListener(_openInitialFiles);
     WidgetsBinding.instance.addPostFrameCallback((_) => _openInitialFiles());
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _openInitialFiles();
+  }
+
+  Future<void> _loadExternal() async {
+    try {
+      _receiveExternal(await externalFilesChannel.invokeMethod<List<dynamic>>('ready'));
+    } on MissingPluginException {
+      // Windows/Linux use command-line file arguments.
+    } on PlatformException catch (error) {
+      debugPrint('External file registration: ${error.code}');
+    }
+  }
+
+  void _receiveExternal(Object? value) {
+    if (!mounted) return;
+    final files = ExternalFile.decode(value);
+    if (files.isNotEmpty) _external.add(files);
+    _openInitialFiles();
+  }
+
+  Future<void> _openExternal() async {
+    if (_openingExternal || _external.isEmpty) return;
+    final context = MouseNav.navigatorKey.currentContext;
+    final locks = ResourceLocks.instance;
+    if (!mounted || context == null || locks.shielded || locks.unavailable || locks.inBackground) return;
+    _openingExternal = true;
+    try {
+      await openExternalMedia(context, _external.removeAt(0));
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('외부 파일을 열 수 없습니다')));
+      }
+    } finally {
+      _openingExternal = false;
+      if (mounted && _external.isNotEmpty) _openInitialFiles();
+    }
+  }
+
   void _openInitialFiles() {
+    if (mounted && _external.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openExternal());
+      WidgetsBinding.instance.ensureVisualUpdate();
+    }
     if (!mounted || _initialOpened || widget.initialFiles.isEmpty) return;
     final locks = ResourceLocks.instance;
     if (locks.shielded || locks.unavailable || locks.inBackground) return;
@@ -43,6 +96,8 @@ class _MediaShellState extends State<MediaShell> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    externalFilesChannel.setMethodCallHandler(null);
     ResourceLocks.instance.removeListener(_openInitialFiles);
     super.dispose();
   }

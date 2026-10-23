@@ -32,12 +32,13 @@ bool RegisterMediaFileAssociations() {
       SetString(progId + L"\\DefaultIcon", nullptr, icon) &&
       SetString(progId + L"\\shell\\open\\command", nullptr, command) &&
       SetString(capabilities, L"ApplicationName", L"OPlayer") &&
-      SetString(capabilities, L"ApplicationDescription", L"OPlayer video and audio player") &&
+      SetString(capabilities, L"ApplicationDescription", L"OPlayer video, audio and photo viewer") &&
       SetString(capabilities, L"ApplicationIcon", icon);
   const wchar_t* extensions[] = {
       L".mp4", L".mkv", L".avi", L".mov", L".wmv", L".flv", L".webm", L".m4v",
       L".ts", L".m2ts", L".mts", L".3gp", L".mpg", L".mpeg", L".vob", L".ogv", L".rmvb", L".asf",
-      L".mp3", L".m4a", L".aac", L".flac", L".wav", L".ogg", L".opus", L".wma", L".aiff", L".alac", L".mka", L".m3u8"};
+      L".mp3", L".m4a", L".aac", L".flac", L".wav", L".ogg", L".opus", L".wma", L".aiff", L".alac", L".mka", L".m3u8",
+      L".jpg", L".jpeg", L".png", L".webp", L".gif", L".bmp", L".avif"};
   for (const auto* extension : extensions) {
     ok = SetString(capabilities + L"\\FileAssociations", extension, L"OPlayer.Media") && ok;
     // Offer Open With without overwriting the user's existing default/UserChoice.
