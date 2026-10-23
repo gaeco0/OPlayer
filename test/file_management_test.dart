@@ -144,6 +144,32 @@ void main() {
     },
   );
 
+  test('prospective file lock keys match existing file keys under the temporary directory', () async {
+    final root = await Directory.systemTemp.createTemp('oplayer_lock_key_');
+    addTearDown(() => root.delete(recursive: true));
+    var parent = root.path;
+    if (Platform.isWindows) {
+      final shortPath = await Process.run(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          r'(New-Object -ComObject Scripting.FileSystemObject).GetFolder($env:OPLAYER_TEST_LOCK_DIRECTORY).ShortPath',
+        ],
+        environment: {'OPLAYER_TEST_LOCK_DIRECTORY': root.path},
+      );
+      expect(shortPath.exitCode, 0, reason: '${shortPath.stderr}');
+      parent = '${shortPath.stdout}'.trim();
+      expect(parent, isNotEmpty);
+    }
+    final file = File(p.join(parent, 'not-yet-created.mp4'));
+    final before = resourceKey(file.path);
+    expect(before, resourceKey(p.join(root.resolveSymbolicLinksSync(), 'not-yet-created.mp4')));
+    await file.writeAsString('test');
+    expect(resourceKey(file.path), before);
+  });
+
   testWidgets('right swipe toggles watched both ways without removing the row', (tester) async {
     final key = 'https://test.example/right-swipe.mp4';
     await tester.pumpWidget(
