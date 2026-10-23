@@ -84,7 +84,7 @@ flutter run -d windows   # 또는 macos / android / ios
 
 ## GitHub Actions 빌드와 릴리스
 
-- 현재 nightly: [v0.1.7-nightly.20261023.5](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.7-nightly.20261023.5). Windows 업데이트의 앱 종료·중복 설치 오류를 수정했다. 기존 v0.1.6 이하 앱은 이 버전을 한 번 직접 설치해야 하며, 설치 후 업데이트 확인 기본 채널은 stable이다. 사용자가 직접 저장한 채널 선택은 유지한다. 정식 최신 버전은 v0.1.6을 유지한다.
+- 현재 nightly: [v0.1.7-nightly.20261023.6](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.7-nightly.20261023.6). 폴더블 플레이어 회전 호환 설정과 OpenSubtitles 다운로드 도메인 수정을 포함한다. 기존 v0.1.6 이하 앱은 이 버전을 한 번 직접 설치해야 하며, 설치 후 업데이트 확인 기본 채널은 stable이다. 사용자가 직접 저장한 채널 선택은 유지한다. 정식 최신 버전은 v0.1.6을 유지한다.
 - 일반 빌드의 기본 채널은 **nightly**이며, 같은 기본 버전에서 **nightly → beta → stable** 순서로 배포한다. 예: `0.1.7-nightly.20261023.1+2` → `0.1.7-beta.1+2` → `0.1.7+2`. nightly·beta는 GitHub 사전 릴리스이고 stable만 Latest로 등록한다. beta 게시 전에는 같은 기본 버전의 공개 nightly가, stable 게시 전에는 공개 beta가 있어야 한다. 승격은 사용자 지시 후 새 버전·릴리즈노트·태그를 준비하고 다시 빌드하는 방식이며 자동 승격하지 않는다.
 - 각 단계의 태그는 `v0.1.7-nightly.20261023.1`, `v0.1.7-beta.1`, `v0.1.7` 형태다. Actions는 태그에서 채널을 확인하고 모든 플랫폼에 `--dart-define=OPLAYER_UPDATE_CHANNEL=채널`을 넣는다. 별도 지정 없이 로컬에서 빌드하면 nightly 채널이다. 내부 빌드 번호 `+2`와 기존 서명 키는 유지한다.
 - 브랜치 push·PR·버전 번호 변경만으로는 빌드하지 않는다. 사용자가 배포를 지시할 때만 해당 커밋에 `v0.1.1` 같은 버전 태그를 만들고 push한다. `v*` 태그 push를 받으면 Windows, Android(mobile), Android TV(tv), Linux(x64), macOS(Apple Silicon 러너)를 빌드한다. Android·TV는 같은 배포 키로 각각 서명하며 Windows에서 정적 분석·Dart 테스트·브라우저 JavaScript 테스트도 실행한다.
@@ -124,7 +124,7 @@ DRM(Widevine/FairPlay, SAMPLE-AES)으로 보호된 스트림은 재생·다운�
 
 - 로컬·원격 목록/격자에서 왼쪽으로 밀어 ‘삭제’를 누르면 실제 파일·폴더를 삭제한다. 폴더는 하위 항목도 함께 삭제하며 휴지통 이동·되돌리기는 제공하지 않는다. WebDAV·FTP·SFTP·SMB는 서버 쓰기 권한이 필요하고, 등록한 루트·SMB 공유 자체는 삭제 대상에서 제외한다. 삭제 중에는 진행 표시·중복 클릭 방지를 제공하고 성공·실패 후 목록을 다시 조회한다. 폴더 안의 별도 잠금 항목도 인증해야 한다. DLNA와 기본 공식 클라우드 확장앱은 읽기 전용이며 삭제 지원을 선언한 확장앱만 해당 버튼을 제공한다([개발 규약](plugins/README.md)).
 - 모바일 설정 → 재생 → ‘플레이어 화면 회전’에서 가로 고정·세로 고정·자동 회전을 선택한다. 재생 화면의 기존 회전 버튼도 같은 설정을 순환하고 선택을 저장한다. Android 자동 회전은 OS 세로 잠금과 관계없이 센서를 사용하고, 플레이어를 닫으면 시스템 회전 정책으로 복원한다. 데스크톱·Android TV에는 제공하지 않는다([Android 센서 회전](https://developer.android.com/guide/topics/manifest/activity-element#screen)).
-- 개발 브랜치의 Android 모바일에는 API 36 큰 화면 회전 호환 설정을 추가했다. Fold6 등 폴더블 내부 화면에서 가로·세로 고정 요청이 무시될 수 있는 Android 16 정책을 보완하며, 화면 크기 조절은 유지한다. Fold6 실기기 검증은 남아 있다. 이 호환 설정은 target API 37부터 지원되지 않으므로 대상 SDK를 올릴 때 별도 대응이 필요하다. iPad 멀티태스킹 제한은 플랫폼 정책을 따른다([Android 안내](https://developer.android.com/about/versions/16/behavior-changes-16#large-screens), [Flutter 안내](https://api.flutter.dev/flutter/services/SystemChrome/setPreferredOrientations.html)).
+- `.6`부터 Android 모바일에 API 36 큰 화면 회전 호환 설정을 추가했다. Fold6 등 폴더블 내부 화면에서 가로·세로 고정 요청이 무시될 수 있는 Android 16 정책을 보완하며, 화면 크기 조절은 유지한다. Fold6 실기기 검증은 남아 있다. 이 호환 설정은 target API 37부터 지원되지 않으므로 대상 SDK를 올릴 때 별도 대응이 필요하다. iPad 멀티태스킹 제한은 플랫폼 정책을 따른다([Android 안내](https://developer.android.com/about/versions/16/behavior-changes-16#large-screens), [Flutter 안내](https://api.flutter.dev/flutter/services/SystemChrome/setPreferredOrientations.html)).
 - 로컬·네트워크·클라우드 폴더는 경로별로 정렬 기준(이름·날짜·크기), 오름차순/내림차순, ‘폴더 먼저 표시’를 기억한다. 정렬 메뉴에서 변경하면 즉시 저장되어 폴더 재방문과 앱 재시작 후에도 복원되며, 서버와 하위 폴더별로 독립 적용된다.
 - 앱 복귀 후 현재 폴더 목록은 자동 재조회한다. 앱 잠금이 있으면 해제를 기다리고, 리소스 잠금은 재조회 전에 별도로 인증한다. 네트워크 목록은 캐시를 건너뛰며, 잠긴 리소스를 수동 해제한 뒤에도 목록을 다시 불러온다. 다른 화면 뒤에 가려진 폴더는 해당 화면으로 돌아올 때 갱신한다.
 - 폴더 안에서도 뒤로가기와 메뉴 버튼을 함께 제공하며 서버 연결 중에도 메뉴를 열 수 있다.
