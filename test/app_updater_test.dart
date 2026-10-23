@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -203,7 +204,13 @@ void main() {
         expect(updater.verifiedFile != null, !corrupt);
         expect(updater.error != null, corrupt);
         expect(dir.listSync(recursive: true).whereType<File>().any((f) => f.path.endsWith('.part')), isFalse);
-        if (!corrupt) expect(await updater.verifiedFile!.readAsBytes(), bytes);
+        if (!corrupt) {
+          expect(await updater.verifiedFile!.readAsBytes(), bytes);
+          await updater.verifiedFile!.writeAsBytes([0]);
+          await expectLater(updater.install(), throwsFormatException);
+          expect(updater.error, contains('업데이트 파일이 변경되었습니다'));
+          expect(updater.installing, isFalse);
+        }
       } finally {
         updater.dispose();
         await dir.delete(recursive: true);
@@ -263,6 +270,22 @@ void main() {
       await stream.close();
       updater.dispose();
       await dir.delete(recursive: true);
+    }
+  });
+
+  test('update closes the native Windows window and reports a failed exit', () async {
+    final calls = <MethodCall>[];
+    const window = MethodChannel('oplayer/window');
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(window, (call) async {
+      calls.add(call);
+      return null;
+    });
+    try {
+      await expectLater(exitWindowsForUpdate(), throwsStateError);
+      expect(calls.single.method, 'closeForUpdate');
+    } finally {
+      messenger.setMockMethodCallHandler(window, null);
     }
   });
 

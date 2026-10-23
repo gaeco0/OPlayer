@@ -16,6 +16,13 @@ import 'app_release.dart';
 
 const appUpdateChannel = MethodChannel('oplayer/updates');
 
+Future<void> exitWindowsForUpdate() async {
+  await const MethodChannel('oplayer/window').invokeMethod<void>('closeForUpdate');
+  // A supported Windows exit terminates the process before this completes.
+  await Future<void>.delayed(const Duration(seconds: 2));
+  throw StateError('앱을 종료하지 못했습니다. 다른 OPlayer 창을 닫은 뒤 다시 설치해 주세요');
+}
+
 // Windows PowerShell does not reliably initialize with DETACHED_PROCESS.
 // Keep its standard handles during startup; the child survives the app exiting.
 Future<Process> startWindowsInstaller(String script, List<String> arguments) => Process.start('powershell.exe', [
@@ -319,10 +326,14 @@ class AppUpdater extends ChangeNotifier {
   Future<void> install() async {
     if (busy || verifiedFile == null) return;
     installing = true;
+    error = null;
     phase = '업데이트 파일 재검증 중';
     notifyListeners();
     try {
       await _install();
+    } catch (e) {
+      error = '업데이트 설치 실패: ${e is StateError ? e.message : e}';
+      rethrow;
     } finally {
       installing = false;
       notifyListeners();
@@ -342,14 +353,12 @@ class AppUpdater extends ChangeNotifier {
       });
       if (result == 'permission') throw StateError('이 앱의 설치 허용을 켠 뒤 돌아와 설치를 다시 눌러 주세요');
     } else if (Platform.isWindows) {
-      final script = File(p.join(file.parent.path, 'install-windows.ps1'));
+      final statusPrefix = '${file.path}.$pid.${DateTime.now().microsecondsSinceEpoch}';
+      final script = File('$statusPrefix.ps1');
       await script.writeAsString(await rootBundle.loadString('assets/update/install-windows.ps1'), flush: true);
-      final ready = File('${file.path}.ready');
-      final failed = File('${file.path}.error');
-      final progress = File('${file.path}.progress');
-      for (final flag in [ready, failed, progress]) {
-        if (await flag.exists()) await flag.delete();
-      }
+      final ready = File('$statusPrefix.ready');
+      final failed = File('$statusPrefix.error');
+      final progress = File('$statusPrefix.progress');
       phase = 'Windows 설치기 시작 중';
       notifyListeners();
       final helper = await startWindowsInstaller(script.path, [
@@ -365,9 +374,11 @@ class AppUpdater extends ChangeNotifier {
         release!.version.name,
         '-Architecture',
         target == 'windows-arm64' ? 'arm64' : 'x64',
+        '-StatusPrefix',
+        statusPrefix,
       ]);
       await helper.stdin.close();
-      final log = File('${file.path}.install.log').openWrite();
+      final log = File('$statusPrefix.install.log').openWrite();
       final logDone = log.done.catchError((Object e) => debugPrint('Update log: $e'));
       var errorOutput = '';
       final output = helper.stdout.listen(log.add);
@@ -384,8 +395,7 @@ class AppUpdater extends ChangeNotifier {
           if (await ready.exists()) {
             phase = '설치 준비 완료 · 앱 종료 후 교체합니다';
             notifyListeners();
-            await SystemNavigator.pop();
-            return;
+            await exitWindowsForUpdate();
           }
           if (helperExit != null) {
             throw StateError('Windows 설치기가 종료됐습니다 (코드 $helperExit). ${errorOutput.trim()}');
@@ -407,8 +417,10 @@ class AppUpdater extends ChangeNotifier {
           }
           await Future<void>.delayed(const Duration(milliseconds: 100));
         }
+        throw StateError('Windows 설치기 응답이 지연되고 있습니다. 설치 로그: $statusPrefix.install.log');
+      } catch (_) {
         helper.kill();
-        throw StateError('Windows 설치기 응답이 지연되고 있습니다. 설치 로그: ${file.path}.install.log');
+        rethrow;
       } finally {
         await output.cancel();
         await errors.cancel();

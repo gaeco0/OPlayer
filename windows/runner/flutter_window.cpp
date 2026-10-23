@@ -58,6 +58,11 @@ bool FlutterWindow::OnCreate() {
       flutter_controller_->engine()->messenger(), "oplayer/window",
       &flutter::StandardMethodCodec::GetInstance());
   window_channel_->SetMethodCallHandler([this](const auto& call, auto result) {
+    if (call.method_name() == "closeForUpdate") {
+      if (PostMessage(GetHandle(), WM_CLOSE, 0, 0)) result->Success();
+      else result->Error("CLOSE", "Cannot close OPlayer for update");
+      return;
+    }
     if (call.method_name() == "defaultApps") {
       if (OpenDefaultAppsSettings()) result->Success();
       else result->Error("DEFAULT_APPS", "Cannot register OPlayer or open Windows default apps settings");
