@@ -5,6 +5,7 @@
 
 ## [Unreleased]
 
+- Android 모바일에 큰 화면 회전 요청을 유지하는 API 36 호환 설정을 추가했습니다. Android 16의 큰 화면 정책 때문에 Fold6 같은 폴더블을 펼쳤을 때 플레이어의 가로·세로 고정 요청이 무시될 수 있는 경로를 보완합니다. 화면 크기 조절은 유지하며 TV에는 적용하지 않습니다. Fold6 실기기 검증은 남아 있습니다.
 - OpenSubtitles 확장앱 `1.0.4`에서 다운로드 허용 범위를 `*.opensubtitles.org`·`*.opensubtitles.com`으로 변경했습니다. 해당 하위 도메인의 HTTP 링크는 서명된 경로·쿼리를 유지한 채 HTTPS로 바꾸며, API Key·로그인 토큰은 기존 두 API 서버에만 보냅니다. 앱 재설치 없이 확장앱 저장소를 새로고침한 뒤 OpenSubtitles를 교체해 적용합니다.
 
 ## [0.1.7-nightly.20261023.5]
