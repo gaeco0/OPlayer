@@ -95,6 +95,7 @@ class _AppUpdatePageState extends State<AppUpdatePage> {
             label: Text(updater.checking ? '업데이트 확인 중…' : '지금 확인'),
           ),
           if (updater.checking || updater.installing) const LinearProgressIndicator(),
+          if (updater.installing) Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(updater.phase)),
           if (updater.error != null)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 12),
