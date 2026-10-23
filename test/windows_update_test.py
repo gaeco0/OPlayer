@@ -1,5 +1,6 @@
 """Exercise the bundled installer against disposable bundles, never the installed app."""
 import hashlib
+import ctypes
 from pathlib import Path
 import subprocess
 import sys
@@ -17,7 +18,7 @@ with tempfile.TemporaryDirectory(prefix='oplayer-installer-') as temporary:
     prefix = 'OPlayer-0.1.7-nightly.1-windows-x64/'
     architecture = 'x64'
 
-    def check(entries, expected_success, *, wrong_hash=False, validate=True):
+    def check(entries, expected_success, *, wrong_hash=False, validate=True, expected_error=None):
         archive = base / 'update.zip'
         with zipfile.ZipFile(archive, 'w') as bundle:
             for name, body in entries.items():
@@ -31,6 +32,8 @@ with tempfile.TemporaryDirectory(prefix='oplayer-installer-') as temporary:
             command.append('-ValidateOnly')
         result = subprocess.run(command, capture_output=True, text=True, timeout=30)
         assert (result.returncode == 0) == expected_success, result.stdout + result.stderr
+        if expected_error:
+            assert expected_error in result.stderr, result.stderr
         assert original.read_bytes() == b'original executable fixture'
         assert (install / 'flutter_windows.dll').read_bytes() == b'original library fixture'
         assert not list(base.glob('stage-*')), 'staging directory was not cleaned'
@@ -39,6 +42,19 @@ with tempfile.TemporaryDirectory(prefix='oplayer-installer-') as temporary:
              prefix + 'flutter_windows.dll': b'new library fixture',
              prefix + 'data/flutter_assets/test': b'new data fixture'}
     check(valid, True)
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.CreateMutexW.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_wchar_p]
+    kernel.CreateMutexW.restype = ctypes.c_void_p
+    kernel.ReleaseMutex.argtypes = [ctypes.c_void_p]
+    kernel.CloseHandle.argtypes = [ctypes.c_void_p]
+    mutex_name = 'Local\\OPlayer.Update.' + hashlib.sha256(str(install).lower().encode()).hexdigest().upper()
+    lock = kernel.CreateMutexW(None, True, mutex_name)
+    assert lock
+    try:
+        check(valid, False, expected_error='An update is already running')
+    finally:
+        kernel.ReleaseMutex(lock)
+        kernel.CloseHandle(lock)
     check(valid, False, wrong_hash=True)
     check({**valid, prefix + '../escape': b'bad'}, False)
     check({**valid, prefix + 'data/../../escape': b'bad'}, False)
@@ -61,7 +77,8 @@ with tempfile.TemporaryDirectory(prefix='oplayer-installer-') as temporary:
     compile_script.write_text('''param([string]$Output)
 Add-Type -OutputAssembly $Output -OutputType WindowsApplication -TypeDefinition @'
 public class Program {
-  public static void Main() {
+  public static void Main(string[] args) {
+    if (args.Length > 0) { System.Threading.Thread.Sleep(30000); return; }
     System.IO.File.WriteAllText(System.IO.Path.Combine(
       System.AppDomain.CurrentDomain.BaseDirectory, "started.txt"), "new");
   }
@@ -76,6 +93,23 @@ public class Program {
         bundle.writestr(prefix + 'flutter_windows.dll', b'updated library')
         bundle.writestr(prefix + 'data/updated', b'updated data')
     checksum = hashlib.sha256(archive.read_bytes()).hexdigest()
+    # A second running window must be detected before writing ready/copying.
+    conflict = base / 'blocked.zip'
+    conflict.write_bytes(archive.read_bytes())
+    original.write_bytes(replacement.read_bytes())
+    blocker = subprocess.Popen([str(original), 'hold'])
+    try:
+        result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive',
+            '-ExecutionPolicy', 'Bypass', '-File', str(script), '-Archive', str(conflict),
+            '-InstallDir', str(install), '-ExpectedHash', checksum, '-Version', '0.1.7-nightly.1',
+            '-Architecture', architecture, '-AppProcessId', '2147483647'], capture_output=True, text=True, timeout=30)
+        assert result.returncode != 0 and 'Another OPlayer instance' in result.stderr, result.stderr
+        assert not Path(str(conflict) + '.ready').exists()
+        assert original.read_bytes() == replacement.read_bytes()
+    finally:
+        blocker.terminate()
+        blocker.wait(timeout=10)
+        original.write_bytes(b'original executable fixture')
     parent = '''
 import os, pathlib, subprocess, sys, time
 script, archive, install, checksum, architecture = sys.argv[1:]

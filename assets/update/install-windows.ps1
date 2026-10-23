@@ -5,6 +5,7 @@ param(
   [Parameter(Mandatory=$true)][string]$ExpectedHash,
   [Parameter(Mandatory=$true)][string]$Version,
   [ValidateSet('x64', 'arm64')][string]$Architecture = 'x64',
+  [string]$StatusPrefix = '',
   [switch]$ValidateOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -12,10 +13,20 @@ $stage = $null
 $changed = @()
 $root = $null
 $backup = $null
-$readyFile = "$Archive.ready"
-$errorFile = "$Archive.error"
+if (-not $StatusPrefix) { $StatusPrefix = $Archive }
+$readyFile = "$StatusPrefix.ready"
+$errorFile = "$StatusPrefix.error"
+$updateMutex = $null
+$ownsMutex = $false
 function UpdateStatus([string]$Status) {
-  try { [IO.File]::WriteAllText("$Archive.progress", $Status) } catch { }
+  try { [IO.File]::WriteAllText("$StatusPrefix.progress", $Status) } catch { }
+}
+function AssertNoOtherInstance {
+  $executable = Join-Path $root 'oplayer.exe'
+  $other = Get-Process -Name oplayer -ErrorAction SilentlyContinue | Where-Object {
+    $_.Id -ne $AppProcessId -and $_.Path -eq $executable
+  }
+  if ($other) { throw 'Another OPlayer instance is using this folder. Close other OPlayer windows before updating.' }
 }
 function ChildPath([string]$Base, [string]$Relative) {
   $basePath = [IO.Path]::GetFullPath($Base).TrimEnd('\') + '\'
@@ -31,6 +42,13 @@ try {
   }
   $archivePath = (Get-Item -LiteralPath $Archive).FullName
   $root = (Get-Item -LiteralPath $InstallDir).FullName
+  $mutexHash = [Security.Cryptography.SHA256]::Create()
+  try { $mutexName = [BitConverter]::ToString($mutexHash.ComputeHash([Text.Encoding]::UTF8.GetBytes($root.ToLowerInvariant()))).Replace('-', '') }
+  finally { $mutexHash.Dispose() }
+  $updateMutex = New-Object Threading.Mutex($false, "Local\OPlayer.Update.$mutexName")
+  try { $ownsMutex = $updateMutex.WaitOne(0) }
+  catch [Threading.AbandonedMutexException] { $ownsMutex = $true }
+  if (-not $ownsMutex) { throw 'An update is already running for this OPlayer folder.' }
   if (-not (Test-Path -LiteralPath (Join-Path $root 'oplayer.exe') -PathType Leaf)) { throw 'OPlayer executable was not found' }
   if ((Get-Item -LiteralPath $root).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Install directory is a reparse point' }
   UpdateStatus 'hash'
@@ -79,6 +97,7 @@ try {
     }
   }
   if ($ValidateOnly) { Write-Output 'Update archive validated'; exit 0 }
+  AssertNoOtherInstance
   # Fail before asking the running app to close if this folder is read-only.
   $probe = ChildPath $root ('.oplayer-update-' + [Guid]::NewGuid().ToString('N'))
   [IO.File]::WriteAllText($probe, '')
@@ -91,6 +110,7 @@ try {
     if ([DateTime]::UtcNow -ge $exitDeadline) { throw 'OPlayer did not exit before the update timeout' }
     Start-Sleep -Milliseconds 200
   }
+  AssertNoOtherInstance
   foreach ($file in $files) {
     $relative = $file.FullName.Substring($incoming.Length).TrimStart('\')
     $destination = ChildPath $root $relative
@@ -121,6 +141,8 @@ try {
   Write-Error $message
   exit 1
 } finally {
+  if ($ownsMutex) { $updateMutex.ReleaseMutex() }
+  if ($updateMutex) { $updateMutex.Dispose() }
   if ($stage -and (Test-Path -LiteralPath $stage)) {
     $resolvedStage = [IO.Path]::GetFullPath($stage)
     $intendedParent = [IO.Path]::GetFullPath(([IO.Path]::GetDirectoryName($archivePath))).TrimEnd('\') + '\'
