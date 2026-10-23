@@ -102,7 +102,11 @@ class OPlugin {
       final values = meta[key] ?? [];
       if (values is! List ||
           values.length > 100 ||
-          values.any((v) => v is! String || !RegExp(r'^(\*\.)?[a-zA-Z0-9][a-zA-Z0-9.-]*$').hasMatch(v))) {
+          values.any(
+            (v) =>
+                v is! String ||
+                !(key == 'sites' && v == '*') && !RegExp(r'^(\*\.)?[a-zA-Z0-9][a-zA-Z0-9.-]*$').hasMatch(v),
+          )) {
         throw FormatException('잘못된 도메인 권한: $key');
       }
     }
@@ -224,7 +228,8 @@ class OPlugin {
   static bool matchesHost(String host, Iterable<String> domains) => domains.any((domain) {
     domain = domain.toLowerCase();
     host = host.toLowerCase();
-    return domain.startsWith('*.') ? host.endsWith(domain.substring(1)) : host == domain;
+    return host.isNotEmpty &&
+        (domain == '*' || (domain.startsWith('*.') ? host.endsWith(domain.substring(1)) : host == domain));
   });
   bool matches(String url) => matchesHost(Uri.tryParse(url)?.host ?? '', sites);
   bool allows(String url, {bool auth = false}) {

@@ -62,7 +62,7 @@ class _PluginsPageState extends State<PluginsPage> {
                 : p.kind == 'player'
                 ? '영상 색상·회전·반전 필터 적용'
                 : '지정한 사이트의 페이지와 요청 헤더·쿠키 접근, 다운로드 보완·광고 차단'}\n\n'
-            '사이트: ${p.sites.join(', ')}\n네트워크: ${p.hosts.join(', ')}\n인증: ${p.authHosts.join(', ')}\n'
+            '사이트: ${p.sites.contains('*') ? '모든 웹사이트' : p.sites.join(', ')}\n네트워크: ${p.hosts.join(', ')}\n인증: ${p.authHosts.join(', ')}\n'
             '${(p.manifest['networkSettings'] as List? ?? []).isEmpty ? '' : '사용자 지정 서버 설정: ${(p.manifest['networkSettings'] as List).join(', ')}\n'}'
             '${p.cloud && p.authType == 'oauth' ? '로그인 서버: ${p.oauth['authEndpoint']}\n토큰 서버: ${p.oauth['tokenEndpoint']}\n' : ''}'
             '${p.authType == 's3' ? '등록할 S3 Endpoint·버킷에 대한 서명된 읽기 요청\n' : ''}\n'
