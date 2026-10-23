@@ -14,6 +14,7 @@ import '../../core/secure_store.dart';
 import '../../core/network/network_service.dart';
 import '../../core/stream_proxy.dart';
 import '../../core/file_deletion.dart';
+import '../../core/file_renaming.dart';
 import '../media_source.dart';
 import '../server_store.dart';
 import 'cloud_config.dart';
@@ -159,6 +160,26 @@ class CloudSource extends MediaSource {
 
   @override
   bool get canDelete => definition.manifest['canDelete'] == true;
+
+  @override
+  bool get canRename => definition.manifest['canRename'] == true;
+  @override
+  bool canRenameEntry(RemoteEntry entry) =>
+      canRename && !entry.isDir && entry.path.isNotEmpty && ![rootPath, '/', '.', '..'].contains(entry.path);
+  @override
+  String renamedPath(RemoteEntry entry, String name) {
+    if (!canRenameEntry(entry)) throw UnsupportedError('이 확장앱은 이름변경을 지원하지 않습니다');
+    validateFileName(name);
+    return entry.path; // Cloud IDs remain stable when the display name changes.
+  }
+
+  @override
+  Future<String> rename(RemoteEntry entry, String name) async {
+    final path = renamedPath(entry, name);
+    final result = await _call('rename', {'path': path, 'name': entry.name, 'newName': name}, retry: false);
+    if (result != true) throw StateError('확장앱이 이름변경 완료를 확인하지 못했습니다');
+    return path;
+  }
 
   @override
   bool canDeleteEntry(RemoteEntry entry) =>

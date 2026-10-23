@@ -30,8 +30,9 @@ import '../../core/plugins/plugin.dart';
 import '../web/web_browser_page.dart';
 import 'local_browser_page.dart';
 import 'recent_page.dart';
+import 'playlists_page.dart';
 
-enum SourceKind { device, folder, recent, downloads, server, dlna, cloud, web, settings }
+enum SourceKind { device, folder, recent, playlists, downloads, server, dlna, cloud, web, settings }
 
 class Source {
   const Source(this.kind, this.title, this.icon, {this.path, this.id, this.subtitle});
@@ -326,6 +327,8 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       case SourceKind.recent:
         return RecentPage(onOpenDrawer: _openDrawer);
+      case SourceKind.playlists:
+        return PlaylistsPage(onOpenDrawer: _openDrawer);
       case SourceKind.downloads:
         return DownloadsPage(leading: menu);
       case SourceKind.server:
@@ -611,6 +614,7 @@ class _Sidebar extends StatelessWidget {
               ]),
             ),
           item(const Source(SourceKind.recent, '최근 재생', Icons.history)),
+          item(const Source(SourceKind.playlists, '재생목록', Icons.playlist_play)),
           ListenableBuilder(
             listenable: DownloadManager.instance,
             builder: (_, __) {

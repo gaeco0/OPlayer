@@ -127,6 +127,27 @@ class WebDavSource extends MediaSource {
   bool get canDelete => true;
 
   @override
+  bool get canRename => true;
+
+  @override
+  Future<String> rename(RemoteEntry entry, String name) async {
+    final target = renamedPath(entry, name);
+    final client = http.Client();
+    try {
+      final request = http.Request('MOVE', _uri(deletionPath(entry)))
+        ..followRedirects = false
+        ..headers.addAll({..._auth, 'Destination': _uri(target).toString(), 'Overwrite': 'F'});
+      final response = await client.send(request).timeout(const Duration(seconds: 30));
+      if (![201, 204].contains(response.statusCode)) {
+        throw HttpException('WebDAV 이름변경 실패 (HTTP ${response.statusCode})');
+      }
+      return target;
+    } finally {
+      client.close();
+    }
+  }
+
+  @override
   Future<void> delete(RemoteEntry entry) async {
     final client = http.Client();
     try {

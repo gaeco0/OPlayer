@@ -12,6 +12,7 @@ export '../../core/folder_sort.dart';
 import '../../core/resource_locks.dart';
 import '../settings/privacy_settings.dart';
 import '../../core/thumbnail_service.dart';
+import 'file_actions.dart';
 
 /// 썸네일 (로컬: 프레임 추출 캐시 / 원격: 서버 제공 썸네일 URL) + 길이 + 이어보기 진행바
 class VideoThumb extends StatefulWidget {
@@ -167,6 +168,11 @@ Future<void> showVideoMenu(
   String? location,
   required VoidCallback onChanged,
   VoidCallback? onDownload,
+  VoidCallback? onRename,
+  VoidCallback? onDelete,
+  VoidCallback? onAddToPlaylist,
+  VoidCallback? onSelect,
+  VoidCallback? onRemoveFromPlaylist,
   List<Widget> extra = const [],
 }) async {
   final r = ResumeStore.instance.get(resumeKey);
@@ -174,54 +180,74 @@ Future<void> showVideoMenu(
     context: context,
     backgroundColor: OColors.of(context).surface,
     builder: (c) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            title: Text(name, maxLines: 2, overflow: TextOverflow.ellipsis),
-            subtitle: location == null ? null : Text(location, maxLines: 1, overflow: TextOverflow.ellipsis),
-          ),
-          const Divider(height: 1),
-          if (onDownload != null)
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
             ListTile(
-              leading: const Icon(Icons.download_outlined),
-              title: const Text('기기에 다운로드'),
-              onTap: () {
+              title: Text(name, maxLines: 2, overflow: TextOverflow.ellipsis),
+              subtitle: location == null ? null : Text(location, maxLines: 1, overflow: TextOverflow.ellipsis),
+            ),
+            const Divider(height: 1),
+            if (onDownload != null)
+              ListTile(
+                leading: const Icon(Icons.download_outlined),
+                title: const Text('기기에 다운로드'),
+                onTap: () {
+                  Navigator.pop(c);
+                  onDownload();
+                },
+              ),
+            ListTile(
+              leading: const Icon(Icons.lock_outline),
+              title: Text(ResourceLocks.instance.hasExact(resumeKey) ? '잠금 설정 해제' : '이 항목 잠금'),
+              onTap: () async {
                 Navigator.pop(c);
-                onDownload();
+                await toggleResourceLock(context, resumeKey, name);
+                onChanged();
               },
             ),
-          ListTile(
-            leading: const Icon(Icons.lock_outline),
-            title: Text(ResourceLocks.instance.hasExact(resumeKey) ? '잠금 설정 해제' : '이 항목 잠금'),
-            onTap: () async {
-              Navigator.pop(c);
-              await toggleResourceLock(context, resumeKey, name);
-              onChanged();
-            },
-          ),
-          if (r != null)
+            if (r != null)
+              ListTile(
+                leading: const Icon(Icons.restart_alt),
+                title: const Text('재생 기록 삭제'),
+                onTap: () async {
+                  await ResumeStore.instance.remove(resumeKey);
+                  if (c.mounted) Navigator.pop(c);
+                  onChanged();
+                },
+              ),
             ListTile(
-              leading: const Icon(Icons.restart_alt),
-              title: const Text('재생 기록 삭제'),
+              leading: const Icon(Icons.done_all),
+              title: Text(r?.finished == true ? '안 본 상태로 표시' : '본 상태로 표시'),
               onTap: () async {
-                await ResumeStore.instance.remove(resumeKey);
+                await runFileAction(
+                  context,
+                  () => ResumeStore.instance.toggleWatched(resumeKey, title: p.basenameWithoutExtension(name)),
+                );
                 if (c.mounted) Navigator.pop(c);
                 onChanged();
               },
             ),
-          ListTile(
-            leading: const Icon(Icons.done_all),
-            title: const Text('시청 완료로 표시'),
-            onTap: () async {
-              final d = r?.duration ?? const Duration(seconds: 1);
-              await ResumeStore.instance.save(resumeKey, d, d, title: p.basenameWithoutExtension(name));
-              if (c.mounted) Navigator.pop(c);
-              onChanged();
-            },
-          ),
-          ...extra,
-        ],
+            for (final action in <(String, IconData, VoidCallback?)>[
+              ('재생목록에 추가', Icons.playlist_add, onAddToPlaylist),
+              ('선택모드', Icons.checklist, onSelect),
+              ('이름변경', Icons.drive_file_rename_outline, onRename),
+              ('파일 삭제', Icons.delete_outline, onDelete),
+              ('재생목록에서 삭제', Icons.playlist_remove, onRemoveFromPlaylist),
+            ])
+              if (action.$3 != null)
+                ListTile(
+                  leading: Icon(action.$2),
+                  title: Text(action.$1),
+                  onTap: () {
+                    Navigator.pop(c);
+                    action.$3!();
+                  },
+                ),
+            ...extra,
+          ],
+        ),
       ),
     ),
   );
@@ -242,6 +268,11 @@ class VideoListTile extends StatelessWidget {
     this.location,
     this.hasSubtitle = false,
     this.onDownload,
+    this.onRename,
+    this.onDelete,
+    this.onAddToPlaylist,
+    this.onSelect,
+    this.onRemoveFromPlaylist,
   });
 
   final String resumeKey;
@@ -253,6 +284,7 @@ class VideoListTile extends StatelessWidget {
   final String? location;
   final bool hasSubtitle;
   final VoidCallback? onDownload;
+  final VoidCallback? onRename, onDelete, onAddToPlaylist, onSelect, onRemoveFromPlaylist;
   final VoidCallback onTap;
   final VoidCallback onChanged;
 
@@ -271,6 +303,11 @@ class VideoListTile extends StatelessWidget {
       location: location ?? localPath,
       onChanged: onChanged,
       onDownload: onDownload,
+      onRename: onRename,
+      onDelete: onDelete,
+      onAddToPlaylist: onAddToPlaylist,
+      onSelect: onSelect,
+      onRemoveFromPlaylist: onRemoveFromPlaylist,
     );
     return InkWell(
       onTap: onTap,
@@ -350,6 +387,11 @@ class VideoGridTile extends StatelessWidget {
     this.localPath,
     this.thumbnailUrl,
     this.onDownload,
+    this.onRename,
+    this.onDelete,
+    this.onAddToPlaylist,
+    this.onSelect,
+    this.onRemoveFromPlaylist,
   });
   final String resumeKey;
   final String name;
@@ -359,14 +401,26 @@ class VideoGridTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onChanged;
   final VoidCallback? onDownload;
+  final VoidCallback? onRename, onDelete, onAddToPlaylist, onSelect, onRemoveFromPlaylist;
 
   @override
   Widget build(BuildContext context) {
+    void menu() => showVideoMenu(
+      context,
+      resumeKey: resumeKey,
+      name: name,
+      onChanged: onChanged,
+      onDownload: onDownload,
+      onRename: onRename,
+      onDelete: onDelete,
+      onAddToPlaylist: onAddToPlaylist,
+      onSelect: onSelect,
+      onRemoveFromPlaylist: onRemoveFromPlaylist,
+    );
     return InkWell(
       borderRadius: BorderRadius.circular(6),
       onTap: onTap,
-      onLongPress: () =>
-          showVideoMenu(context, resumeKey: resumeKey, name: name, onChanged: onChanged, onDownload: onDownload),
+      onLongPress: menu,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -383,10 +437,20 @@ class VideoGridTile extends StatelessWidget {
                   width: double.infinity,
                   height: null,
                 ),
+                Positioned(
+                  top: 0,
+                  right: 0,
+                  child: IconButton(
+                    tooltip: '파일 메뉴',
+                    style: IconButton.styleFrom(backgroundColor: Colors.black54, foregroundColor: Colors.white),
+                    icon: const Icon(Icons.more_vert),
+                    onPressed: menu,
+                  ),
+                ),
                 if (onDownload != null)
                   Positioned(
                     top: 0,
-                    right: 0,
+                    right: 40,
                     child: IconButton(
                       tooltip: '기기에 다운로드',
                       style: IconButton.styleFrom(backgroundColor: Colors.black54, foregroundColor: Colors.white),

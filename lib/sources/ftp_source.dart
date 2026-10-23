@@ -206,6 +206,26 @@ class FtpSource extends MediaSource {
   bool get canDelete => true;
 
   @override
+  bool get canRename => true;
+
+  @override
+  Future<String> rename(RemoteEntry entry, String name) async {
+    final target = renamedPath(entry, name);
+    final ftp = _new();
+    try {
+      if (!await ftp.connect()) throw StateError('FTP 접속 실패');
+      if (!await ftp.changeDirectory(p.url.dirname(entry.path))) throw StateError('폴더를 열 수 없습니다');
+      if ((await ftp.listDirectoryContent()).any((e) => e.name == name)) throw StateError('같은 이름의 항목이 이미 있습니다');
+      if (!await ftp.rename(p.url.basename(deletionPath(entry)), name)) throw StateError('FTP 이름변경 실패');
+      return target;
+    } finally {
+      try {
+        await ftp.disconnect();
+      } catch (_) {}
+    }
+  }
+
+  @override
   Future<void> delete(RemoteEntry entry) async {
     final path = deletionPath(entry);
     final ftp = _new();
