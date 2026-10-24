@@ -217,6 +217,39 @@ Android는 WebView 요청 콜백, Windows는 DevTools 요청 차단, Apple WebVi
   `canDelete`와 독립적으로 선언할 수 있고 미선언 확장앱은 기존 동작을 유지합니다. 구형 앱은 이 훅을 지원하지 않습니다.
 - Android Google 계정 선택·인증은 기존 네이티브 브리지를 재사용합니다.
 
+### 저장소 검색 (API 4 선택 기능, 다음 앱 릴리스)
+
+리소스 확장앱에 `canSearch: true` 메타데이터와 `async search({query, path})`를 함께 선언합니다.
+검색을 선언하고 함수가 없으면 설치를 거부합니다. 미선언 확장앱은 기존 목록 탐색을 유지합니다.
+이 SDK가 포함된 앱으로 한 번 업데이트한 뒤에는 공급자별 검색을 JS 배포만으로 추가할 수 있습니다.
+
+```javascript
+// 기존 리소스 확장앱의 메타데이터에 "canSearch":true 추가
+// 기존 plugin 객체에 다음 함수를 추가 (기존 hosts/authHosts 권한 범위 사용)
+async search({query, path}) {
+  const response = await OPlayer.request('https://api.example.com/files/search', {
+    query: {q: query, parent: path}
+  });
+  return response.files.map(file => ({
+    name: file.name, path: file.id, isDir: file.folder === true,
+    size: file.size, modified: file.modified, thumbnailUrl: file.thumbnail
+  }));
+}
+```
+
+- `query`는 사용자가 입력한 문자열에서 앞뒤 공백만 제거한 값입니다. 한글·기호·따옴표를 그대로 전달합니다.
+  HTTP 쿼리는 `OPlayer.request`의 `query`로 전달하고 검색어를 JS 코드나 URL 문자열에 직접 삽입하지 마세요.
+- `path`는 현재 폴더의 소스 내부 식별자입니다. 루트에서는 `root` 값입니다. 공급자 검색 API에 맞춰 검색 범위·
+  재귀 여부를 처리하고 반환 항목의 `path`는 `list`·`stream`과 같은 실제 ID/경로를 사용합니다.
+- 반환값은 `list`와 동일한 `[{name,path,isDir,size,modified,thumbnailUrl}]` 배열이며 결과가 없으면 `[]`입니다.
+  검색 결과도 기존 재생·다운로드·선택·파일 작업으로 연결됩니다. 서버 오류를 빈 결과로 숨기지 말고 예외로 전달하세요.
+- 검색창은 검색 지원 저장소에서만 표시합니다. 입력 후 350ms 대기하거나 키보드 검색을 누르면 호출하며,
+  빈 검색어·검색 닫기는 일반 폴더 목록을 복원합니다. 검색 중 새로고침은 같은 검색어를 다시 요청합니다.
+  이전 검색의 늦은 응답은 화면에 적용하지 않으며 이미 시작한 JS/HTTP 요청은 기존 런타임 제한 내에서 완료됩니다.
+- 검색 결과는 일반 폴더 캐시를 덮어쓰지 않습니다. 결과의 폴더를 열면 검색을 닫고 그 폴더를 탐색합니다.
+  인증 갱신·도메인·비밀값 제한·실행 시간 제한은 `list`와 같습니다. 자동 페이지 순회는 앱이 수행하지 않으므로
+  공급자가 필요한 범위에서 결과를 수집하며 기존 호출 제한을 지켜야 합니다.
+
 ### 공통 설정·인증 SDK
 
 설정 항목을 Dart에 등록하지 않습니다. 확장앱 첫 줄의 `settings` 배열이 자체 설정 화면을 정의합니다.

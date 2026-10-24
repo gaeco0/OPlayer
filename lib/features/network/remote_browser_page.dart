@@ -6,6 +6,7 @@ import '../../app/theme.dart';
 import '../../core/media_utils.dart';
 import '../../core/settings.dart';
 import 'dart:convert';
+import 'dart:async';
 import '../../sources/media_source.dart';
 import '../browser/home_screen.dart';
 import '../browser/local_browser_page.dart' show ErrorView, ScrollablePlaceholder;
@@ -51,6 +52,10 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
   bool _grid = false;
   bool _videosOnly = true;
   int _loadGeneration = 0;
+  final _searchController = TextEditingController();
+  Timer? _searchTimer;
+  bool _searchOpen = false;
+  String get _query => _searchOpen ? _searchController.text.trim() : '';
   bool _selecting = false;
   bool _busy = false;
   final _selected = <String>{};
@@ -157,19 +162,51 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _searchTimer?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _searchChanged(String _) {
+    _searchTimer?.cancel();
+    // Invalidate the old request immediately, before the debounce expires.
+    _loadGeneration++;
+    setState(() => _loading = true);
+    _searchTimer = Timer(const Duration(milliseconds: 350), () => _load());
+  }
+
+  void _submitSearch(String _) {
+    _searchTimer?.cancel();
+    _load();
+  }
+
+  void _closeSearch() {
+    _searchTimer?.cancel();
+    _searchController.clear();
+    _searchOpen = false;
+    _load();
+  }
+
   Future<void> _load({bool force = false}) async {
     final generation = ++_loadGeneration;
     _restoreSort();
     final path = _stack.last.path;
+    final query = _query;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
       await ResourceLocks.instance.requireAccess(widget.source.keyFor(path));
-      final list = (!force && _cache.containsKey(path)) ? _cache[path]! : await widget.source.list(path);
+      final list = query.isNotEmpty
+          ? await widget.source.search(query, path: path)
+          : (!force && _cache.containsKey(path))
+          ? _cache[path]!
+          : await widget.source.list(path);
       if (!mounted || generation != _loadGeneration) return;
-      _cache[path] = list;
+      if (query.isEmpty) _cache[path] = list;
       _all = list;
       _apply();
       _selected.removeWhere((path) => !_items.any((e) => !e.isDir && e.path == path));
@@ -195,6 +232,9 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
 
   void _enter(RemoteEntry e) {
     _closeSelection();
+    _searchTimer?.cancel();
+    _searchController.clear();
+    _searchOpen = false;
     _stack.add(_Crumb(e.path, e.name));
     _load();
   }
@@ -203,6 +243,10 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
     if (_busy) return;
     if (_selecting) {
       _closeSelection();
+      return;
+    }
+    if (_searchOpen) {
+      _closeSearch();
       return;
     }
     if (_stack.length <= 1) return;
@@ -241,7 +285,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
   Widget build(BuildContext context) {
     final crumbs = _stack.skip(1).map((c) => c.title).join(' / ');
     return PopScope(
-      canPop: !_selecting && !_busy && _stack.length <= 1,
+      canPop: !_selecting && !_busy && !_searchOpen && _stack.length <= 1,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _up();
       },
@@ -250,32 +294,41 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
           automaticallyImplyLeading: false,
           leading: _selecting
               ? IconButton(tooltip: '선택 취소', icon: const Icon(Icons.close), onPressed: _busy ? null : _closeSelection)
-              : _stack.length > 1
+              : _searchOpen || _stack.length > 1
               ? IconButton(icon: const Icon(Icons.arrow_back), onPressed: _up)
               : (widget.onOpenDrawer != null && shouldShowDrawerButton(context)
                     ? IconButton(icon: const Icon(Icons.menu), onPressed: widget.onOpenDrawer)
                     : (Navigator.canPop(context) ? const BackButton() : null)),
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _selecting
-                    ? '${_selected.length}개 선택'
-                    : _stack.length == 1
-                    ? widget.source.displayName
-                    : _stack.last.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              if (crumbs.isNotEmpty)
-                Text(
-                  '/$crumbs',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12, color: OColors.of(context).textSecondary),
+          title: _searchOpen && !_selecting
+              ? TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  textInputAction: TextInputAction.search,
+                  decoration: const InputDecoration(hintText: '저장소 검색', border: InputBorder.none),
+                  onChanged: _searchChanged,
+                  onSubmitted: _submitSearch,
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _selecting
+                          ? '${_selected.length}개 선택'
+                          : _stack.length == 1
+                          ? widget.source.displayName
+                          : _stack.last.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (crumbs.isNotEmpty)
+                      Text(
+                        '/$crumbs',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 12, color: OColors.of(context).textSecondary),
+                      ),
+                  ],
                 ),
-            ],
-          ),
           actions: [
             if (_selecting)
               FileSelectionActions(
@@ -293,42 +346,50 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
                     : null,
               )
             else ...[
-              IconButton(
-                tooltip: '선택모드',
-                icon: const Icon(Icons.checklist),
-                onPressed: () => setState(() => _selecting = true),
-              ),
-              if (_stack.length > 1 && widget.onOpenDrawer != null && shouldShowDrawerButton(context))
-                IconButton(tooltip: '메뉴', icon: const Icon(Icons.menu), onPressed: widget.onOpenDrawer),
-              sortMenu(
-                sort: _sort,
-                asc: _asc,
-                foldersFirst: _foldersFirst,
-                onFoldersFirst: () => setState(() {
-                  _foldersFirst = !_foldersFirst;
-                  _apply();
-                  _saveSort();
-                }),
-                onSort: (v) => setState(() {
-                  _asc = _sort == v ? !_asc : true;
-                  _sort = v;
-                  _apply();
-                  _saveSort();
-                }),
-                extra: [
-                  const PopupMenuDivider(),
-                  CheckedPopupMenuItem(value: 'videos', checked: _videosOnly, child: const Text('미디어만 표시')),
-                ],
-                onExtra: (_) => setState(() {
-                  _videosOnly = !_videosOnly;
-                  _apply();
-                }),
-              ),
-              IconButton(
-                tooltip: _grid ? '목록 보기' : '격자 보기',
-                icon: Icon(_grid ? Icons.view_list : Icons.grid_view),
-                onPressed: () => setState(() => _grid = !_grid),
-              ),
+              if (widget.source.canSearch)
+                IconButton(
+                  tooltip: _searchOpen ? '검색 닫기' : '검색',
+                  icon: Icon(_searchOpen ? Icons.close : Icons.search),
+                  onPressed: _searchOpen ? _closeSearch : () => setState(() => _searchOpen = true),
+                ),
+              if (!_searchOpen) ...[
+                IconButton(
+                  tooltip: '선택모드',
+                  icon: const Icon(Icons.checklist),
+                  onPressed: () => setState(() => _selecting = true),
+                ),
+                if (_stack.length > 1 && widget.onOpenDrawer != null && shouldShowDrawerButton(context))
+                  IconButton(tooltip: '메뉴', icon: const Icon(Icons.menu), onPressed: widget.onOpenDrawer),
+                sortMenu(
+                  sort: _sort,
+                  asc: _asc,
+                  foldersFirst: _foldersFirst,
+                  onFoldersFirst: () => setState(() {
+                    _foldersFirst = !_foldersFirst;
+                    _apply();
+                    _saveSort();
+                  }),
+                  onSort: (v) => setState(() {
+                    _asc = _sort == v ? !_asc : true;
+                    _sort = v;
+                    _apply();
+                    _saveSort();
+                  }),
+                  extra: [
+                    const PopupMenuDivider(),
+                    CheckedPopupMenuItem(value: 'videos', checked: _videosOnly, child: const Text('미디어만 표시')),
+                  ],
+                  onExtra: (_) => setState(() {
+                    _videosOnly = !_videosOnly;
+                    _apply();
+                  }),
+                ),
+                IconButton(
+                  tooltip: _grid ? '목록 보기' : '격자 보기',
+                  icon: Icon(_grid ? Icons.view_list : Icons.grid_view),
+                  onPressed: () => setState(() => _grid = !_grid),
+                ),
+              ],
               IconButton(tooltip: '새로고침', icon: const Icon(Icons.refresh), onPressed: () => _load(force: true)),
               ...widget.actions,
             ],
@@ -384,7 +445,10 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
     if (_items.isEmpty) {
       return ScrollablePlaceholder(
         child: Center(
-          child: Text('항목이 없습니다', style: TextStyle(color: OColors.of(context).textSecondary)),
+          child: Text(
+            _query.isEmpty ? '항목이 없습니다' : '검색 결과가 없습니다',
+            style: TextStyle(color: OColors.of(context).textSecondary),
+          ),
         ),
       );
     }
