@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="OPlayer 개인정보처리방침: 기기 저장 정보, Google Drive 동기화·읽기·업로드, 확장앱, 외부 서비스 및 데이터 삭제 방법.">
+  <title>개인정보처리방침 — OPlayer</title>
+  <link rel="icon" href="oplayer-120.png" type="image/png">
+  <link rel="stylesheet" href="site.css">
+</head>
+<body>
+<header><img src="oplayer-120.png" width="48" height="48" alt=""><a href="./">OPlayer</a><nav aria-label="주 메뉴"><a href="privacy.html" aria-current="page">개인정보처리방침</a><a href="terms.html">이용약관</a></nav></header>
+<main>
+  <h1>개인정보처리방침</h1>
+  <p class="meta">시행일·최종 변경일: 2026년 10월 24일 · 운영자: gaeco0 / OPlayer</p>
+  <p>이 방침은 OPlayer 공식 배포 앱과 이 안내 웹사이트에 적용됩니다. 제3자가 수정·배포한 앱, 사용자가 설치한 외부 확장앱과 외부 서비스는 해당 제공자의 정책도 확인해야 합니다.</p>
+  <p class="notice">OPlayer는 개발자 운영 서버에 미디어·시청 기록을 수집하거나 별도의 회원 계정을 만드는 구조가 아닙니다. 사용자가 선택한 기능에 따라 기기에서 Google·네트워크 저장소·웹사이트 등으로 직접 요청을 전송합니다. 앱 자체에 광고용 추적·이용 통계·자동 오류 보고 SDK는 포함하지 않습니다.</p>
+
+  <h2>1. 처리하는 정보와 목적</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th scope="col">기능</th><th scope="col">정보</th><th scope="col">목적·기본 저장 위치</th></tr></thead>
+    <tbody>
+      <tr><td>파일 탐색·재생</td><td>선택한 파일 내용, 파일명·경로·크기, 자막, 썸네일, 재생 위치·길이·시각, 재생목록</td><td>목록 표시·재생·이어보기. 설정·기록·캐시를 기기에 보관하며 원격 파일은 선택한 저장소에서 읽습니다.</td></tr>
+      <tr><td>네트워크·클라우드 연결</td><td>서버 주소·계정명, 사용자가 입력한 비밀번호·키, OAuth 토큰, Google 계정의 이메일·계정 식별자</td><td>사용자가 연결한 저장소 인증·파일 접근. 로그인 비밀번호·OAuth 토큰 등은 OS 보안 저장소를 이용합니다. 일반 연결 설정은 앱 저장소에 보관합니다.</td></tr>
+      <tr><td>브라우저·다운로드</td><td>방문 URL·탐색 기록, WebView 쿠키·사이트 저장소, 다운로드 URL·파일명·저장 위치·진행 상태·요청 헤더</td><td>페이지 표시·탐색 복원·인증된 미디어 요청·다운로드 재시도. WebView 및 앱 저장소에 보관합니다. URL·쿠키·요청 헤더에 사이트 인증 정보가 포함될 수 있습니다.</td></tr>
+      <tr><td>Google 동기화</td><td>재생목록, 최근 재생·이어보기, 사용자가 지정한 리소스 별칭·상대 경로/파일 ID·제목, 기기별 임의 식별자, 수정·삭제 기록</td><td>같은 Google 계정의 기기 사이 병합. 사용자 Drive 앱 전용 공간과 기기에 보관합니다.</td></tr>
+      <tr><td>잠금·개인정보 설정</td><td>PIN·패턴 검증 정보, 잠금 대상과 생체인증·캡처 방지 설정</td><td>기기 내 접근 제어. 지문·얼굴 원본은 앱이 수집하지 않으며 OS 인증 결과만 이용합니다. 앱 잠금은 원본 미디어 파일 자체를 암호화하는 기능은 아닙니다.</td></tr>
+      <tr><td>지원 문의</td><td>사용자가 직접 제출한 문의·오류 설명·선택한 첨부 자료</td><td>문의 대응·오류 확인. GitHub 등 사용자가 문의한 서비스에 해당 정책에 따라 보관됩니다.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>2. Google 계정·Drive 정보의 이용</h2>
+  <p>Google 연결 시 Google의 로그인·동의 화면을 이용합니다. OPlayer는 Google 계정 비밀번호를 입력받지 않습니다. 계정 이메일·식별자는 연결한 계정 표시, 동기화 계정 구분, 올바른 계정으로 토큰 갱신을 수행하는 데 사용합니다.</p>
+  <h3>선택적 Google 동기화</h3>
+  <p><code>https://www.googleapis.com/auth/drive.appdata</code> 범위로 Google Drive의 숨겨진 앱 전용 공간에 동기화 문서를 읽고 씁니다. 파일 자체, 서버 비밀번호·호스트, 기기 절대 경로, 브라우저 URL·세션·요청 헤더, PIN·패턴·생체 정보는 이 동기화에 전송하지 않습니다. 사용자가 지정한 별칭·상대 경로/파일 ID와 제목에는 파일명이나 개인적인 내용이 포함될 수 있습니다.</p>
+  <h3>Google Drive 확장앱의 파일 접근</h3>
+  <p>공식 Google Drive 확장앱 1.3.0 이상은 <code>https://www.googleapis.com/auth/drive</code> 범위를 요청합니다. 이 범위는 전체 Drive 파일을 조회·관리할 수 있는 넓은 권한입니다. 현재 공식 확장앱은 목록·파일명 검색, 사용자가 재생·다운로드할 파일 읽기, 사용자가 지정한 폴더로 파일 업로드 및 확인한 기존 파일의 덮어쓰기에 사용합니다. 앱에서 파일 삭제·이름변경 기능을 선언하지 않은 확장앱에는 해당 작업 UI를 제공하지 않습니다. 구버전·읽기 전용 확장앱은 <code>drive.readonly</code>를 사용할 수 있습니다.</p>
+  <p>동기화 토큰과 Drive 파일 접근 토큰은 구분하여 관리합니다. 공식 Drive 확장앱에는 파일 바이트·사용자 액세스/갱신 토큰을 JavaScript 값으로 전달하지 않고 앱의 인증된 요청·전송 기능을 제공합니다. 파일 내용은 사용자가 선택한 재생·다운로드·업로드 목적에 필요한 범위에서 기기와 Google 사이에 전송됩니다.</p>
+
+  <h2>3. Google API 정보의 제한적 사용</h2>
+  <p>OPlayer는 Google API로 받은 정보를 이 방침에 설명한 사용자 기능 제공에만 이용하며, 다른 앱으로의 이전도 그 목적과 사용자의 선택에 맞게 제한합니다. <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>의 Limited Use 요구사항을 준수합니다.</p>
+  <p lang="en">OPlayer complies with the Google API Services User Data Policy, including its Limited Use requirements.</p>
+  <ul>
+    <li>Google 사용자 데이터를 판매하거나 광고·광고 타기팅, 데이터 중개, 신용 평가, 범용 AI/머신러닝 모델 학습에 사용하지 않습니다.</li>
+    <li>개발자가 사용자의 Drive 파일이나 동기화 문서를 자동으로 수집·열람하는 기능은 없습니다. 사용자가 지원을 위해 자료를 제공하는 등 구체적으로 동의한 경우, 보안 조사 또는 법적 의무 이행에 필요한 경우 외에는 사람의 열람에 사용하지 않습니다.</li>
+    <li>사용자가 파일을 다른 저장소에 저장·전송하도록 선택한 경우에는 선택한 목적지로 필요한 데이터가 전송됩니다. 외부 확장앱은 선언한 호스트·인증 권한 안에서 요청하므로 신뢰할 수 있는 확장앱만 설치해야 합니다.</li>
+  </ul>
+
+  <h2>4. 외부 서비스·웹사이트·확장앱</h2>
+  <p>원격 기능을 쓰면 해당 제공자는 IP 주소, 요청 URL·파일 식별자, 필요한 인증 정보와 전송 파일 등을 처리할 수 있습니다. 각 서비스는 별도의 운영자이며 그 개인정보 정책과 보관 기준이 적용됩니다.</p>
+  <ul>
+    <li><a href="https://policies.google.com/privacy">Google</a>: 로그인·Drive 파일·앱 전용 동기화 데이터.</li>
+    <li><a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">GitHub</a>: 앱 업데이트 확인·배포 파일, 공식 확장앱 저장소, 이 안내 사이트와 지원 이슈. 웹사이트 접속·다운로드·문의 시 GitHub가 접속 정보를 처리할 수 있습니다.</li>
+    <li>사용자가 등록한 SMB·FTP·SFTP·WebDAV·클라우드 저장소, DLNA/외부 출력 기기, 방문 웹사이트와 선택한 자막 제공자: 해당 기능에 필요한 파일·검색어·요청 정보.</li>
+    <li>선택적 DNS over HTTPS: 사용자가 지정한 DNS 제공자에 도메인 조회를 전송합니다. 제공자가 질의와 접속 정보를 처리할 수 있습니다. 내장 ByeDPI는 기기 내에서 연결을 처리하며 별도의 개발자 VPN 서버는 사용하지 않습니다.</li>
+    <li>확장앱: 설치·활성화한 기능과 선언된 권한에 따라 사이트 데이터, 검색어, 설정 및 허용된 네트워크 요청을 처리할 수 있습니다. 확장앱을 끄거나 삭제해도 별도로 연결한 계정·저장한 인증 정보가 함께 지워진다고 가정하지 마세요.</li>
+  </ul>
+  <p>사이트나 확장앱이 사용하는 쿠키·추적 기능은 해당 제공자의 정책에 따릅니다. 이 개인정보 안내 사이트 자체에는 분석 스크립트·광고·추적용 쿠키를 추가하지 않았으며 외부 폰트·스크립트를 불러오지 않습니다.</p>
+
+  <h2>5. 보관·삭제·동의 철회</h2>
+  <ul>
+    <li><strong>기기 기록·캐시:</strong> 최근 재생·재생목록·다운로드 목록은 앱의 해당 목록 관리 기능으로 정리할 수 있습니다. 다운로드한 파일을 지우려면 파일 삭제를 선택해야 합니다. WebView 프로필·브라우저 저장 정보와 기타 앱 데이터는 OS의 앱 데이터 관리 또는 앱 데이터 초기화가 필요할 수 있습니다.</li>
+    <li><strong>계정 연결 해제:</strong> 연결 계정 삭제 또는 Google 동기화의 연결 해제는 해당 기능의 기기 토큰을 제거합니다. 기기의 재생 기록·재생목록, 이미 업로드한 일반 Drive 파일과 Drive 앱 전용 동기화 문서를 모두 삭제하는 동작은 아닙니다. 동기화용 계정 이메일과 로컬 병합 기록이 앱 저장소에 남을 수 있습니다.</li>
+    <li><strong>Google 접근 권한 철회:</strong> <a href="https://myaccount.google.com/connections">Google 계정의 제3자 연결 관리</a>에서 OPlayer의 접근 권한을 철회할 수 있습니다.</li>
+    <li><strong>클라우드 동기화 데이터:</strong> 모든 기기에서 동기화를 끄거나 연결 해제한 뒤 Google Drive 설정의 앱 관리에서 OPlayer의 숨겨진 앱 데이터를 삭제할 수 있습니다. 동기화가 켜진 다른 기기가 있으면 그 기기의 기록이 다시 업로드될 수 있습니다. 동기화 문서에는 오래된 기기의 삭제 항목 복원을 막는 삭제 기록이 보관됩니다.</li>
+    <li><strong>일반 Drive 파일:</strong> 업로드한 파일은 사용자의 Drive에서 직접 삭제·관리할 수 있으며 Google의 보관·휴지통 정책이 적용됩니다.</li>
+    <li><strong>OS 백업·앱 삭제:</strong> 기기 데이터와 보안 저장소의 보관·복원 여부는 OS 및 사용자의 백업 설정에 따라 달라질 수 있습니다. 앱 삭제만으로 모든 외부 서비스 데이터나 백업이 지워지는 것은 아닙니다.</li>
+    <li><strong>문의 기록:</strong> 공개 이슈는 삭제·편집하거나 운영자에게 제거를 요청할 수 있으며 GitHub의 보관 정책·복제본·법적 의무에 따른 제한이 있을 수 있습니다. 정해진 기간마다 사용 기록을 개발자 서버에 수집·보관하는 기능은 없습니다.</li>
+  </ul>
+
+  <h2>6. 보호 조치</h2>
+  <p>클라우드 로그인에는 OAuth와 제공자의 인증 방식을 사용하고 지원 경로에서 PKCE·state 검증을 수행합니다. 비밀번호·OAuth 토큰 등은 OS 보안 저장소를 이용하며, PIN·패턴은 검증 정보를 저장합니다. 생체인증은 OS에 맡깁니다. 클라우드 인증·Google API 요청에는 HTTPS를 사용합니다. 사용자가 직접 설정한 원격 프로토콜·웹사이트의 암호화 지원 여부는 다를 수 있습니다.</p>
+  <p>설정·재생 기록·다운로드 메타데이터 전체가 별도로 암호화되는 것은 아닙니다. Google 동기화도 별도의 종단간 암호화를 제공하지 않습니다. 기기·OS 계정·백업·원격 저장소를 보호하고, 오류 로그·스크린샷 공유 전 URL·쿠키·인증 토큰·개인 경로를 제거하세요.</p>
+
+  <h2>7. 변경·문의</h2>
+  <p>데이터 처리 방식이 변경되면 이 페이지의 시행일과 내용을 갱신합니다. Google 데이터의 이용 목적을 확대할 때는 필요한 설명과 권한 동의 절차를 적용합니다.</p>
+  <p>운영자: <a href="https://github.com/gaeco0">gaeco0</a><br>개인정보 문의·접근/삭제 요청: <a href="https://github.com/gaeco0/OPlayer/issues">OPlayer GitHub Issues</a></p>
+  <p>문의는 필요한 최소 정보만 작성해 주세요. 공개 이슈에 비밀번호·토큰·개인 파일·민감한 시청 기록을 게시하지 마세요. 비공개 연락이 필요한 경우 민감한 내용을 제외하고 연락 방법을 먼저 문의해 주세요.</p>
+</main>
+<footer><a href="./">OPlayer 홈페이지</a> · <a href="terms.html">이용약관</a> · © 2026 gaeco0</footer>
+</body>
+</html>

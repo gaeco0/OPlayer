@@ -1,5 +1,7 @@
 # OPlayer
 
+[홈페이지](https://gaeco0.github.io/OPlayer/) · [개인정보처리방침](https://gaeco0.github.io/OPlayer/privacy.html) · [이용약관](https://gaeco0.github.io/OPlayer/terms.html)
+
 Android · Android TV · iOS · Windows · Linux · macOS 동영상 플레이어 (Flutter + media_kit/libmpv).
 nPlayer의 UI/UX를 기준으로, 로컬·네트워크·클라우드 재생과 웹 페이지 동영상 받기를 지원한다.
 
