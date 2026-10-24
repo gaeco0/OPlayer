@@ -17,6 +17,7 @@ import 'swipe_delete_tile.dart';
 import '../../core/file_deletion.dart';
 import '../../core/file_renaming.dart';
 import '../../core/playlist_store.dart';
+import '../../core/resource_playback_store.dart';
 import 'file_actions.dart';
 import 'playlists_page.dart';
 
@@ -136,6 +137,13 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
   );
 
   String get _cwd => _stack.last;
+  String get _playbackResource => ResourcePlaybackStore.localResource(widget.rootPath);
+  bool _highlighted(String path, {bool folder = false}) =>
+      ResourcePlaybackStore.instance.highlighted(_playbackResource, path, folder: folder);
+
+  void _playbackChanged() {
+    if (mounted) setState(() {});
+  }
 
   String get _sortKey =>
       'local:${Platform.isWindows ? p.normalize(p.absolute(_cwd)).toLowerCase() : p.normalize(p.absolute(_cwd))}';
@@ -153,7 +161,16 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
   @override
   void initState() {
     super.initState();
+    ResourcePlaybackStore.instance.addListener(_playbackChanged);
+    ResourceLocks.instance.addListener(_playbackChanged);
     _load();
+  }
+
+  @override
+  void dispose() {
+    ResourcePlaybackStore.instance.removeListener(_playbackChanged);
+    ResourceLocks.instance.removeListener(_playbackChanged);
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -241,9 +258,13 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
     }
     final videos = _items.where((e) => !e.isDir && isPlayable(e.path)).map((e) => e.path).toList();
     final index = videos.indexOf(item.path);
-    await Navigator.of(
-      context,
-    ).push(PlayerScreen.route(videos.map(MediaItem.local).toList(), index, folderFiles: _allFiles));
+    await Navigator.of(context).push(
+      PlayerScreen.route(
+        videos.map((path) => MediaItem.local(path).inResource(_playbackResource, _stack)).toList(),
+        index,
+        folderFiles: _allFiles,
+      ),
+    );
     if (mounted) setState(() {}); // 이어보기 진행바 갱신
   }
 
@@ -279,13 +300,25 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(_selecting ? '${_selected.length}개 선택' : title, maxLines: 1, overflow: TextOverflow.ellipsis),
+              Text(
+                _selecting ? '${_selected.length}개 선택' : title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: !_selecting && _highlighted(_cwd, folder: true)
+                    ? TextStyle(color: lastPlayedColor(context))
+                    : null,
+              ),
               if (relative != '.')
                 Text(
                   '/$relative',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 12, color: OColors.of(context).textSecondary),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: _highlighted(_cwd, folder: true)
+                        ? lastPlayedColor(context)
+                        : OColors.of(context).textSecondary,
+                  ),
                 ),
             ],
           ),
@@ -394,9 +427,15 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
         itemBuilder: (_, i) {
           final it = _items[i];
           final tile = it.isDir
-              ? FolderGridTile(name: it.name, resource: it.path, onTap: () => _enter(it.path))
+              ? FolderGridTile(
+                  name: it.name,
+                  resource: it.path,
+                  lastPlayed: _highlighted(it.path, folder: true),
+                  onTap: () => _enter(it.path),
+                )
               : VideoGridTile(
                   resumeKey: it.path,
+                  lastPlayed: _highlighted(it.path),
                   name: it.name,
                   localPath: it.path,
                   size: it.stat.size,
@@ -425,9 +464,15 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
       itemBuilder: (_, i) {
         final it = _items[i];
         final tile = it.isDir
-            ? FolderListTile(name: it.name, resource: it.path, onTap: () => _enter(it.path))
+            ? FolderListTile(
+                name: it.name,
+                resource: it.path,
+                lastPlayed: _highlighted(it.path, folder: true),
+                onTap: () => _enter(it.path),
+              )
             : VideoListTile(
                 resumeKey: it.path,
+                lastPlayed: _highlighted(it.path),
                 name: it.name,
                 localPath: it.path,
                 size: it.stat.size,

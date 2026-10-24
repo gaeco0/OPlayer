@@ -18,6 +18,8 @@ import 'package:oplayer/sources/media_source.dart';
 import 'package:oplayer/sources/server_store.dart';
 import 'package:oplayer/sources/webdav_source.dart';
 import 'package:oplayer/sources/smb_source.dart';
+import 'package:oplayer/core/resource_playback_store.dart';
+import 'package:oplayer/features/browser/video_tile.dart';
 
 class _Source extends MediaSource {
   final entries = [const RemoteEntry(name: 'movie.mp4', path: '/media/movie.mp4', isDir: false)];
@@ -57,6 +59,7 @@ void main() {
     await AppSettings.instance.init();
     AppSettings.instance.showThumbnails = false;
     await ResumeStore.instance.init();
+    await ResourcePlaybackStore.instance.init();
     await ResourceLocks.instance.init();
     ResourceLocks.instance.onAuthenticate = null;
   });
@@ -177,8 +180,18 @@ void main() {
 
   testWidgets('remote delete refreshes the list on success and preserves failed entries', (t) async {
     final source = _Source()..fail = true;
+    final resource = jsonEncode([source.scheme, source.id, source.rootPath]);
+    final key = source.keyFor('/media/movie.mp4');
+    await ResourcePlaybackStore.instance.record(
+      MediaItem(
+        key: key,
+        uri: 'https://example.invalid/movie',
+        title: 'movie',
+      ).inResource(resource, [source.keyFor(source.rootPath)]),
+    );
     await t.pumpWidget(MaterialApp(home: RemoteBrowserPage(source: source)));
     await t.pumpAndSettle();
+    expect(t.widget<Text>(find.text('movie.mp4')).style!.color, lastPlayedColor(t.element(find.text('movie.mp4'))));
     Future<void> remove() async {
       await t.drag(find.byKey(const ValueKey('/media/movie.mp4')), const Offset(-650, 0));
       await t.pumpAndSettle();
@@ -194,5 +207,6 @@ void main() {
     expect(find.text('movie.mp4'), findsNothing);
     expect(find.text('항목이 없습니다'), findsOneWidget);
     expect(source.loads, 3);
+    expect(ResourcePlaybackStore.instance.highlighted(resource, key), false);
   });
 }

@@ -17,6 +17,7 @@ import 'appearance_settings.dart';
 import 'plugins_page.dart';
 import 'app_update_page.dart';
 import 'google_sync_page.dart';
+import 'issue_report_page.dart';
 import '../player/desktop_window.dart';
 import '../player/player_orientation.dart';
 
@@ -293,6 +294,12 @@ class SettingsPage extends StatelessWidget {
               onChanged: (v) => s.update((x) => x.hlsParallelSegments = v),
             ),
             const _Header('정보'),
+            ListTile(
+              leading: const Icon(Icons.bug_report_outlined),
+              title: const Text('진단 정보 보내기'),
+              subtitle: const Text('문제 신고 · GitHub Issues'),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const IssueReportPage())),
+            ),
             ListTile(
               leading: const Icon(Icons.system_update),
               title: const Text('앱 업데이트'),

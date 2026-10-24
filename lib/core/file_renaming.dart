@@ -3,6 +3,7 @@ import 'package:path/path.dart' as p;
 import 'playlist_store.dart';
 import 'resume_store.dart';
 import 'resource_locks.dart';
+import 'resource_playback_store.dart';
 
 String validateFileName(String name) {
   if (name.isEmpty ||
@@ -18,6 +19,7 @@ String validateFileName(String name) {
 Future<void> updateRenamedFile(String oldKey, String newKey, String name) async {
   await ResumeStore.instance.relocate(oldKey, newKey, p.basenameWithoutExtension(name));
   await PlaylistStore.instance.relocate(oldKey, newKey, name);
+  await ResourcePlaybackStore.instance.relocate(oldKey, newKey);
 }
 
 Future<String> renameLocalFile(String path, String name, {required String parent}) async {

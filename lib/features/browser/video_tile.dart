@@ -14,6 +14,9 @@ import '../settings/privacy_settings.dart';
 import '../../core/thumbnail_service.dart';
 import 'file_actions.dart';
 
+Color lastPlayedColor(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark ? const Color(0xFF64B5F6) : const Color(0xFF1565C0);
+
 /// 썸네일 (로컬: 프레임 추출 캐시 / 원격: 서버 제공 썸네일 URL) + 길이 + 이어보기 진행바
 class VideoThumb extends StatefulWidget {
   const VideoThumb({
@@ -262,6 +265,7 @@ class VideoListTile extends StatelessWidget {
     required this.onTap,
     required this.onChanged,
     this.size = 0,
+    this.lastPlayed = false,
     this.modified,
     this.localPath,
     this.thumbnailUrl,
@@ -276,6 +280,7 @@ class VideoListTile extends StatelessWidget {
   });
 
   final String resumeKey;
+  final bool lastPlayed;
   final String name;
   final int size;
   final DateTime? modified;
@@ -328,7 +333,9 @@ class VideoListTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 14,
-                      color: (r?.finished ?? false)
+                      color: lastPlayed
+                          ? lastPlayedColor(context)
+                          : (r?.finished ?? false)
                           ? OColors.of(context).textSecondary
                           : OColors.of(context).textPrimary,
                     ),
@@ -384,6 +391,7 @@ class VideoGridTile extends StatelessWidget {
     required this.onTap,
     required this.onChanged,
     this.size = 0,
+    this.lastPlayed = false,
     this.localPath,
     this.thumbnailUrl,
     this.onDownload,
@@ -394,6 +402,7 @@ class VideoGridTile extends StatelessWidget {
     this.onRemoveFromPlaylist,
   });
   final String resumeKey;
+  final bool lastPlayed;
   final String name;
   final int size;
   final String? localPath;
@@ -462,7 +471,12 @@ class VideoGridTile extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
+          Text(
+            name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 13, color: lastPlayed ? lastPlayedColor(context) : null),
+          ),
           if (size > 0)
             Text(formatSize(size), style: TextStyle(fontSize: 11, color: OColors.of(context).textSecondary)),
         ],
@@ -472,7 +486,15 @@ class VideoGridTile extends StatelessWidget {
 }
 
 class FolderListTile extends StatelessWidget {
-  const FolderListTile({super.key, required this.name, required this.onTap, this.subtitle, this.resource});
+  const FolderListTile({
+    super.key,
+    required this.name,
+    required this.onTap,
+    this.subtitle,
+    this.resource,
+    this.lastPlayed = false,
+  });
+  final bool lastPlayed;
   final String name;
   final String? resource;
   final String? subtitle;
@@ -481,7 +503,12 @@ class FolderListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListTile(
     leading: const SizedBox(width: 96, child: Icon(Icons.folder_rounded, color: Color(0xFFF2B84B), size: 40)),
-    title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
+    title: Text(
+      name,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: lastPlayed ? TextStyle(color: lastPlayedColor(context)) : null,
+    ),
     subtitle: subtitle == null
         ? null
         : Text(subtitle!, style: TextStyle(fontSize: 12, color: OColors.of(context).textSecondary)),
@@ -492,7 +519,8 @@ class FolderListTile extends StatelessWidget {
 }
 
 class FolderGridTile extends StatelessWidget {
-  const FolderGridTile({super.key, required this.name, required this.onTap, this.resource});
+  const FolderGridTile({super.key, required this.name, required this.onTap, this.resource, this.lastPlayed = false});
+  final bool lastPlayed;
   final String name;
   final String? resource;
   final VoidCallback onTap;
@@ -514,7 +542,12 @@ class FolderGridTile extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
+          Text(
+            name,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 13, color: lastPlayed ? lastPlayedColor(context) : null),
+          ),
         ],
       ),
     );
