@@ -10,6 +10,7 @@ import '../secure_store.dart';
 import 'plugin.dart';
 import 'plugin_runtime.dart';
 import 'plugin_legacy_settings.dart';
+import '../../sources/cloud/cloud_config.dart';
 
 const defaultPluginRepository = 'https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/repository.json';
 
@@ -53,7 +54,9 @@ class PluginStore extends ChangeNotifier {
 
   // OAuth registration belongs to its extension; account-bound IDs stay unchanged.
   String oauthClientId(OPlugin plugin) =>
-      _prefs?.getString('pluginOAuthClientId:${plugin.id}') ?? plugin.oauth['clientId'] as String? ?? '';
+      _prefs?.getString('pluginOAuthClientId:${plugin.id}') ??
+      plugin.oauth['clientId'] as String? ??
+      (plugin.oauth['clientIdSource'] == 'app.google' ? CloudConfig.googleClientId : '');
 
   Future<void> setOAuthClientId(String id, String value) async {
     if (installed[id]?.cloud != true) throw StateError('설치된 클라우드 확장앱이 아닙니다');
@@ -69,9 +72,15 @@ class PluginStore extends ChangeNotifier {
     (jsonDecode(_prefs?.getString('pluginSettings:${plugin.id}') ?? '{}') as Map).cast<String, dynamic>(),
   );
   Future<Map<String, dynamic>> credentials(String id) async {
-    if (!hasCredentials(id)) return legacyPluginSettings(id);
+    final plugin = installed[id];
+    final defaults = {
+      if (plugin?.oauth['clientIdSource'] == 'app.google')
+        plugin!.oauth['clientIdSetting'] as String? ?? 'clientId': oauthClientId(plugin),
+      ...await legacyPluginSettings(id),
+    };
+    if (!hasCredentials(id)) return defaults;
     final raw = await SecureStore.instance.readRequired('pluginCredentials:$id');
-    return {...await legacyPluginSettings(id), if (raw != null) ...(jsonDecode(raw) as Map).cast<String, dynamic>()};
+    return {...defaults, if (raw != null) ...(jsonDecode(raw) as Map).cast<String, dynamic>()};
   }
 
   Future<void> setCredentials(String id, Map<String, dynamic> values) async {

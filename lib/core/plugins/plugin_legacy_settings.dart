@@ -1,6 +1,7 @@
 import 'dart:io';
 import '../settings.dart';
 import '../secure_store.dart';
+import '../../sources/cloud/cloud_config.dart';
 
 /// Read-only migration of registrations saved before extension-owned settings.
 /// New providers never add entries here.
@@ -9,7 +10,7 @@ Future<Map<String, dynamic>> legacyPluginSettings(String id) async {
   final clientId = switch (id) {
     'cloud.dropbox' => s.dropboxAppKey,
     'cloud.onedrive' => s.oneDriveClientId,
-    'cloud.gdrive' => Platform.isAndroid ? s.googleAndroidClientId : s.googleDesktopClientId,
+    'cloud.gdrive' => CloudConfig.googleClientId,
     _ => '',
   };
   return {

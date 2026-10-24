@@ -51,6 +51,11 @@ OAuthClient oauthClientFor(CloudProvider provider, {String? clientId, String? ac
     authEndpoint: oauth['authEndpoint'] as String,
     tokenEndpoint: oauth['tokenEndpoint'] as String,
     clientId: id,
+    clientSecret:
+        oauth['tokenEndpoint'] == 'https://oauth2.googleapis.com/token' &&
+            oauth['authEndpoint'] == 'https://accounts.google.com/o/oauth2/v2/auth'
+        ? CloudConfig.googleBundledSecret(id)
+        : null,
     clientSecretKey: provider == CloudProvider.gdrive || oauth['requiresClientSecret'] == true
         ? PluginStore.oauthSecretKey(definition.id, id)
         : null,

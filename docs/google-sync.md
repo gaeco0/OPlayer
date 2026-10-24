@@ -6,7 +6,8 @@ Google Drive의 숨겨진 `appDataFolder`에 재생목록·최근 재생·이어
 
 ## 설정
 
-설정 → **Google 동기화**에서 앱 등록 정보를 설정한 뒤 Google 계정을 연결한다.
+설정 → **Google 동기화**에서 Google 계정을 연결한다. 운영자가 등록값을 포함한 배포본은 별도 ID 입력이 필요 없다.
+등록값이 없는 자체 빌드에서는 앱 등록 정보를 직접 입력한다.
 연결 시 기기에 있던 동기화 대상 기록과 해당 계정의 기록을 병합한다. 자동 동기화는 계정 연결 후 켜진다.
 앱 시작·복귀와 사용 중 최대 분당 한 번 확인한다. 꺼 두어도 기기의 변경 사항은 보관하며 **지금 동기화**로 반영한다.
 자동 동기화는 앱이 앞에 있고 앱 잠금·최근 재생 잠금이 해제된 때 수행한다. OS가 앱을 종료한 뒤 실행되는 별도 작업은 아니다.
@@ -32,6 +33,35 @@ iOS는 Google 로그인 콜백 등록·네이티브 설정을 추가한 뒤 지�
 
 동기화 권한을 기존 파일 탐색용 `drive.readonly`와 합치지 않는다. 동기화 토큰도 기존 클라우드 계정 토큰과 분리한다.
 등록 정보가 없는 배포본은 직접 등록이 필요하다. 실제 공통 배포용 OAuth 프로젝트·클라이언트는 운영자가 별도로 준비해야 한다.
+
+## 운영자 등록값을 Actions에서 주입하기
+
+GitHub 저장소 → Settings → Secrets and variables → Actions → Repository secrets에 다음 값을 등록한다.
+Google Cloud의 프로젝트 번호·API Key가 아니라 **OAuth Client ID**를 사용한다.
+
+| Secret 이름 | 값 | 적용 대상 |
+| --- | --- | --- |
+| `OPLAYER_GOOGLE_ANDROID_CLIENT_ID` | Android 유형 OAuth Client ID | Android·Android TV |
+| `OPLAYER_GOOGLE_DESKTOP_CLIENT_ID` | 데스크톱 앱 유형 OAuth Client ID | Windows·Linux·macOS |
+| `OPLAYER_GOOGLE_DESKTOP_CLIENT_SECRET` | 위 데스크톱 클라이언트의 Client Secret | Windows·Linux·macOS 네이티브 토큰 교환 |
+
+Android·데스크톱 클라이언트는 같은 Cloud 프로젝트에 만든다. Android는 기존 배포 서명 SHA-1과 패키지명을
+등록하며 Client Secret은 사용하지 않는다. 데스크톱 ID와 Secret은 둘 다 설정하거나 둘 다 비워 둔다.
+전부 비어 있으면 직접 등록 가능한 자체 빌드로 동작한다. 잘못된 ID 형식·데스크톱 값의 일부 누락은 빌드를 실패시킨다.
+
+태그 빌드가 JSON dart-define 파일을 만들어 모든 대상에 해당 플랫폼의 값만 포함한다. 값은 명령행에 직접
+치환하거나 로그로 출력하지 않으며 JSON 파일은 Git·배포 압축파일에 포함하지 않는다. Secret 등록 자체는 빌드를
+시작하지 않는다. 기존처럼 배포 지시 후 태그를 생성할 때 적용된다. 로컬 빌드도 같은 키의 JSON 파일을
+`--dart-define-from-file=<파일>`로 지정할 수 있다. 실제 등록값을 저장소에 커밋하지 않는다.
+
+Client ID는 공개 식별자다. **데스크톱 앱에 포함한 Client Secret도 배포 바이너리에서 추출할 수 있으므로
+서버 전용 비밀로 취급하면 안 된다.** 웹 앱용 Secret·서비스 계정 키·개인 액세스/갱신 토큰은 빌드에 넣지 않는다.
+Google의 [설치형 앱 OAuth 설명](https://developers.google.com/identity/protocols/oauth2/native-app)을 따른다.
+로그인은 사용자 동의와 PKCE로 처리하며 사용자 토큰은 기기 보안 저장소에만 보관한다.
+
+동기화와 Google Drive 확장앱은 배포 등록값을 기본으로 공유한다. 앱에서 직접 저장한 등록값과 계정별로
+연결 당시 저장한 Client ID가 우선하며, 다른 Client ID에는 배포 Secret을 사용하지 않는다.
+플러그인은 `OPlayer.app.googleOAuth`에서 현재 플랫폼의 공개 ID만 조회할 수 있다. Secret·계정 토큰은 제공하지 않는다.
 
 공식 자료:
 

@@ -58,6 +58,7 @@ class GoogleSync extends ChangeNotifier with WidgetsBindingObserver {
           authEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
           tokenEndpoint: 'https://oauth2.googleapis.com/token',
           clientId: id,
+          clientSecret: CloudConfig.googleBundledSecret(id),
           clientSecretKey: CloudConfig.googleSecretKey(id),
           scopes: const [googleSyncScope],
           mobileScheme: CloudConfig.mobileScheme,

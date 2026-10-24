@@ -227,6 +227,9 @@ class OPlugin {
       throw const FormatException('이 인증 방식에는 확장앱 API 2 이상이 필요합니다');
     }
     if (plugin.cloud && plugin.authType == 'oauth') {
+      if (plugin.oauth.containsKey('clientIdSource') && plugin.oauth['clientIdSource'] != 'app.google') {
+        throw const FormatException('지원하지 않는 OAuth clientIdSource');
+      }
       for (final key in ['authEndpoint', 'tokenEndpoint']) {
         repositoryUri('${plugin.oauth[key]}');
       }
