@@ -83,7 +83,12 @@ class MainActivity : FlutterActivity() {
                         result.success(null)
                     } else {
                         try {
-                            requestedOrientation = orientation
+                            // Player init, PiP availability and lifecycle callbacks
+                            // can request the same mode in one frame. Avoid making
+                            // those look like a rotation loop to foldable firmware.
+                            if (requestedOrientation != orientation) {
+                                requestedOrientation = orientation
+                            }
                             result.success(null)
                         } catch (e: IllegalStateException) {
                             result.error("ORIENTATION", e.message, null)
