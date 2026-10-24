@@ -14,21 +14,28 @@ void main() {
 
   test('mobile manifest preserves player orientation requests against foldable compatibility overrides', () async {
     final mobile = XmlDocument.parse(await File('android/app/src/mobile/AndroidManifest.xml').readAsString());
-    final activity = mobile.findAllElements('activity').single;
+    final application = mobile.findAllElements('application').single;
+    final activity = application.findElements('activity').single;
     final properties = {
-      for (final property in activity.findElements('property'))
+      for (final property in application.findElements('property'))
         property.getAttribute('android:name'): property.getAttribute('android:value'),
     };
-    expect(properties['android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY'], 'true');
+    expect(
+      activity.findElements('property').single.getAttribute('android:name'),
+      'android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY',
+    );
+    expect(activity.findElements('property').single.getAttribute('android:value'), 'true');
     for (final name in [
       'PROPERTY_COMPAT_ALLOW_ORIENTATION_OVERRIDE',
       'PROPERTY_COMPAT_ALLOW_DISPLAY_ORIENTATION_OVERRIDE',
       'PROPERTY_COMPAT_ALLOW_IGNORING_ORIENTATION_REQUEST_WHEN_LOOP_DETECTED',
+      'PROPERTY_COMPAT_IGNORE_REQUESTED_ORIENTATION',
     ]) {
       expect(properties['android.window.$name'], 'false');
     }
     final tv = await File('android/app/src/tv/AndroidManifest.xml').readAsString();
     expect(tv, isNot(contains('PROPERTY_COMPAT_ALLOW_')));
+    expect(tv, isNot(contains('PROPERTY_COMPAT_IGNORE_REQUESTED_ORIENTATION')));
   });
 
   test('mobile orientation preference restores across reloads and tolerates older settings', () async {

@@ -1,21 +1,23 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
+        <!-- These OEM compatibility properties are application-level, not activity-level. -->
+        <property
+            android:name="android.window.PROPERTY_COMPAT_ALLOW_ORIENTATION_OVERRIDE"
+            android:value="false"/>
+        <property
+            android:name="android.window.PROPERTY_COMPAT_ALLOW_DISPLAY_ORIENTATION_OVERRIDE"
+            android:value="false"/>
+        <property
+            android:name="android.window.PROPERTY_COMPAT_ALLOW_IGNORING_ORIENTATION_REQUEST_WHEN_LOOP_DETECTED"
+            android:value="false"/>
+        <property
+            android:name="android.window.PROPERTY_COMPAT_IGNORE_REQUESTED_ORIENTATION"
+            android:value="false"/>
         <activity android:name=".MainActivity" android:resizeableActivity="true">
             <!-- API 36 otherwise ignores player orientation requests on unfolded displays. -->
             <property
                 android:name="android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"
                 android:value="true"/>
-            <!-- Keep explicit player modes when OEM foldable compatibility
-                 would substitute USER orientation or a fixed natural display. -->
-            <property
-                android:name="android.window.PROPERTY_COMPAT_ALLOW_ORIENTATION_OVERRIDE"
-                android:value="false"/>
-            <property
-                android:name="android.window.PROPERTY_COMPAT_ALLOW_DISPLAY_ORIENTATION_OVERRIDE"
-                android:value="false"/>
-            <property
-                android:name="android.window.PROPERTY_COMPAT_ALLOW_IGNORING_ORIENTATION_REQUEST_WHEN_LOOP_DETECTED"
-                android:value="false"/>
         </activity>
     </application>
 </manifest>
