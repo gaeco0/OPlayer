@@ -6,6 +6,7 @@ import '../../core/plugins/plugin_runtime.dart';
 import '../../core/plugins/plugin_store.dart';
 import '../../core/secure_store.dart';
 import '../../sources/cloud/oauth.dart';
+import '../../sources/cloud/cloud_config.dart';
 
 /// The extension owns the schema; the app only renders standard controls.
 Future<bool> showPluginSettingsDialog(BuildContext context, OPlugin plugin) async {
@@ -95,6 +96,13 @@ Future<bool> showPluginSettingsDialog(BuildContext context, OPlugin plugin) asyn
                                 values[field['key'] as String] = field['type'] == 'password' ? v : v.trim(),
                             validator: (v) {
                               final text = (v ?? '').trim();
+                              if (field['key'] == secretKey &&
+                                  text.isEmpty &&
+                                  plugin.oauth['tokenEndpoint'] == 'https://oauth2.googleapis.com/token' &&
+                                  plugin.oauth['authEndpoint'] == 'https://accounts.google.com/o/oauth2/v2/auth' &&
+                                  (CloudConfig.googleBundledSecret('${values[idKey] ?? ''}')?.isNotEmpty ?? false)) {
+                                return null;
+                              }
                               if (field['required'] == true && text.isEmpty) return '${field['label']} 값을 입력해 주세요';
                               if (field['type'] == 'url' && text.isNotEmpty) {
                                 try {

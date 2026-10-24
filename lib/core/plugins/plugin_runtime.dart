@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import '../../sources/cloud/cloud_config.dart';
 import 'package:quickjs_engine/quickjs_engine.dart';
 import 'plugin.dart';
 import 'plugin_values.dart';
@@ -45,6 +47,7 @@ Future<Object?> callPlugin(
       globalThis.OPlayer = Object.freeze({
         api: 4, kind: ${jsonEncode(plugin.kind)}, capabilities: Object.freeze(${jsonEncode(plugin.capabilities)}),
         config: Object.freeze(${jsonEncode(config)}),
+        app: Object.freeze({googleOAuth: Object.freeze(${jsonEncode({'clientId': CloudConfig.googleClientId, 'platform': Platform.operatingSystem})})}),
         secret: (name, options = {}) => ({\$secret:name, ...options}),
         parse: createOPlayerParser(args => __host('parse',{args})),
         crypto: Object.freeze({

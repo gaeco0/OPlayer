@@ -189,6 +189,22 @@ Android는 WebView 요청 콜백, Windows는 DevTools 요청 차단, Apple WebVi
 
 ### 클라우드 기능
 
+앱에 등록된 Google OAuth ID는 모든 네이티브 JS 확장앱의 훅에서 동기적으로 조회할 수 있습니다.
+
+```js
+const {clientId, platform} = OPlayer.app.googleOAuth;
+// clientId: 현재 플랫폼 ID (미등록 빌드는 빈 문자열)
+// platform: android / windows / linux / macos
+```
+
+`OPlayer.app`과 `googleOAuth`는 읽기 전용입니다. Client Secret·사용자 계정·로그인 토큰은 노출하지 않습니다.
+페이지에 주입되는 스크립트에는 이 네이티브 SDK 객체를 자동 제공하지 않습니다.
+Google OAuth 리소스 확장앱은 매니페스트의 `oauth.clientIdSource: "app.google"`로 앱의 ID를 기본값으로
+선택할 수 있습니다. 자체 `clientId`·사용자 설정·기존 계정의 ID가 우선합니다. 배포용 데스크톱 Secret은
+등록 ID와 Google 인증·토큰 엔드포인트가 모두 일치할 때만 네이티브에서 사용합니다.
+인증 범위·호스트 권한은 그대로 선언해야 하며 ID 조회만으로 인증·API 호출 권한이 생기지 않습니다.
+Actions Secret 이름과 운영자 등록 절차는 [Google 등록 안내](../docs/google-sync.md#운영자-등록값을-actions에서-주입하기)를 참고하세요.
+
 공식 `cloud.*.js`를 참고하세요. 계정 연결 UI에는 설치·활성화된 클라우드 확장앱이 표시됩니다.
 `oauth`를 선언한 클라우드 확장앱에는 자체 설정 화면을 제공합니다. 추가 공급자의 Client ID도 그 화면에
 확장앱 ID별로 저장하며 로그인 시 사용합니다. 등록 정보가 없으면 연결 과정에서 해당 확장앱 설정을 엽니다.

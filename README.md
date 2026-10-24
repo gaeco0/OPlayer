@@ -30,7 +30,7 @@ nPlayer의 UI/UX를 기준으로, 로컬·네트워크·클라우드 재생과 �
 
 - 설정 → **Google 동기화**에서 Google Drive 앱 전용 저장소에 재생목록·최근 재생·이어보기 위치를 동기화합니다. 별도 서버나 Google Drive 확장앱 설치가 필요하지 않으며 Apple·삼성 계정 연동은 제공하지 않습니다.
 - 기기별 폴더·서버·클라우드 계정에 공통 동기화 이름을 지정해 파일을 연결합니다. 파일 내용·비밀번호·사이트 세션·잠금 정보는 전송하지 않습니다. 연결되지 않은 파일과 URL은 기기에만 남습니다.
-- Android/Android TV와 Windows·Linux·macOS를 지원합니다. 같은 Cloud 프로젝트의 OAuth 등록이 필요하며 실제 등록값이 없는 배포본은 앱에서 입력·등록 안내를 제공합니다. iOS는 별도 로그인 설정이 필요해 현재 지원하지 않습니다.
+- Android/Android TV와 Windows·Linux·macOS를 지원합니다. 운영자의 같은 Cloud 프로젝트 OAuth 등록값을 Actions Secret으로 빌드에 포함할 수 있으며 미등록 자체 빌드는 입력·등록 안내를 제공합니다. iOS는 별도 로그인 설정이 필요해 현재 지원하지 않습니다.
 - 자동·수동 동기화, 오프라인 변경 보관, 삭제 병합을 지원하며 동일 재생목록의 동시 편집은 마지막 수정본을 사용합니다. 자세한 [설정·등록·동작 안내](docs/google-sync.md)를 참고하세요.
 
 ## 고화질 업스케일 (v0.1.6)
@@ -213,7 +213,7 @@ Chromecast·DLNA·PiP는 실제 Android/TV 기기 검증이 필요하다. nPlaye
 
 - OneDrive: Microsoft Entra 앱 등록에서 개인 Microsoft 계정을 포함하는 계정 유형과 모바일 및 데스크톱 플랫폼을 선택한다. 권한은 Files.Read, User.Read, offline_access. 커스텀 복귀 주소 `com.oplayer.oplayer://oauth/onedrive`와 데스크톱 `http://localhost:53682/callback`을 등록한다.
 - Dropbox: Scoped access / Full Dropbox 앱을 만들고 files.metadata.read, files.content.read, account_info.read 권한을 켠다. `com.oplayer.oplayer://oauth/dropbox`와 `http://localhost:53682/callback`을 등록한다.
-- Google Drive: Google Cloud 프로젝트에서 Drive API를 사용 설정하고 OAuth 동의 화면에 `https://www.googleapis.com/auth/drive.readonly`와 테스트 사용자를 추가한다. 파일·폴더 탐색 및 미디어 읽기 전용이며 업로드·수정 권한은 요청하지 않는다. Windows/macOS/Linux에서는 **데스크톱 앱** 유형의 Client ID와 Client Secret을 설정에 입력한다. Secret은 기기의 보안 저장소에 계정이 사용한 Client ID별로 보관하며 APK나 일반 설정 파일에 넣지 않는다. 로그인은 시스템 브라우저와 `http://127.0.0.1:53682/callback` 루프백, PKCE로 처리한다.
+- Google Drive: Google Cloud 프로젝트에서 Drive API를 사용 설정하고 OAuth 동의 화면에 `https://www.googleapis.com/auth/drive.readonly`와 테스트 사용자를 추가한다. 파일·폴더 탐색 및 미디어 읽기 전용이며 업로드·수정 권한은 요청하지 않는다. Windows/macOS/Linux에서는 **데스크톱 앱** 유형의 Client ID와 Client Secret을 설정에 입력한다. 직접 입력한 Secret은 기기의 보안 저장소에 Client ID별로 보관한다. 운영자 등록값의 Actions 주입은 [Google 등록 안내](docs/google-sync.md)를 따른다. 데스크톱 배포본에 포함한 Secret은 바이너리에서 추출 가능하므로 서버 비밀로 사용하지 않는다. 로그인은 시스템 브라우저와 `http://127.0.0.1:53682/callback` 루프백, PKCE로 처리한다.
 - Google Drive Android/Android TV: **Android** 유형의 OAuth 클라이언트를 만든다. 앱 등록 화면에 표시되는 현재 패키지와 서명 SHA-1을 그대로 등록하고 Client ID를 입력한다. 모바일 `com.oplayer.oplayer`와 TV `com.oplayer.oplayer.tv`, 디버그/배포 서명은 각각 등록한다. Google Play 서비스의 공식 Authorization SDK를 사용하며 Android 루프백·커스텀 스킴은 사용하지 않는다. TV도 Google Play 서비스 및 계정·동의 UI가 필요하다. iOS의 Google Drive 연결은 지원하지 않는다.
 - `drive.readonly`는 제한된 범위이므로 공개 배포 로그인에는 Google OAuth 검증이 필요하다. 외부 테스트 모드에서는 등록한 테스트 사용자만 접속할 수 있고 갱신 토큰이 7일 후 만료될 수 있다. [Google OAuth 안내](https://developers.google.com/identity/protocols/oauth2/native-app), [Android 인증 안내](https://developer.android.com/identity/authorization), [Drive 권한 안내](https://developers.google.com/workspace/drive/api/guides/api-specific-auth).
 - Android/iOS 복귀 스킴은 이미 등록되어 있다. Windows/macOS/Linux는 시스템 브라우저와 루프백 콜백을 사용한다. PKCE S256, state, 복귀 주소를 검증하고 토큰은 보안 저장소에 보관한다.

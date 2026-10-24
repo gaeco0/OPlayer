@@ -185,9 +185,11 @@ class OAuthClient {
   }
 
   Future<OAuthTokens> _token(Map<String, String> params) async {
-    final secret =
-        (clientSecretKey == null ? clientSecret : await SecureStore.instance.readRequired(clientSecretKey!)) ??
-        (clientSecretFallbackKey == null ? null : await SecureStore.instance.readRequired(clientSecretFallbackKey!));
+    final secret = [
+      if (clientSecretKey != null) await SecureStore.instance.readRequired(clientSecretKey!),
+      if (clientSecretFallbackKey != null) await SecureStore.instance.readRequired(clientSecretFallbackKey!),
+      clientSecret,
+    ].whereType<String>().where((value) => value.isNotEmpty).firstOrNull;
     final client = http.Client();
     final http.Response res;
     try {
