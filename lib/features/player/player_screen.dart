@@ -332,9 +332,12 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   /// nPlayer: 이전 위치에서 자동으로 이어서 재생하고, "처음부터" 버튼을 잠시 보여준다.
   Future<void> _maybeResume() async {
     final at = c.pendingResume;
-    if (at == null) return;
-    c.pendingResume = null;
-    if (AppSettings.instance.resumeMode == ResumeMode.ask && mounted) {
+    if (at == null || c.preparing || c.error != null) return;
+    final generation = c.openGeneration;
+    if (_resumeGeneration == generation) return;
+    _resumeGeneration = generation;
+    bool current() => mounted && c.isCurrentOpen(generation);
+    if (c.awaitingResumeChoice) {
       final ok = await showDialog<bool>(
         context: context,
         builder: (d) => AlertDialog(
@@ -346,15 +349,14 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
           ],
         ),
       );
-      if (ok != true) return;
+      if (!current()) return;
+      if (ok != true) {
+        await c.finishResume(generation, fromBeginning: true);
+        return;
+      }
     }
-    if (c.player.state.duration == Duration.zero) {
-      await c.player.stream.duration
-          .firstWhere((d) => d > Duration.zero)
-          .timeout(const Duration(seconds: 10), onTimeout: () => Duration.zero);
-    }
-    await c.player.seek(at);
-    if (!mounted) return;
+    await c.finishResume(generation);
+    if (!current() || c.error != null) return;
     setState(() => _resumeOffer = at);
     _resumeTimer?.cancel();
     _resumeTimer = Timer(const Duration(seconds: 5), () {
@@ -362,7 +364,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     });
   }
 
-  String? _lastPath;
+  int? _resumeGeneration;
   void _onController() {
     _syncPip();
     if (c.warning != null) {
@@ -371,10 +373,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
       _showToast(warning);
     }
     // 다음/이전 파일로 넘어갔을 때 이어보기 처리
-    if (_lastPath != c.current.key) {
-      _lastPath = c.current.key;
-      if (c.pendingResume != null) _maybeResume();
-    }
+    if (c.pendingResume != null && !c.preparing && c.error == null) unawaited(_maybeResume());
     setState(() {});
   }
 
@@ -774,7 +773,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
               const SizedBox(width: 8),
               TextButton(
                 onPressed: () {
-                  c.player.seek(Duration.zero);
+                  c.restartFromBeginning();
                   setState(() => _resumeOffer = null);
                 },
                 child: const Text('처음부터'),

@@ -60,8 +60,13 @@ bool backgroundPlaybackAllowed({required bool android, required bool audioOnly, 
 
 /// 플레이어 상태 전체. UI는 이 컨트롤러와 media_kit 스트림만 바라본다.
 class PlayerController extends ChangeNotifier {
-  PlayerController({required this.playlist, required int startIndex, this.folderFiles = const []})
-    : _index = startIndex {
+  PlayerController({
+    required this.playlist,
+    required int startIndex,
+    this.folderFiles = const [],
+    Player? playbackEngine,
+  }) : _index = startIndex,
+       player = playbackEngine ?? Player(configuration: const PlayerConfiguration(title: 'OPlayer')) {
     final st = AppSettings.instance;
     baseRate = st.defaultSpeed;
     aspect = switch (st.defaultAspect) {
@@ -115,7 +120,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   final List<String> folderFiles;
-  final player = Player(configuration: const PlayerConfiguration(title: 'OPlayer'));
+  final Player player;
   late final video = _createVideoController();
   bool _hasVideoController = false;
   VideoController _createVideoController() {
@@ -395,15 +400,45 @@ class PlayerController extends ChangeNotifier {
 
   /// 이어보기 위치가 있으면 반환 (UI에서 "이어서 보기" 물어봄)
   Duration? pendingResume;
+  Duration? _resumeStart;
+  bool _positionReady = false;
+  bool _awaitingResumeChoice = false;
+  bool get awaitingResumeChoice => _awaitingResumeChoice;
+  int get openGeneration => _openGeneration;
+
+  bool isCurrentOpen(int generation) => !_disposed && generation == _openGeneration;
+
+  Future<void> finishResume(int generation, {bool fromBeginning = false}) async {
+    if (!isCurrentOpen(generation) || preparing || error != null || pendingResume == null) return;
+    try {
+      if (fromBeginning) {
+        await restartFromBeginning();
+        if (!isCurrentOpen(generation)) return;
+      }
+      if (_awaitingResumeChoice) await player.play();
+      if (!isCurrentOpen(generation)) return;
+      _awaitingResumeChoice = false;
+      pendingResume = null;
+    } catch (e) {
+      if (!isCurrentOpen(generation)) return;
+      error = '재생 위치를 복원할 수 없습니다: $e';
+      notifyListeners();
+    }
+  }
 
   Future<void> open({bool askResume = true}) async {
+    preparing = true;
+    _positionReady = false;
+    pendingResume = null;
+    _resumeStart = null;
+    _awaitingResumeChoice = false;
     _markedPlayingKey = null;
     _playbackPermit = null;
     final generation = ++_openGeneration;
     _startWatchdog?.cancel();
     if (current.browserMedia) {
       _startWatchdog = Timer(const Duration(seconds: 60), () {
-        if (!_disposed && generation == _openGeneration && player.state.position == Duration.zero) {
+        if (isCurrentOpen(generation) && !_awaitingResumeChoice && player.state.position == Duration.zero) {
           error ??= '60초 동안 재생 데이터를 받지 못했습니다. 웹페이지에서 재생 상태를 확인한 뒤 다시 시도해 주세요.';
           preparing = false;
           unawaited(player.stop());
@@ -422,6 +457,8 @@ class PlayerController extends ChangeNotifier {
     pendingResume = (askResume && r != null && !r.finished && r.position > const Duration(seconds: 10))
         ? r.position
         : null;
+    _resumeStart = pendingResume;
+    _awaitingResumeChoice = pendingResume != null && st.resumeMode == ResumeMode.ask;
     abA = abB = null;
     subtitleDelay = Duration.zero;
     error = null;
@@ -462,7 +499,12 @@ class PlayerController extends ChangeNotifier {
               : '',
         );
       }
-      final opening = player.open(Media(item.uri, httpHeaders: await _applyHttpIdentity(item.headers)), play: true);
+      final headers = await _applyHttpIdentity(item.headers);
+      if (!isCurrentOpen(generation)) return;
+      final opening = player.open(
+        Media(item.uri, httpHeaders: headers, start: _resumeStart),
+        play: !_awaitingResumeChoice,
+      );
       if (current.browserMedia) {
         await opening.timeout(const Duration(seconds: 60));
       } else {
@@ -480,7 +522,7 @@ class PlayerController extends ChangeNotifier {
       if (generation == _openGeneration) preparing = false;
       if (!_disposed && generation == _openGeneration) unawaited(_refreshInterpolation());
       if (!_disposed && generation == _openGeneration) unawaited(_refreshUpscaling());
-      notifyListeners();
+      if (!_disposed) notifyListeners();
     }
   }
 
@@ -666,11 +708,16 @@ class PlayerController extends ChangeNotifier {
   }
 
   void _onPosition(Duration pos) {
-    if (!preparing &&
-        error == null &&
-        player.state.playing &&
-        pos > Duration.zero &&
-        _markedPlayingKey != current.key) {
+    // Opening/sync events may still describe the previous file or a temporary zero.
+    if (_disposed || preparing || error != null) return;
+    if (!_positionReady) {
+      if (pos <= Duration.zero || player.state.duration <= Duration.zero) return;
+      if (_resumeStart != null && pos < _resumeStart! - const Duration(seconds: 1)) return;
+      _positionReady = true;
+      _resumeStart = null;
+    }
+    if (_awaitingResumeChoice) return;
+    if (player.state.playing && pos > Duration.zero && _markedPlayingKey != current.key) {
       _markedPlayingKey = current.key;
       unawaited(ResourcePlaybackStore.instance.record(current).catchError((Object _) {}));
     }
@@ -694,6 +741,8 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> _onCompleted() async {
+    if (!_canSavePosition) return;
+    final generation = _openGeneration;
     await ResumeStore.instance.save(
       current.key,
       player.state.duration,
@@ -701,6 +750,7 @@ class PlayerController extends ChangeNotifier {
       title: current.title,
       browserMedia: current.browserMedia,
     );
+    if (!isCurrentOpen(generation)) return;
     switch (repeat) {
       case LoopMode.one:
         await player.seek(Duration.zero);
@@ -716,13 +766,18 @@ class PlayerController extends ChangeNotifier {
     }
   }
 
-  Future<void> saveNow() => ResumeStore.instance.save(
-    current.key,
-    player.state.position,
-    player.state.duration,
-    title: current.title,
-    browserMedia: current.browserMedia,
-  );
+  bool get _canSavePosition => !_disposed && !preparing && error == null && !_awaitingResumeChoice && _positionReady;
+
+  Future<void> saveNow() async {
+    if (!_canSavePosition) return;
+    await ResumeStore.instance.save(
+      current.key,
+      player.state.position,
+      player.state.duration,
+      title: current.title,
+      browserMedia: current.browserMedia,
+    );
+  }
 
   Future<void> next() async {
     if (!hasNext) return;
@@ -734,7 +789,7 @@ class PlayerController extends ChangeNotifier {
   Future<void> prev() async {
     // nPlayer처럼 3초 이상 재생 중이면 처음으로, 아니면 이전 파일
     if (player.state.position > const Duration(seconds: 3) || !hasPrev) {
-      await player.seek(Duration.zero);
+      await restartFromBeginning();
       return;
     }
     await saveNow();
@@ -755,6 +810,14 @@ class PlayerController extends ChangeNotifier {
     if (t < Duration.zero) t = Duration.zero;
     if (dur > Duration.zero && t > dur) t = dur;
     await player.seek(t);
+  }
+
+  Future<void> restartFromBeginning() async {
+    final generation = _openGeneration;
+    await player.seek(Duration.zero);
+    if (!isCurrentOpen(generation)) return;
+    _resumeStart = null;
+    _positionReady = false;
   }
 
   // ---- 컨트롤 표시 ----
@@ -1036,6 +1099,7 @@ class PlayerController extends ChangeNotifier {
 
   @override
   void dispose() {
+    unawaited(saveNow());
     _startWatchdog?.cancel();
     _openGeneration++;
     _subtitleRequest++;
@@ -1057,7 +1121,6 @@ class PlayerController extends ChangeNotifier {
     for (final s in _subs) {
       s.cancel();
     }
-    saveNow();
     unawaited(player.dispose().whenComplete(_clearOnlineSubtitleFiles));
     super.dispose();
   }
