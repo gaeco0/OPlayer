@@ -236,7 +236,11 @@ class CloudSource extends MediaSource {
         ? await PluginStore.instance.credentials(plugin.id)
         : await _credentials();
     final s3 = plugin.authType == 's3' ? S3Credentials(values) : null;
-    final config = {...plugin.publicConfig(values), ...?s3?.publicConfig};
+    final config = {
+      ...plugin.publicConfig(values),
+      ...?s3?.publicConfig,
+      if (plugin.authType == 'oauth') plugin.oauth['clientIdSetting'] as String? ?? 'clientId': tokens.client.clientId,
+    };
     var unauthorized = false;
     try {
       return await callPlugin(

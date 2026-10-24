@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+- OAuth 리소스 확장앱에 현재 계정을 연결한 Client ID를 전달하도록 보완했습니다. Google Drive 확장앱의 계정 조회·파일 목록 페이지 처리·인증 헤더·401 토큰 갱신·미디어 주소를 모의 API로 검증하고, 플러그인의 일반 Drive 조회 방법과 동기화 권한 분리를 문서화했습니다.
+
 - 운영자 Google OAuth 등록값을 Actions Secret에서 플랫폼별 빌드에 주입합니다. Google 동기화·Drive 확장앱이 기본 등록값을 공유하고 플러그인에 읽기 전용 `OPlayer.app.googleOAuth`·선택적 `oauth.clientIdSource`를 제공합니다. Client Secret·사용자 토큰은 JS에 노출하지 않으며 기존 수동 등록·계정 연결을 유지합니다. 등록·개발 문서를 갱신했습니다.
 
 - Google Drive 앱 전용 저장소(`drive.appdata`)를 이용한 기본 동기화 기능을 추가했습니다. 재생목록·최근 재생·이어보기 위치를 동기화하고 일반 Drive 파일 탐색 확장앱과 인증 권한·토큰을 분리합니다. Apple·삼성 계정은 추가하지 않았습니다.
