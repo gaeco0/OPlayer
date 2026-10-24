@@ -19,7 +19,10 @@ import 'download_manager.dart';
 
 String _dest(DownloadTask t) {
   if (!t.isRemote) return '';
-  final name = ServerStore.instance.server(t.remoteServerId!)?.name ?? '삭제된 서버';
+  final name =
+      ServerStore.instance.server(t.remoteServerId!)?.name ??
+      ServerStore.instance.account(t.remoteServerId!)?.name ??
+      '삭제된 저장소';
   return ' → $name:${t.remoteDir ?? '/'}';
 }
 
@@ -260,6 +263,13 @@ class _Tile extends StatelessWidget {
                   subtitle: Text(server.type.label),
                   onTap: () => Navigator.pop(sheet, server),
                 ),
+              for (final account in SourceRegistry.instance.uploadAccounts)
+                ListTile(
+                  leading: const Icon(Icons.cloud_upload_outlined),
+                  title: Text(account.name),
+                  subtitle: const Text('클라우드 · 업로드 지원'),
+                  onTap: () => Navigator.pop(sheet, account),
+                ),
             ],
           ),
         ),
@@ -271,12 +281,12 @@ class _Tile extends StatelessWidget {
         directory = (await DownloadManager.downloadDir()).path;
       } else if (choice == 'folder') {
         directory = await FilePicker.getDirectoryPath(dialogTitle: '파일을 이동할 폴더');
-      } else if (choice is ServerConfig) {
-        final source = await SourceRegistry.instance.forServer(choice);
+      } else if (choice is ServerConfig || choice is CloudAccount) {
+        serverId = choice is ServerConfig ? choice.id : (choice as CloudAccount).id;
+        final source = await SourceRegistry.instance.forDestination(serverId);
         if (!source.canUpload) throw UnsupportedError('이 저장소는 업로드를 지원하지 않습니다');
         if (!context.mounted) return;
         directory = await RemoteFolderPicker.pick(context, source);
-        serverId = choice.id;
       }
       if (directory == null) return;
       await DownloadManager.instance.changeDestination(task, serverId: serverId, directory: directory);

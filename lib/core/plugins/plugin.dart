@@ -56,6 +56,7 @@ class OPlugin {
       if (manifest['canDelete'] == true) 'delete',
       if (manifest['canRename'] == true) 'rename',
       if (manifest['canSearch'] == true) 'search',
+      if (manifest['canUpload'] == true) ...['upload', 'uploadComplete'],
     ],
   };
   List<String> get hosts => (manifest['hosts'] as List).cast<String>();
@@ -128,7 +129,8 @@ class OPlugin {
         throw const FormatException('유형에 맞는 API 4 기능(capabilities)을 선언하세요');
       }
       if (!plugin.site && (meta.containsKey('sites') || meta.containsKey('blockRules')) ||
-          !plugin.cloud && ['oauth', 'auth', 'canDelete', 'canRename', 'canSearch'].any(meta.containsKey)) {
+          !plugin.cloud &&
+              ['oauth', 'auth', 'canDelete', 'canRename', 'canSearch', 'canUpload'].any(meta.containsKey)) {
         throw const FormatException('다른 유형의 확장앱 권한은 사용할 수 없습니다');
       }
       if (plugin.site && !plugin.supports('blockRequests') && meta.containsKey('blockRules')) {
@@ -143,6 +145,9 @@ class OPlugin {
     }
     if (meta['canSearch'] != null && meta['canSearch'] is! bool) {
       throw const FormatException('잘못된 검색 지원 선언');
+    }
+    if (meta['canUpload'] != null && meta['canUpload'] is! bool) {
+      throw const FormatException('잘못된 업로드 지원 선언');
     }
     if (meta['platforms'] != null &&
         (meta['platforms'] is! List ||
@@ -225,6 +230,9 @@ class OPlugin {
     }
     if (plugin.cloud && plugin.authType != 'oauth' && ![2, 3, 4].contains(meta['api'])) {
       throw const FormatException('이 인증 방식에는 확장앱 API 2 이상이 필요합니다');
+    }
+    if (meta['canUpload'] == true && plugin.authType != 'oauth') {
+      throw const FormatException('현재 업로드 전송은 OAuth 리소스 확장앱만 지원합니다');
     }
     if (plugin.cloud && plugin.authType == 'oauth') {
       if (plugin.oauth.containsKey('clientIdSource') && plugin.oauth['clientIdSource'] != 'app.google') {

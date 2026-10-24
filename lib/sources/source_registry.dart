@@ -36,6 +36,26 @@ class SourceRegistry {
 
   MediaSource forAccount(CloudAccount a) => _cache[a.id] ??= cloudSourceFor(a);
 
+  Future<MediaSource> forDestination(String id, {bool authorizedUpload = false}) async {
+    final server = ServerStore.instance.server(id);
+    if (server != null) return forServer(server, authorizedUpload: authorizedUpload);
+    final account = ServerStore.instance.account(id);
+    if (account == null) throw StateError('저장소가 삭제되었습니다');
+    final source = forAccount(account);
+    if (!authorizedUpload) await ResourceLocks.instance.requireAccess(source.keyFor(''));
+    return source;
+  }
+
+  Iterable<CloudAccount> get uploadAccounts sync* {
+    for (final account in ServerStore.instance.accounts) {
+      try {
+        if (forAccount(account).canUpload) yield account;
+      } catch (_) {
+        /* Disabled or removed extension. */
+      }
+    }
+  }
+
   /// 설정이 바뀌거나 삭제되면 연결을 버린다.
   Future<void> invalidate(String id) async {
     await _cache.remove(id)?.close();

@@ -79,6 +79,9 @@ Future<Object?> callPlugin(
       if (plugin.manifest['canSearch'] == true && !methods.contains('search')) {
         throw StateError('검색을 지원하는 확장앱에는 search 함수가 필요합니다');
       }
+      if (plugin.manifest['canUpload'] == true && !['upload', 'uploadComplete'].every(methods.contains)) {
+        throw StateError('업로드를 지원하는 확장앱에는 upload·uploadComplete 함수가 필요합니다');
+      }
       if (plugin.cloud
           ? !['accountName', 'list', 'stream'].every(methods.contains)
           : plugin.kind == 'player'

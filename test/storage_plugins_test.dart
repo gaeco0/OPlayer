@@ -59,7 +59,7 @@ void main() {
       );
       final source = cloudSourceFor(account);
       addTearDown(source.close);
-      expect(source.tokens.client.scopes, ['https://www.googleapis.com/auth/drive.readonly']);
+      expect(source.tokens.client.scopes, ['https://www.googleapis.com/auth/drive']);
       await source.tokens.save(
         OAuthTokens(
           accessToken: 'old-drive-token',

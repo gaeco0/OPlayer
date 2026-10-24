@@ -317,7 +317,9 @@ class DownloadManager extends ChangeNotifier {
       outputQuality: quality,
     );
     final st = AppSettings.instance;
-    if (st.downloadServerId != null && ServerStore.instance.server(st.downloadServerId!) != null) {
+    if (st.downloadServerId != null &&
+        (ServerStore.instance.server(st.downloadServerId!) != null ||
+            ServerStore.instance.account(st.downloadServerId!) != null)) {
       task
         ..remoteServerId = st.downloadServerId
         ..remoteDir = st.downloadServerDir ?? '/';
@@ -370,9 +372,7 @@ class DownloadManager extends ChangeNotifier {
     if (serverId == null) {
       await ResourceLocks.instance.requireAccess(Directory(directory).absolute.path);
     } else {
-      final server = ServerStore.instance.server(serverId);
-      if (server == null) throw StateError('저장할 서버가 삭제되었습니다');
-      final source = await SourceRegistry.instance.forServer(server);
+      final source = await SourceRegistry.instance.forDestination(serverId);
       if (!source.canUpload) throw UnsupportedError('이 저장소는 업로드를 지원하지 않습니다');
       if (source.scheme == 'smb' && directory == '/') throw StateError('SMB 공유 폴더를 선택해 주세요');
       await ResourceLocks.instance.requireAccess(source.keyFor(directory));
@@ -481,11 +481,9 @@ class DownloadManager extends ChangeNotifier {
       await _foreground?.update(downloadNotificationState(tasks));
       _check(t);
       if (t.remoteServerId != null) {
-        final server = ServerStore.instance.server(t.remoteServerId!);
-        if (server != null) {
-          await _requireDestinationAccess(serverResourceKey(server));
-          await _requireDestinationAccess('${serverResourceKey(server)}${t.remoteDir ?? '/'}');
-        }
+        final source = await SourceRegistry.instance.forDestination(t.remoteServerId!, authorizedUpload: true);
+        await _requireDestinationAccess(source.keyFor(''));
+        await _requireDestinationAccess(source.keyFor(t.remoteDir ?? source.rootPath));
       } else {
         await _requireDestinationAccess(t.localDirectory ?? (await downloadDir()).path);
       }
@@ -590,22 +588,21 @@ class DownloadManager extends ChangeNotifier {
   }) async {
     name = resourceDownloadName(name);
     final settings = AppSettings.instance;
-    final server = resource || settings.downloadServerId == null
-        ? null
-        : ServerStore.instance.server(settings.downloadServerId!);
-    if (server != null) {
-      final source = await SourceRegistry.instance.forServer(server);
+    final destination = resource ? null : settings.downloadServerId;
+    if (destination != null) {
+      final source = await SourceRegistry.instance.forDestination(destination);
       if (!source.canUpload) throw UnsupportedError('이 저장소는 업로드를 지원하지 않습니다');
-      final directory = settings.downloadServerDir ?? '/';
+      final directory = settings.downloadServerDir ?? source.rootPath;
       final key = resourceKey(source.keyFor(MediaSource.joinRemote(directory, name)));
       await ResourceLocks.instance.requireAccess(source.keyFor(directory));
       await ResourceLocks.instance.requireAccess(key);
       final entries = await source.list(directory);
       final entry = entries.where((e) => e.name.toLowerCase() == name.toLowerCase()).firstOrNull;
+      if (entry != null) await ResourceLocks.instance.requireAccess(source.keyFor(entry.path));
       final busy = tasks.any(
         (t) =>
             [DownloadStatus.running, DownloadStatus.queued].contains(t.status) &&
-            t.remoteServerId == server.id &&
+            t.remoteServerId == destination &&
             resourceKey(source.keyFor(MediaSource.joinRemote(t.remoteDir ?? '/', t.preferredFileName ?? t.fileName))) ==
                 key,
       );
@@ -899,17 +896,19 @@ class DownloadManager extends ChangeNotifier {
   }
 
   Future<void> _upload(DownloadTask t) async {
-    final cfg = ServerStore.instance.server(t.remoteServerId!);
-    if (cfg == null) throw '저장할 서버가 삭제되었습니다';
-    final src = await SourceRegistry.instance.forServer(cfg, authorizedUpload: true);
-    if (!src.canUpload) throw '${cfg.name}은(는) 업로드를 지원하지 않습니다';
-    final directory = t.remoteDir ?? '/';
+    final src = await SourceRegistry.instance.forDestination(t.remoteServerId!, authorizedUpload: true);
+    final destinationName = src.displayName;
+    if (!src.canUpload) throw '$destinationName 업로드를 지원하지 않습니다';
+    final directory = t.remoteDir ?? src.rootPath;
     final entries = await src.list(directory);
     var uploadName = t.fileName;
     final targetKey = resourceKey(src.keyFor(MediaSource.joinRemote(directory, uploadName)));
     final overwrite = t.overwriteTarget == targetKey;
     if (overwrite) {
       await _requireDestinationAccess(targetKey);
+      for (final entry in entries.where((e) => e.name.toLowerCase() == uploadName.toLowerCase())) {
+        await _requireDestinationAccess(src.keyFor(entry.path));
+      }
       if (entries.any((e) => e.name.toLowerCase() == uploadName.toLowerCase() && e.isDir)) {
         throw StateError('같은 이름의 폴더를 덮어쓸 수 없습니다');
       }
@@ -925,7 +924,7 @@ class DownloadManager extends ChangeNotifier {
     final size = await local.length();
     _check(t);
     t.uploading = true;
-    t.phase = '${cfg.name}(으)로 업로드 중';
+    t.phase = '$destinationName(으)로 업로드 중';
     t.total = size;
     t.received = 0;
     t.done = 0;
@@ -940,6 +939,9 @@ class DownloadManager extends ChangeNotifier {
       local,
       directory,
       uploadName,
+      overwritePath: overwrite
+          ? entries.where((e) => e.name.toLowerCase() == uploadName.toLowerCase() && !e.isDir).firstOrNull?.path
+          : null,
       cancelled: cancellation.future,
       onProgress: (sent) {
         _check(t);
@@ -949,12 +951,12 @@ class DownloadManager extends ChangeNotifier {
           windowStart = DateTime.now();
           last = 0;
           t.speed = 0;
-          t.phase = '${cfg.name}(으)로 업로드 다시 시도 중';
+          t.phase = '$destinationName(으)로 업로드 다시 시도 중';
         }
         window += sent - last;
         last = sent;
         t.received = sent;
-        if (sent >= size) t.phase = '${cfg.name} 서버 저장 확인 중';
+        if (sent >= size) t.phase = '$destinationName 서버 저장 확인 중';
         final el = DateTime.now().difference(windowStart).inMilliseconds;
         if (el > 1000) {
           t.speed = window * 1000 / el;
@@ -967,7 +969,7 @@ class DownloadManager extends ChangeNotifier {
     _check(t);
     t.remoteKey = src.keyFor(remotePath);
     t.fileName = uploadName;
-    t.note = '${cfg.name}:$remotePath에 저장됨';
+    t.note = '$destinationName:$remotePath에 저장됨';
     t.received = size;
     try {
       await local.delete();

@@ -265,6 +265,7 @@ class FtpSource extends MediaSource {
     File local,
     String remoteDir,
     String name, {
+    String? overwritePath,
     void Function(int sent)? onProgress,
     Future<void>? cancelled,
   }) async {

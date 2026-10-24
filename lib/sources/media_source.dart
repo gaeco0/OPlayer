@@ -190,10 +190,13 @@ abstract class MediaSource {
   }
 
   /// [local] 파일을 [remoteDir] 폴더에 [name]으로 올리고 원격 경로를 돌려준다.
+  /// [overwritePath] grants an opaque-ID provider permission to replace exactly
+  /// the confirmed existing file; null means create without replacing it.
   Future<String> upload(
     File local,
     String remoteDir,
     String name, {
+    String? overwritePath,
     void Function(int sent)? onProgress,
     Future<void>? cancelled,
   }) => throw UnsupportedError('$scheme 는 업로드를 지원하지 않습니다');
