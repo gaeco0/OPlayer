@@ -9,6 +9,11 @@ class PlayerOrientation {
   static bool get supported =>
       appFlavor != 'tv' && [TargetPlatform.android, TargetPlatform.iOS].contains(defaultTargetPlatform);
 
+  static Future<Map<String, dynamic>> diagnostics() async {
+    if (!supported || defaultTargetPlatform != TargetPlatform.android) return {};
+    return await _channel.invokeMapMethod<String, dynamic>('diagnostics') ?? {};
+  }
+
   /// null restores the OS policy outside fullscreen playback.
   static Future<void> apply(PlaybackOrientation? mode) async {
     if (!supported) return;

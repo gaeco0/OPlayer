@@ -22,6 +22,7 @@ class ControlsOverlay extends StatelessWidget {
     required this.onRotate,
     required this.orientationIcon,
     this.onPip,
+    this.onRotationDiagnostics,
     this.onCast,
     this.onMinimize,
     this.onCompact,
@@ -34,6 +35,7 @@ class ControlsOverlay extends StatelessWidget {
   final ValueChanged<PanelKind> onPanel;
   final ValueChanged<String> onToast;
   final VoidCallback? onRotate;
+  final VoidCallback? onRotationDiagnostics;
   final IconData orientationIcon;
   final VoidCallback? onPip;
   final VoidCallback? onCast;
@@ -115,7 +117,10 @@ class ControlsOverlay extends StatelessWidget {
                         _CenterControls(c: c),
                         const Spacer(),
                         if (onRotate != null)
-                          _RoundButton(icon: orientationIcon, onTap: onRotate!)
+                          GestureDetector(
+                            onLongPress: onRotationDiagnostics,
+                            child: _RoundButton(icon: orientationIcon, onTap: onRotate!),
+                          )
                         else
                           const SizedBox(width: 48),
                         const SizedBox(width: 16),

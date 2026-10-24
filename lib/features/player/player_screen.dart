@@ -1,5 +1,6 @@
 import '../settings/resource_access_view.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -430,6 +431,33 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
     _showToast(next.label);
   }
 
+  Future<void> _showOrientationDiagnostics() async {
+    try {
+      final data = await PlayerOrientation.diagnostics();
+      if (!mounted) return;
+      final report = const JsonEncoder.withIndent('  ').convert({'selectedMode': _orient.name, ...data});
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('화면 회전 진단'),
+          content: SingleChildScrollView(child: SelectableText(report)),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: report));
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+              },
+              child: const Text('복사'),
+            ),
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('닫기')),
+          ],
+        ),
+      );
+    } catch (_) {
+      if (mounted) _showToast('화면 회전 진단 정보를 읽지 못했습니다');
+    }
+  }
+
   void _showToast(String msg) {
     _toastTimer?.cancel();
     setState(() => _toast = msg);
@@ -710,6 +738,9 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
                   onPanel: _openPanel,
                   onToast: _showToast,
                   onRotate: PlayerOrientation.supported ? _rotate : null,
+                  onRotationDiagnostics: Platform.isAndroid && PlayerOrientation.supported
+                      ? _showOrientationDiagnostics
+                      : null,
                   onPip: _pip.available && (c.audioOnly || (c.player.state.width ?? 0) > 0) ? _enterPip : null,
                   onMinimize: _minimize,
                   onCompact: Platform.isWindows ? () => _setCompact(true) : null,

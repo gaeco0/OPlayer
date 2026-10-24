@@ -67,7 +67,45 @@ class MainActivity : FlutterActivity() {
         privacyBridge = PrivacyBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "oplayer/orientation")
             .setMethodCallHandler { call, result ->
-                if (call.method != "set") {
+                if (call.method == "diagnostics") {
+                    val config = resources.configuration
+                    val info = mutableMapOf<String, Any?>(
+                        "manufacturer" to Build.MANUFACTURER,
+                        "model" to Build.MODEL,
+                        "android" to Build.VERSION.RELEASE,
+                        "sdk" to Build.VERSION.SDK_INT,
+                        "targetSdk" to applicationInfo.targetSdkVersion,
+                        "requestedOrientation" to requestedOrientation,
+                        "configurationOrientation" to config.orientation,
+                        "screenWidthDp" to config.screenWidthDp,
+                        "screenHeightDp" to config.screenHeightDp,
+                        "smallestScreenWidthDp" to config.smallestScreenWidthDp,
+                        "multiWindow" to isInMultiWindowMode,
+                        "pip" to (Build.VERSION.SDK_INT >= 26 && isInPictureInPictureMode),
+                        "displayRotation" to windowManager.defaultDisplay.rotation,
+                        "windowWidthPx" to window.decorView.width,
+                        "windowHeightPx" to window.decorView.height
+                    )
+                    if (Build.VERSION.SDK_INT >= 31) {
+                        val names = listOf(
+                            "PROPERTY_COMPAT_ALLOW_ORIENTATION_OVERRIDE",
+                            "PROPERTY_COMPAT_ALLOW_DISPLAY_ORIENTATION_OVERRIDE",
+                            "PROPERTY_COMPAT_ALLOW_IGNORING_ORIENTATION_REQUEST_WHEN_LOOP_DETECTED",
+                            "PROPERTY_COMPAT_IGNORE_REQUESTED_ORIENTATION",
+                            "PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"
+                        )
+                        for (name in names) {
+                            val fullName = "android.window.$name"
+                            info["application.$name"] = try {
+                                packageManager.getProperty(fullName, packageName).boolean
+                            } catch (_: PackageManager.NameNotFoundException) { null }
+                            info["activity.$name"] = try {
+                                packageManager.getProperty(fullName, componentName).boolean
+                            } catch (_: PackageManager.NameNotFoundException) { null }
+                        }
+                    }
+                    result.success(info)
+                } else if (call.method != "set") {
                     result.notImplemented()
                 } else {
                     val orientation = when (call.arguments as? String) {
