@@ -283,7 +283,11 @@ void main() {
     var puts = 0;
     final bytes = await file.readAsBytes();
     server.listen((request) async {
-      if (request.method == 'GET') {
+      if (request.method == 'PROPFIND') {
+        await request.drain<void>();
+        request.response.statusCode = 207;
+        request.response.write('<d:multistatus xmlns:d="DAV:"/>');
+      } else if (request.method == 'GET') {
         gets++;
         request.response.add(bytes);
       } else {
