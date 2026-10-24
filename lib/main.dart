@@ -11,6 +11,7 @@ import 'core/mouse_nav.dart';
 import 'core/linux_file_associations.dart';
 import 'core/resume_store.dart';
 import 'core/playlist_store.dart';
+import 'core/google_sync.dart';
 import 'core/settings.dart';
 import 'core/plugins/plugin_store.dart';
 import 'core/resource_locks.dart';
@@ -47,6 +48,7 @@ Future<void> main(List<String> args) async {
   await PluginStore.instance.init();
   await ResourceLocks.instance.init();
   await ResourceLocks.instance.syncNativePrivacy();
+  await GoogleSync.instance.init();
   if (ResourceLocks.supportsSystemAuthentication) {
     final enabled = await privacyChannel.invokeMethod<bool>('getCaptureProtection') ?? false;
     if (enabled != AppSettings.instance.preventCapture) AppSettings.instance.update((s) => s.preventCapture = enabled);

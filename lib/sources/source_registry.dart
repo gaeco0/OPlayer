@@ -3,6 +3,7 @@ import 'dart:io';
 import '../core/media_item.dart';
 import '../core/resource_locks.dart';
 import '../core/resume_store.dart';
+import '../core/sync_references.dart';
 import '../features/web/browser_playback_proxy.dart';
 import 'cloud/cloud_sources.dart';
 import 'ftp_source.dart';
@@ -42,6 +43,11 @@ class SourceRegistry {
 
   /// 최근 재생 키 → 재생 항목
   Future<MediaItem?> itemFromKey(String key, {String? title}) async {
+    if (key.startsWith(SyncReferences.prefix)) {
+      final resolved = SyncReferences.instance.resolve(key);
+      if (resolved == null) return null;
+      key = resolved;
+    }
     try {
       await ResourceLocks.instance.requireAccess(key);
     } on ResourceLockedException {

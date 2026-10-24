@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/media_item.dart';
 import '../../core/media_utils.dart';
 import '../../core/resume_store.dart';
+import '../../core/google_sync.dart';
 import '../../core/settings.dart';
 import '../../core/resource_locks.dart';
 import '../../core/network/network_service.dart';
@@ -408,6 +409,12 @@ class PlayerController extends ChangeNotifier {
       });
     }
     final st = AppSettings.instance;
+    if (st.resumeMode != ResumeMode.off) {
+      preparing = true;
+      notifyListeners();
+      await GoogleSync.instance.refreshForPlayback(current.key);
+      if (_disposed || generation != _openGeneration) return;
+    }
     final r = st.resumeMode == ResumeMode.off ? null : ResumeStore.instance.get(current.key);
     pendingResume = (askResume && r != null && !r.finished && r.position > const Duration(seconds: 10))
         ? r.position
