@@ -19,6 +19,17 @@ class GoogleDriveBridge(private val activity: Activity, messenger: BinaryMesseng
 
     init {
         channel.setMethodCallHandler { call, result ->
+            if (call.method == "syncDeviceId") {
+                try {
+                    val file = java.io.File(activity.noBackupFilesDir, "oplayer-sync-device")
+                    val saved = if (file.exists()) file.readText() else null
+                    val id = try { java.util.UUID.fromString(saved).toString() }
+                        catch (_: Exception) { java.util.UUID.randomUUID().toString() }
+                    if (id != saved) file.writeText(id)
+                    result.success(id)
+                } catch (e: Exception) { result.error("SYNC_DEVICE", "기기 동기화 ID를 저장하지 못했습니다", null) }
+                return@setMethodCallHandler
+            }
             if (call.method == "registrationInfo") {
                 @Suppress("DEPRECATION")
                 val signature = activity.packageManager.getPackageInfo(activity.packageName,
@@ -30,12 +41,19 @@ class GoogleDriveBridge(private val activity: Activity, messenger: BinaryMesseng
             }
             if (call.method != "authorize") { result.notImplemented(); return@setMethodCallHandler }
             if (pending != null) { result.error("BUSY", "이미 Google 로그인 중입니다", null); return@setMethodCallHandler }
+            val scopes = call.argument<List<String>>("scopes")
+                ?: listOf("https://www.googleapis.com/auth/drive.readonly")
+            val allowed = setOf("https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/drive.appdata")
+            if (scopes.isEmpty() || scopes.any { it !in allowed }) {
+                result.error("SCOPE", "지원하지 않는 Google 권한입니다", null)
+                return@setMethodCallHandler
+            }
             pending = result
             val email = call.argument<String>("email")
             val interactive = call.argument<Boolean>("interactive") == true
             val oldToken = call.argument<String>("invalidateToken")
             val request = AuthorizationRequest.builder()
-                .setRequestedScopes(listOf(Scope("https://www.googleapis.com/auth/drive.readonly")))
+                .setRequestedScopes(scopes.map { Scope(it) })
                 .apply { if (!email.isNullOrBlank()) setAccount(Account(email, "com.google")) }
                 .build()
             fun authorize() {

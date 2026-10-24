@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'resource_locks.dart';
+import 'package:flutter/foundation.dart';
+import 'sync_references.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -45,7 +47,7 @@ class ResumeEntry {
 }
 
 /// 이어보기 위치 + 최근 재생 기록 + 사용자 추가 폴더 저장소.
-class ResumeStore {
+class ResumeStore extends ChangeNotifier {
   ResumeStore._();
   static final instance = ResumeStore._();
 
@@ -57,13 +59,21 @@ class ResumeStore {
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
     final raw = _prefs.getString(_kResume);
+    _entries.clear();
     if (raw != null) {
       final m = jsonDecode(raw) as Map<String, dynamic>;
       m.forEach((k, v) => _entries[k] = ResumeEntry.fromJson(k, v as Map<String, dynamic>));
     }
   }
 
-  ResumeEntry? get(String path) => _entries[path];
+  ResumeEntry? get(String path) {
+    final direct = _entries[path] ?? _entries[SyncReferences.instance.resolve(path)];
+    final portable = _entries[SyncReferences.instance.portable(path)];
+    if (direct == null) return portable;
+    return portable != null && portable.updatedAt.isAfter(direct.updatedAt) ? portable : direct;
+  }
+
+  Map<String, ResumeEntry> get entries => Map.unmodifiable(_entries);
 
   Map<String, dynamic> playbackSettings(String path) {
     try {
@@ -79,7 +89,12 @@ class ResumeStore {
   }
 
   List<ResumeEntry> recent({int limit = 50}) {
-    final l = _entries.values.toList()..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    final unique = <String, ResumeEntry>{};
+    for (final entry in _entries.values) {
+      final key = SyncReferences.instance.portable(entry.path) ?? entry.path;
+      if (unique[key] == null || entry.updatedAt.isAfter(unique[key]!.updatedAt)) unique[key] = entry;
+    }
+    final l = unique.values.toList()..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return l.take(limit).toList();
   }
 
@@ -91,6 +106,7 @@ class ResumeStore {
     bool browserMedia = false,
   }) async {
     if (duration == Duration.zero) return;
+    _entries.remove(SyncReferences.instance.portable(path));
     _entries[path] = ResumeEntry(
       path: path,
       position: position,
@@ -100,15 +116,20 @@ class ResumeStore {
       browserMedia: browserMedia,
     );
     await _prefs.setString(_kResume, jsonEncode(_entries.map((k, v) => MapEntry(k, v.toJson()))));
+    notifyListeners();
   }
 
   Future<void> remove(String path) async {
     _entries.remove(path);
+    _entries.remove(SyncReferences.instance.portable(path));
+    final resolved = SyncReferences.instance.resolve(path);
+    if (resolved != null) _entries.remove(resolved);
     await _prefs.setString(_kResume, jsonEncode(_entries.map((k, v) => MapEntry(k, v.toJson()))));
+    notifyListeners();
   }
 
   Future<void> toggleWatched(String path, {String? title}) async {
-    await ResourceLocks.instance.requireAccess(path);
+    await ResourceLocks.instance.requireAccess(SyncReferences.instance.resolve(path) ?? path);
     final previous = get(path);
     final duration = previous?.duration ?? const Duration(seconds: 1);
     await save(
@@ -128,10 +149,23 @@ class ResumeStore {
         await _prefs.remove('playback_settings_$oldPath');
       }
     }
-    final entry = _entries.remove(oldPath);
+    final entry = get(oldPath);
+    _entries.remove(oldPath);
+    _entries.remove(SyncReferences.instance.portable(oldPath));
     if (entry != null) {
       await save(newPath, entry.position, entry.duration, title: title, browserMedia: entry.browserMedia);
     }
+  }
+
+  Future<void> applySynced(Map<String, ResumeEntry?> changes) async {
+    for (final entry in changes.entries) {
+      _entries.removeWhere((key, _) => key == entry.key || SyncReferences.instance.portable(key) == entry.key);
+      if (entry.value != null) _entries[entry.value!.path] = entry.value!;
+    }
+    if (!await _prefs.setString(_kResume, jsonEncode(_entries.map((k, v) => MapEntry(k, v.toJson()))))) {
+      throw StateError('동기화한 재생 기록을 저장하지 못했습니다');
+    }
+    notifyListeners();
   }
 
   List<String> get folders => _prefs.getStringList(_kFolders) ?? [];

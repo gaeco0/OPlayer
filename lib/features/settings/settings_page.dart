@@ -16,6 +16,7 @@ import 'privacy_settings.dart';
 import 'appearance_settings.dart';
 import 'plugins_page.dart';
 import 'app_update_page.dart';
+import 'google_sync_page.dart';
 import '../player/desktop_window.dart';
 import '../player/player_orientation.dart';
 
@@ -40,6 +41,12 @@ class SettingsPage extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 48),
           children: [
             const AppearanceSettings(),
+            ListTile(
+              leading: const Icon(Icons.cloud_sync_outlined),
+              title: const Text('Google 동기화'),
+              subtitle: const Text('재생목록·최근 재생·이어보기 · Drive 앱 전용 저장소'),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const GoogleSyncPage())),
+            ),
             ListTile(
               leading: const Icon(Icons.extension_outlined),
               title: const Text('확장앱'),

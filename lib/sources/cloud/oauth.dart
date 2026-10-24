@@ -224,13 +224,16 @@ class OAuthClient {
 
 /// Android Google authorization uses Play services, not deprecated loopback/custom-scheme OAuth.
 class GoogleAndroidOAuthClient extends OAuthClient {
-  GoogleAndroidOAuthClient({required super.clientId, this.accountEmail})
-    : super(
-        authEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-        tokenEndpoint: 'https://oauth2.googleapis.com/token',
-        scopes: const ['https://www.googleapis.com/auth/drive.readonly'],
-        mobileScheme: CloudConfig.mobileScheme,
-      );
+  GoogleAndroidOAuthClient({
+    required super.clientId,
+    this.accountEmail,
+    List<String> requestedScopes = const ['https://www.googleapis.com/auth/drive.readonly'],
+  }) : super(
+         authEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+         tokenEndpoint: 'https://oauth2.googleapis.com/token',
+         scopes: requestedScopes,
+         mobileScheme: CloudConfig.mobileScheme,
+       );
 
   final String? accountEmail;
   static const channel = MethodChannel('oplayer/google-drive');
@@ -240,6 +243,7 @@ class GoogleAndroidOAuthClient extends OAuthClient {
       'interactive': interactive,
       'email': accountEmail,
       'invalidateToken': invalidateToken,
+      'scopes': scopes,
     });
     final access = result?['accessToken'];
     if (access is! String || access.isEmpty) throw 'Google Drive 인증 응답이 비어 있습니다';

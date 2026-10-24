@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'sync_references.dart';
 
 class PlaylistTrack {
   const PlaylistTrack(this.key, this.title);
@@ -109,12 +110,27 @@ class PlaylistStore extends ChangeNotifier {
 
   Future<void> relocate(String oldKey, String newKey, String title) async {
     await init();
-    if (!_lists.any((p) => p.tracks.any((t) => t.key == oldKey))) return;
+    bool matches(PlaylistTrack t) => t.key == oldKey || SyncReferences.instance.resolve(t.key) == oldKey;
+    if (!_lists.any((p) => p.tracks.any(matches))) return;
     await _save(
       () => [
         for (final p in _lists)
-          SavedPlaylist(p.id, p.name, p.tracks.map((t) => t.key == oldKey ? PlaylistTrack(newKey, title) : t)),
+          SavedPlaylist(p.id, p.name, p.tracks.map((t) => matches(t) ? PlaylistTrack(newKey, title) : t)),
       ],
     );
   }
+
+  Future<void> applySynced(Map<String, SavedPlaylist?> changes, bool Function(String) unchanged) => _save(() {
+    final next = {for (final list in _lists) list.id: list};
+    for (final entry in changes.entries) {
+      if (!unchanged(entry.key)) continue;
+      if (entry.value == null) {
+        next.remove(entry.key);
+      } else {
+        final localOnly = next[entry.key]?.tracks.where((t) => SyncReferences.instance.portable(t.key) == null) ?? [];
+        next[entry.key] = SavedPlaylist(entry.key, entry.value!.name, [...entry.value!.tracks, ...localOnly]);
+      }
+    }
+    return next.values.toList();
+  });
 }
