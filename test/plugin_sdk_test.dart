@@ -21,6 +21,45 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final store = PluginStore.instance;
   late OPlugin plugin;
+  test('resource search is opt-in, requires a hook and receives the entered query and folder ID', () async {
+    final parsed = OPlugin.parse(await File('plugins/examples/cloud.custom.example.js').readAsString());
+    final meta = {...parsed.manifest, 'id': 'cloud.search.test', 'canSearch': true};
+    const functions = 'accountName(){return "Test"},list(){return []},stream(){return null}';
+    String source(String hook) => '// @oplayer ${jsonEncode(meta)}\nglobalThis.plugin={$functions$hook};';
+    await expectLater(store.load(source('')), throwsStateError);
+    expect(
+      () => OPlugin.parse(source('').replaceFirst('"canSearch":true', '"canSearch":"true"')),
+      throwsFormatException,
+    );
+    await store.load(source(',search({query,path}){return [{name:query+".mp4",path:path+"/result",size:123}]}'));
+    final account = CloudAccount(
+      id: 'search-test',
+      provider: CloudProvider.plugin,
+      name: 'Search',
+      pluginId: meta['id'] as String,
+    );
+    await SecureStore.instance.writeRequired(
+      account.tokenKey,
+      jsonEncode({'pluginId': meta['id'], 'authType': 'script'}),
+    );
+    final cloud = cloudSourceFor(account);
+    try {
+      expect(cloud.canSearch, true);
+      final rows = await cloud.search('  한글 & "query"  ', path: 'opaque-folder');
+      expect(rows.single.name, '한글 & "query".mp4');
+      expect(rows.single.path, 'opaque-folder/result');
+      expect(rows.single.size, 123);
+      expect(await cloud.search('  ', path: 'opaque-folder'), isEmpty);
+      meta['canSearch'] = false;
+      await store.load(source(''));
+      expect(cloud.canSearch, false);
+      await expectLater(cloud.search('query', path: 'root'), throwsUnsupportedError);
+    } finally {
+      await cloud.close();
+      await SecureStore.instance.writeRequired(account.tokenKey, null);
+      await store.remove(meta['id'] as String);
+    }
+  });
   test('resource rename is opt-in, independent of deletion, and requires its hook', () async {
     final source = await File('plugins/examples/cloud.custom.example.js').readAsString();
     final parsed = OPlugin.parse(source);

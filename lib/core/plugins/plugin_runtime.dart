@@ -73,6 +73,9 @@ Future<Object?> callPlugin(
       if (plugin.manifest['canRename'] == true && !methods.contains('rename')) {
         throw StateError('이름변경을 지원하는 확장앱에는 rename 함수가 필요합니다');
       }
+      if (plugin.manifest['canSearch'] == true && !methods.contains('search')) {
+        throw StateError('검색을 지원하는 확장앱에는 search 함수가 필요합니다');
+      }
       if (plugin.cloud
           ? !['accountName', 'list', 'stream'].every(methods.contains)
           : plugin.kind == 'player'

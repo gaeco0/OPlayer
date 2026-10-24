@@ -9,6 +9,7 @@ import 'package:volume_controller/volume_controller.dart';
 import '../../../core/media_utils.dart';
 import '../../../core/settings.dart';
 import '../player_controller.dart';
+import '../system_volume.dart';
 
 enum _Drag { none, seek, brightness, volume, zoom }
 
@@ -23,12 +24,7 @@ bool get isMobile => Platform.isAndroid || Platform.isIOS;
 ///  • 길게 누르기: 2배속 (떼면 원래 속도)
 ///  • (데스크톱) 마우스 휠: 볼륨, 마우스 이동: 컨트롤 표시
 class GestureLayer extends StatefulWidget {
-  const GestureLayer({
-    super.key,
-    required this.c,
-    required this.onTapOutsidePanel,
-    this.seekStep = 10,
-  });
+  const GestureLayer({super.key, required this.c, required this.onTapOutsidePanel, this.seekStep = 10});
   final PlayerController c;
 
   /// 패널이 열려 있으면 탭은 패널 닫기로 쓰인다. true를 반환하면 탭을 소비한 것.
@@ -48,7 +44,8 @@ class GestureLayerState extends State<GestureLayer> {
   Duration _seekTo = Duration.zero;
   double _startValue = 0;
   double _brightness = 0.5;
-  double _volume = 0.5; // 0~1
+  final _systemVolume = SystemVolume();
+  double get _volume => _systemVolume.value ?? 0;
   double _startZoom = 1;
   Offset _doubleTapPos = Offset.zero;
 
@@ -65,14 +62,15 @@ class GestureLayerState extends State<GestureLayer> {
   }
 
   Future<void> _initLevels() async {
+    try {
+      await _systemVolume.ready;
+    } catch (_) {}
+    if (!mounted) return;
     if (isMobile) {
       VolumeController.instance.showSystemUI = false;
       try {
-        _volume = await VolumeController.instance.getVolume();
         _brightness = await ScreenBrightness.instance.application;
       } catch (_) {}
-    } else {
-      _volume = c.player.state.volume / 100;
     }
   }
 
@@ -80,19 +78,15 @@ class GestureLayerState extends State<GestureLayer> {
   void dispose() {
     _hudTimer?.cancel();
     _dtTimer?.cancel();
+    _systemVolume.dispose();
     if (isMobile) {
-      ScreenBrightness.instance.resetApplicationScreenBrightness().catchError(
-        (_) {},
-      );
+      ScreenBrightness.instance.resetApplicationScreenBrightness().catchError((_) {});
       VolumeController.instance.showSystemUI = true;
     }
     super.dispose();
   }
 
-  void _showHud(
-    Widget w, {
-    Duration hideAfter = const Duration(milliseconds: 700),
-  }) {
+  void _showHud(Widget w, {Duration hideAfter = const Duration(milliseconds: 700)}) {
     _hudTimer?.cancel();
     setState(() => _hud = w);
     _hudTimer = Timer(hideAfter, () {
@@ -106,24 +100,23 @@ class GestureLayerState extends State<GestureLayer> {
   }
 
   Future<void> setVolume(double v) async {
-    _volume = v.clamp(0.0, 1.0);
-    if (isMobile) {
-      await VolumeController.instance.setVolume(_volume);
-    } else {
-      await c.player.setVolume(_volume * 100);
+    try {
+      await _systemVolume.set(v);
+    } catch (_) {
+      if (mounted) flashText('OS 볼륨을 변경하지 못했습니다');
     }
   }
 
   /// 외부(키보드/휠)에서 볼륨 변경 시 HUD 표시
-  void nudgeVolume(double delta) {
-    setVolume(_volume + delta);
-    _showHud(
-      _LevelHud(
-        icon: _volumeIcon(_volume),
-        value: _volume,
-        label: '${(_volume * 100).round()}',
-      ),
-    );
+  Future<void> nudgeVolume(double delta) async {
+    try {
+      await _systemVolume.adjust(delta);
+    } catch (_) {
+      if (mounted) flashText('OS 볼륨을 변경하지 못했습니다');
+      return;
+    }
+    if (!mounted) return;
+    _showHud(_LevelHud(icon: _volumeIcon(_volume), value: _volume, label: '${(_volume * 100).round()}'));
   }
 
   /// 외부(키보드)에서 탐색 시 HUD 표시
@@ -143,9 +136,7 @@ class GestureLayerState extends State<GestureLayer> {
     hideAfter: const Duration(milliseconds: 1000),
   );
 
-  IconData _volumeIcon(double v) => v == 0
-      ? Icons.volume_off
-      : (v < 0.5 ? Icons.volume_down : Icons.volume_up);
+  IconData _volumeIcon(double v) => v == 0 ? Icons.volume_off : (v < 0.5 ? Icons.volume_down : Icons.volume_up);
 
   // ---------------- gestures ----------------
   void _onTap() {
@@ -188,9 +179,7 @@ class GestureLayerState extends State<GestureLayer> {
     if (d.pointerCount >= 2) {
       _mode = _Drag.zoom;
       c.setZoom(_startZoom * d.scale);
-      _holdHud(
-        _TextHud(icon: Icons.zoom_in, text: '${(c.zoom * 100).round()}%'),
-      );
+      _holdHud(_TextHud(icon: Icons.zoom_in, text: '${(c.zoom * 100).round()}%'));
       return;
     }
     final delta = d.localFocalPoint - _start;
@@ -208,6 +197,7 @@ class GestureLayerState extends State<GestureLayer> {
           return _resetMode();
         }
         if (_mode == _Drag.volume && !st.gestureVolume) return _resetMode();
+        if (_mode == _Drag.volume && _systemVolume.value == null) return _resetMode();
         _startValue = _mode == _Drag.brightness ? _brightness : _volume;
       }
     }
@@ -217,41 +207,21 @@ class GestureLayerState extends State<GestureLayer> {
         final dur = c.player.state.duration;
         // 화면 전체 폭 = 최대 3분 (짧은 영상은 영상 길이)
         final maxSpan = (st.swipeSeekSpanSeconds * 1000).round();
-        final spanMs = dur.inMilliseconds == 0
-            ? maxSpan
-            : dur.inMilliseconds.clamp(10000, maxSpan);
-        final offset = Duration(
-          milliseconds: (delta.dx / size.width * spanMs).round(),
-        );
+        final spanMs = dur.inMilliseconds == 0 ? maxSpan : dur.inMilliseconds.clamp(10000, maxSpan);
+        final offset = Duration(milliseconds: (delta.dx / size.width * spanMs).round());
         var t = _seekFrom + offset;
         if (t < Duration.zero) t = Duration.zero;
         if (dur > Duration.zero && t > dur) t = dur;
         _seekTo = t;
         _holdHud(_SeekHud(delta: t - _seekFrom, target: t, duration: dur));
       case _Drag.brightness:
-        _brightness = (_startValue - delta.dy / (size.height * 0.75)).clamp(
-          0.0,
-          1.0,
-        );
-        ScreenBrightness.instance
-            .setApplicationScreenBrightness(_brightness)
-            .catchError((_) {});
-        _holdHud(
-          _LevelHud(
-            icon: Icons.brightness_6,
-            value: _brightness,
-            label: '${(_brightness * 100).round()}',
-          ),
-        );
+        _brightness = (_startValue - delta.dy / (size.height * 0.75)).clamp(0.0, 1.0);
+        ScreenBrightness.instance.setApplicationScreenBrightness(_brightness).catchError((_) {});
+        _holdHud(_LevelHud(icon: Icons.brightness_6, value: _brightness, label: '${(_brightness * 100).round()}'));
       case _Drag.volume:
-        setVolume(_startValue - delta.dy / (size.height * 0.75));
-        _holdHud(
-          _LevelHud(
-            icon: _volumeIcon(_volume),
-            value: _volume,
-            label: '${(_volume * 100).round()}',
-          ),
-        );
+        final level = (_startValue - delta.dy / (size.height * 0.75)).clamp(0.0, 1.0);
+        setVolume(level);
+        _holdHud(_LevelHud(icon: _volumeIcon(level), value: level, label: '${(level * 100).round()}'));
       case _Drag.zoom:
       case _Drag.none:
         break;
@@ -295,12 +265,7 @@ class GestureLayerState extends State<GestureLayer> {
               onLongPressStart: (_) {
                 if (c.locked || !AppSettings.instance.longPressSpeed) return;
                 c.startFastForward();
-                _holdHud(
-                  _TextHud(
-                    icon: Icons.fast_forward,
-                    text: '${(c.baseRate * 2).toStringAsFixed(1)}x 빨리 감기',
-                  ),
-                );
+                _holdHud(_TextHud(icon: Icons.fast_forward, text: '${(c.baseRate * 2).toStringAsFixed(1)}x 빨리 감기'));
               },
               onLongPressEnd: (_) {
                 c.stopFastForward();
@@ -330,27 +295,16 @@ class _HudBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-    decoration: BoxDecoration(
-      color: const Color(0xB3000000),
-      borderRadius: BorderRadius.circular(10),
-    ),
+    decoration: BoxDecoration(color: const Color(0xB3000000), borderRadius: BorderRadius.circular(10)),
     child: DefaultTextStyle(
-      style: const TextStyle(
-        color: Colors.white,
-        fontSize: 15,
-        fontWeight: FontWeight.w600,
-      ),
+      style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
       child: child,
     ),
   );
 }
 
 class _SeekHud extends StatelessWidget {
-  const _SeekHud({
-    required this.delta,
-    required this.target,
-    required this.duration,
-  });
+  const _SeekHud({required this.delta, required this.target, required this.duration});
   final Duration delta;
   final Duration target;
   final Duration duration;
@@ -361,10 +315,7 @@ class _SeekHud extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            '$sign${formatDuration(delta.abs())}',
-            style: const TextStyle(fontSize: 26),
-          ),
+          Text('$sign${formatDuration(delta.abs())}', style: const TextStyle(fontSize: 26)),
           const SizedBox(height: 4),
           Text(
             '${formatDuration(target)} / ${formatDuration(duration)}',
@@ -377,11 +328,7 @@ class _SeekHud extends StatelessWidget {
 }
 
 class _LevelHud extends StatelessWidget {
-  const _LevelHud({
-    required this.icon,
-    required this.value,
-    required this.label,
-  });
+  const _LevelHud({required this.icon, required this.value, required this.label});
   final IconData icon;
   final double value;
   final String label;
@@ -421,10 +368,7 @@ class _TextHud extends StatelessWidget {
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (icon != null) ...[
-          Icon(icon, color: Colors.white, size: 24),
-          const SizedBox(width: 8),
-        ],
+        if (icon != null) ...[Icon(icon, color: Colors.white, size: 24), const SizedBox(width: 8)],
         Text(text),
       ],
     ),
@@ -443,11 +387,7 @@ class _DoubleTapHud extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              forward ? Icons.fast_forward_rounded : Icons.fast_rewind_rounded,
-              color: Colors.white,
-              size: 32,
-            ),
+            Icon(forward ? Icons.fast_forward_rounded : Icons.fast_rewind_rounded, color: Colors.white, size: 32),
             Text('${forward ? '+' : '-'}$seconds초'),
           ],
         ),

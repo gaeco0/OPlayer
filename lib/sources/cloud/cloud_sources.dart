@@ -275,7 +275,21 @@ class CloudSource extends MediaSource {
 
   @override
   Future<List<RemoteEntry>> list(String path) async {
-    final result = await _call('list', {'path': path}) as List;
+    return _entries(await _call('list', {'path': path}));
+  }
+
+  @override
+  bool get canSearch => definition.manifest['canSearch'] == true;
+
+  @override
+  Future<List<RemoteEntry>> search(String query, {required String path}) async {
+    if (!canSearch) throw UnsupportedError('이 확장앱은 검색을 지원하지 않습니다');
+    if (query.trim().isEmpty) return [];
+    return _entries(await _call('search', {'query': query.trim(), 'path': path}));
+  }
+
+  List<RemoteEntry> _entries(Object? result) {
+    if (result is! List) throw StateError('확장앱이 파일 목록을 반환하지 않았습니다');
     return result.map((value) {
       final e = value as Map;
       return RemoteEntry(

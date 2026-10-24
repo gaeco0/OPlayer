@@ -55,6 +55,10 @@ abstract class MediaSource {
 
   Future<List<RemoteEntry>> list(String path);
 
+  bool get canSearch => false;
+  Future<List<RemoteEntry>> search(String query, {required String path}) =>
+      throw UnsupportedError('이 저장소는 검색을 지원하지 않습니다');
+
   /// 재생 항목 생성. [siblings]는 같은 폴더 항목(자막 매칭용).
   MediaItem itemFor(RemoteEntry e, List<RemoteEntry> siblings);
 
