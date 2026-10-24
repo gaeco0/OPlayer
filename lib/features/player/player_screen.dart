@@ -23,6 +23,7 @@ import 'widgets/controls_overlay.dart';
 import 'widgets/gesture_layer.dart';
 import 'widgets/side_panels.dart';
 import 'widgets/player_video.dart';
+import 'widgets/player_orientation_viewport.dart';
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({
@@ -517,7 +518,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   }
 
   // ---------------- 영상 레이어 ----------------
-  Widget _video() {
+  Widget _video(BuildContext context) {
     if (c.audioOnly) return const ColoredBox(color: Colors.black);
     final st = AppSettings.instance;
     final subtitleCfg = SubtitleViewConfiguration(
@@ -582,7 +583,11 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         focusNode: _focus,
         autofocus: true,
         onKeyEvent: _onKey,
-        child: Builder(builder: _buildContent),
+        child: PlayerOrientationViewport(
+          mode: _orient,
+          enabled: Platform.isAndroid && PlayerOrientation.supported && !_pip.active,
+          child: Builder(builder: _buildContent),
+        ),
       ),
     ),
   );
@@ -595,7 +600,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         body: Column(
           children: [
             Expanded(
-              child: GestureDetector(onDoubleTap: () => _setCompact(false), child: _video()),
+              child: GestureDetector(onDoubleTap: () => _setCompact(false), child: _video(context)),
             ),
             Material(
               color: Colors.black,
@@ -680,7 +685,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
         backgroundColor: Colors.black,
         body: Stack(
           children: [
-            Positioned.fill(child: _video()),
+            Positioned.fill(child: _video(context)),
             if (!_pip.active) ...[
               Positioned.fill(
                 child: GestureLayer(
