@@ -121,6 +121,56 @@ void main() {
     },
   );
 
+  test('official Google Drive search filters the current folder, escapes input and paginates', () async {
+    final plugin = OPlugin.parse(await File('plugins/cloud.gdrive.js').readAsString());
+    expect(plugin.manifest['canSearch'], true);
+    var requests = 0;
+    final results =
+        await callPlugin(
+              plugin,
+              'search',
+              {'query': "  한글 'test\\name  ", 'path': "folder'id"},
+              request: (url, options) async {
+                requests++;
+                final uri = Uri.parse(url);
+                expect(uri.host, 'www.googleapis.com');
+                expect(
+                  uri.queryParameters['q'],
+                  "'folder\\'id' in parents and trashed=false and name contains '한글 \\'test\\\\name'",
+                );
+                if (requests == 1) {
+                  return {
+                    'nextPageToken': 'next/+page',
+                    'files': [
+                      {'id': 'one', 'name': 'one.mp4', 'mimeType': 'video/mp4'},
+                    ],
+                  };
+                }
+                expect(uri.queryParameters['pageToken'], 'next/+page');
+                return {
+                  'files': [
+                    {'id': 'two', 'name': 'two.mp4', 'mimeType': 'video/mp4'},
+                    {'id': 'doc', 'name': 'document', 'mimeType': 'application/vnd.google-apps.document'},
+                  ],
+                };
+              },
+            )
+            as List;
+    expect(results.map((r) => (r as Map)['path']), ['one', 'two']);
+    expect(requests, 2);
+    expect(
+      await callPlugin(
+        plugin,
+        'search',
+        {'query': '   ', 'path': 'root'},
+        request: (_, __) async {
+          fail('An empty query must not send a request');
+        },
+      ),
+      isEmpty,
+    );
+  });
+
   test('SigV4 matches the published AWS example and encodes paths, queries and session tokens', () {
     // Public example credentials, NOT an account credential:
     // https://docs.aws.amazon.com/AmazonS3/latest/developerguide/sigv4-query-string-auth.html
