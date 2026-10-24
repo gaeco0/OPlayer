@@ -1,14 +1,35 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:xml/xml.dart';
 import 'package:oplayer/core/settings.dart';
 import 'package:oplayer/features/player/player_orientation.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('mobile manifest preserves player orientation requests against foldable compatibility overrides', () async {
+    final mobile = XmlDocument.parse(await File('android/app/src/mobile/AndroidManifest.xml').readAsString());
+    final activity = mobile.findAllElements('activity').single;
+    final properties = {
+      for (final property in activity.findElements('property'))
+        property.getAttribute('android:name'): property.getAttribute('android:value'),
+    };
+    expect(properties['android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY'], 'true');
+    for (final name in [
+      'PROPERTY_COMPAT_ALLOW_ORIENTATION_OVERRIDE',
+      'PROPERTY_COMPAT_ALLOW_DISPLAY_ORIENTATION_OVERRIDE',
+      'PROPERTY_COMPAT_ALLOW_IGNORING_ORIENTATION_REQUEST_WHEN_LOOP_DETECTED',
+    ]) {
+      expect(properties['android.window.$name'], 'false');
+    }
+    final tv = await File('android/app/src/tv/AndroidManifest.xml').readAsString();
+    expect(tv, isNot(contains('PROPERTY_COMPAT_ALLOW_')));
+  });
 
   test('mobile orientation preference restores across reloads and tolerates older settings', () async {
     final settings = AppSettings.instance;
