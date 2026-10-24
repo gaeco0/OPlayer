@@ -24,6 +24,10 @@ iOS는 Google 로그인 콜백 등록·네이티브 설정을 추가한 뒤 지�
 3. Android는 Android OAuth 클라이언트에 **패키지명과 실제 배포 서명의 SHA-1**을 등록한다.
    앱의 등록 정보 화면에서 두 값을 확인할 수 있다. 테스트 APK와 배포 APK의 서명이 다르면 각각 등록한다.
    Android Client ID 입력은 선택 사항이며 Play 서비스가 패키지·서명으로 등록 앱을 확인한다.
+   휴대폰 패키지는 `com.oplayer.oplayer`, TV는 `com.oplayer.oplayer.tv`이므로 같은 프로젝트에 Android 유형
+   클라이언트를 각각 등록한다. 현재 배포 서명의 SHA-1은 두 패키지 모두
+   `7A:28:AC:9F:55:62:98:99:A8:C8:B5:2D:82:46:7A:13:63:AB:80:AD`이다.
+   Actions의 Android ID에는 휴대폰용 ID를 넣는다. TV 네이티브 인증은 별도로 등록한 TV 패키지·서명을 사용한다.
 4. Windows·Linux·macOS는 **데스크톱 앱** OAuth 클라이언트를 만들고 Client ID와 발급된 Client Secret을
    앱에 입력한다. Secret과 토큰은 기기 보안 저장소에 보관한다. 브라우저 로그인은 PKCE와
    `http://127.0.0.1:53682/callback` 루프백을 사용한다.
