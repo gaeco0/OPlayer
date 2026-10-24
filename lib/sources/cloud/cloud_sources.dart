@@ -10,6 +10,7 @@ import '../../core/plugins/plugin_store.dart';
 import '../../core/plugins/plugin_runtime.dart';
 import '../../core/plugins/plugin_values.dart';
 import '../../core/plugins/plugin_http.dart';
+import '../../core/plugins/plugin_upload.dart';
 import '../../core/secure_store.dart';
 import '../../core/network/network_service.dart';
 import '../../core/stream_proxy.dart';
@@ -34,6 +35,7 @@ OAuthClient oauthClientFor(CloudProvider provider, {String? clientId, String? ac
               ? PluginStore.instance.oauthClientId(definition)
               : CloudConfig.googleAndroidClientId),
       accountEmail: accountEmail,
+      requestedScopes: (oauth['scopes'] as List).cast<String>(),
     );
   }
   final id =
@@ -289,6 +291,68 @@ class CloudSource extends MediaSource {
 
   @override
   bool get canSearch => definition.manifest['canSearch'] == true;
+
+  @override
+  bool get canUpload => definition.manifest['canUpload'] == true && definition.authType == 'oauth';
+
+  @override
+  Future<String> upload(
+    File local,
+    String remoteDir,
+    String name, {
+    String? overwritePath,
+    void Function(int sent)? onProgress,
+    Future<void>? cancelled,
+  }) async {
+    if (!canUpload) throw UnsupportedError('이 확장앱은 업로드를 지원하지 않습니다');
+    validateFileName(name);
+    var stopped = false, finished = false;
+    cancelled?.then((_) {
+      if (!finished) stopped = true;
+    });
+    void check() {
+      if (stopped || _closed) throw StateError('업로드가 중단되었습니다');
+      definition;
+    }
+
+    try {
+      check();
+      final size = await local.length();
+      final plan = await _call('upload', {
+        'path': remoteDir,
+        'name': name,
+        'size': size,
+        'overwritePath': overwritePath,
+      }, retry: false);
+      check();
+      if (plan is! Map || plan['protocol'] != 'http-content-range' || plan['url'] is! String) {
+        throw StateError('지원하지 않는 확장앱 업로드 방식');
+      }
+      final uri = Uri.tryParse(plan['url'] as String);
+      if (uri == null ||
+          uri.scheme != 'https' ||
+          uri.userInfo.isNotEmpty ||
+          uri.hasFragment ||
+          !definition.allows(uri.toString(), auth: true)) {
+        throw StateError('허용되지 않은 업로드 도메인');
+      }
+      final response = await uploadPluginFile(
+        local,
+        uri,
+        client: http.Client(),
+        authHeaders: (refresh) => _authHeader(refresh: refresh),
+        check: check,
+        onProgress: onProgress,
+        cancelled: cancelled,
+      );
+      check();
+      final path = await _call('uploadComplete', {'response': response}, retry: false);
+      if (path is! String || path.isEmpty || path.length > 4096) throw StateError('업로드 파일 ID가 올바르지 않습니다');
+      return path;
+    } finally {
+      finished = true;
+    }
+  }
 
   @override
   Future<List<RemoteEntry>> search(String query, {required String path}) async {

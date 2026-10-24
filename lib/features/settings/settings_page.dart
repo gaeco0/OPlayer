@@ -365,6 +365,7 @@ class _DownloadTargetTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppSettings.instance;
     final server = s.downloadServerId == null ? null : ServerStore.instance.server(s.downloadServerId!);
+    final account = s.downloadServerId == null ? null : ServerStore.instance.account(s.downloadServerId!);
     return FutureBuilder(
       future: DownloadManager.downloadDir(),
       builder: (_, snap) => ListTile(
@@ -372,6 +373,8 @@ class _DownloadTargetTile extends StatelessWidget {
         subtitle: Text(
           server != null
               ? '${server.name} (${server.type.name.toUpperCase()}) : ${s.downloadServerDir ?? '/'}\n받은 뒤 서버로 올리고 기기에서는 지웁니다'
+              : account != null
+              ? '${account.name} · 클라우드 : ${s.downloadServerDir ?? 'root'}\n받은 뒤 클라우드로 올리고 기기에서는 지웁니다'
               : '이 기기: ${snap.data?.path ?? '…'}',
           style: const TextStyle(fontSize: 12),
         ),
@@ -384,6 +387,7 @@ class _DownloadTargetTile extends StatelessWidget {
   Future<void> _choose(BuildContext context) async {
     final s = AppSettings.instance;
     final servers = ServerStore.instance.servers;
+    final clouds = SourceRegistry.instance.uploadAccounts.toList();
     final choice = await showModalBottomSheet<Object>(
       context: context,
       backgroundColor: OColors.of(context).surface,
@@ -413,7 +417,15 @@ class _DownloadTargetTile extends StatelessWidget {
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.pop(c, srv),
               ),
-            if (servers.isEmpty)
+            for (final account in clouds)
+              ListTile(
+                leading: const Icon(Icons.cloud_upload_outlined),
+                title: Text(account.name),
+                subtitle: const Text('클라우드 · 업로드 지원'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.pop(c, account),
+              ),
+            if (servers.isEmpty && clouds.isEmpty)
               const ListTile(
                 leading: Icon(Icons.info_outline),
                 title: Text('서버에 저장하려면 사이드바에서 서버를 먼저 추가하세요', style: TextStyle(fontSize: 13)),
@@ -438,17 +450,19 @@ class _DownloadTargetTile extends StatelessWidget {
           x.downloadServerDir = null;
         });
       }
-    } else if (choice is ServerConfig) {
-      final src = await SourceRegistry.instance.forServer(choice);
+    } else if (choice is ServerConfig || choice is CloudAccount) {
+      final id = choice is ServerConfig ? choice.id : (choice as CloudAccount).id;
+      final src = await SourceRegistry.instance.forDestination(id);
+      if (!src.canUpload) throw UnsupportedError('이 저장소는 업로드를 지원하지 않습니다');
       if (!context.mounted) return;
       final dir = await RemoteFolderPicker.pick(
         context,
         src,
-        initialPath: s.downloadServerId == choice.id ? s.downloadServerDir : null,
+        initialPath: s.downloadServerId == id ? s.downloadServerDir : null,
       );
       if (dir != null) {
         s.update((x) {
-          x.downloadServerId = choice.id;
+          x.downloadServerId = id;
           x.downloadServerDir = dir;
         });
       }

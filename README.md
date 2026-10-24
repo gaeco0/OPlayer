@@ -18,15 +18,15 @@ nPlayer의 UI/UX를 기준으로, 로컬·네트워크·클라우드 재생과 �
 - 상단 **선택모드** 또는 파일 메뉴에서 파일을 선택하고 **선택 메뉴 → 재생목록에 추가 / 파일 삭제**를 사용합니다. 전체 선택은 현재 표시된 폴더의 파일에만 적용하며 하위 폴더를 재귀 선택하지 않습니다. 재생목록에는 영상·오디오만 추가합니다.
 - 사이드바 **재생목록**에서 목록을 만들고 이름변경·삭제할 수 있습니다. 목록 안에서 끌어 순서를 바꾸고 원하는 항목부터 연속 재생합니다. 선택 메뉴로 항목을 목록에서 제거하거나 다른 목록/새 목록에 복사합니다. 같은 파일은 중복 추가하지 않습니다. 목록에서 제거해도 원본 파일은 유지합니다.
 - 파일별 `⋮` 메뉴는 목록·격자에서 이름변경과 파일 삭제를 제공합니다. 이름변경은 로컬·WebDAV·FTP·SFTP·SMB에서 현재 폴더 내 파일에 적용하며 동명 항목을 확인하고 거부합니다. 폴더·심볼릭 링크의 이름변경은 제공하지 않습니다. 잠금·시청 기록·저장 재생목록의 참조는 새 파일명으로 옮깁니다. 자동 자막 매칭은 새 파일명 기준이며 자막 파일 이름은 바꾸지 않습니다.
-- DLNA·공식 읽기 전용 클라우드 확장앱에는 쓰기 기능이 없습니다. 리소스 확장앱이 `canDelete`/`canRename`을 선언한 경우에만 해당 작업을 제공합니다. 원격 재생목록은 계정·서버 식별자를 저장하고 재생 시 연결 정보를 다시 조회하므로 등록한 저장소와 확장앱이 필요합니다. NAS·FTP·SSH 실서버와 Android/TV의 직접 조작 검증은 별도로 필요합니다.
+- DLNA와 업로드를 선언하지 않은 클라우드 확장앱은 읽기 전용입니다. Google Drive 1.3.0은 업로드를 지원합니다. 리소스 확장앱이 `canDelete`/`canRename`을 선언한 경우에만 해당 작업을 제공합니다. 원격 재생목록은 계정·서버 식별자를 저장하고 재생 시 연결 정보를 다시 조회하므로 등록한 저장소와 확장앱이 필요합니다. NAS·FTP·SSH 실서버와 Android/TV의 직접 조작 검증은 별도로 필요합니다.
 
-## OS 볼륨·클라우드 검색 (0.1.7-nightly.20261024.3)
+## OS 볼륨·클라우드 검색 (0.1.7-nightly.20261024.4)
 
 - 재생 볼륨은 Android·iOS·Windows·Linux·macOS의 OS 출력 볼륨을 사용합니다. 재생 시작·종료 때 볼륨을 덮어쓰지 않으며 현재 OS 볼륨을 그대로 이어받습니다. 휠·방향키·볼륨 제스처는 OS 볼륨을 변경하고 하드웨어 키·시스템 슬라이더의 변경도 반영합니다. OS 볼륨 API 실패 시 변경 실패를 표시합니다.
 - 클라우드/리소스 확장앱이 `canSearch: true`와 `search({query,path})`를 제공하면 저장소 상단에 검색 버튼이 나타납니다. 검색어·현재 폴더 ID를 확장앱에 전달하고 결과를 기존 파일 목록으로 표시합니다. 검색 닫기·뒤로가기는 원래 폴더 목록으로 돌아가며 검색 결과의 폴더를 열면 해당 폴더 탐색을 시작합니다.
-- 검색 SDK와 예제는 [확장앱 개발 가이드](plugins/README.md#저장소-검색-api-4-선택-기능)를 참고하세요. SDK가 포함된 앱 업데이트 이후 공급자는 검색 훅을 JS로 배포하면 됩니다. 공식 Google Drive 1.2.0은 현재 폴더의 파일명 검색을 지원하며 기존 설치는 확장앱 업데이트가 필요합니다. 다른 확장앱에는 검색이 자동 추가되지 않습니다.
+- 검색 SDK와 예제는 [확장앱 개발 가이드](plugins/README.md#저장소-검색-api-4-선택-기능)를 참고하세요. SDK가 포함된 앱 업데이트 이후 공급자는 검색 훅을 JS로 배포하면 됩니다. 공식 Google Drive 1.3.0은 현재 폴더의 파일명 검색을 지원하며 기존 설치는 확장앱 업데이트가 필요합니다. 다른 확장앱에는 검색이 자동 추가되지 않습니다.
 
-## Google 계정 동기화 (0.1.7-nightly.20261024.3)
+## Google 계정 동기화 (0.1.7-nightly.20261024.4)
 
 - 설정 → **Google 동기화**에서 Google Drive 앱 전용 저장소에 재생목록·최근 재생·이어보기 위치를 동기화합니다. 별도 서버나 Google Drive 확장앱 설치가 필요하지 않으며 Apple·삼성 계정 연동은 제공하지 않습니다.
 - 기기별 폴더·서버·클라우드 계정에 공통 동기화 이름을 지정해 파일을 연결합니다. 파일 내용·비밀번호·사이트 세션·잠금 정보는 전송하지 않습니다. 연결되지 않은 파일과 URL은 기기에만 남습니다.
@@ -105,7 +105,7 @@ flutter run -d windows   # 또는 macos / android / ios
 
 ## GitHub Actions 빌드와 릴리스
 
-- 현재 nightly: [v0.1.7-nightly.20261024.3](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.7-nightly.20261024.3). Google 계정 동기화·기본 OAuth 등록·OS 볼륨 연동·리소스 검색과 기존 다운로드 파일명 편집·덮어쓰기 확인을 포함한다. 기존 v0.1.6 이하 앱은 이 버전을 한 번 직접 설치해야 하며, 설치 후 업데이트 확인 기본 채널은 stable이다. 사용자가 직접 저장한 채널 선택은 유지한다. 정식 최신 버전은 v0.1.6을 유지한다.
+- 현재 nightly: [v0.1.7-nightly.20261024.4](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.7-nightly.20261024.4). Google 계정 동기화·Drive 업로드·기본 OAuth 등록·OS 볼륨 연동·리소스 검색과 기존 다운로드 파일명 편집·덮어쓰기 확인을 포함한다. 기존 v0.1.6 이하 앱은 이 버전을 한 번 직접 설치해야 하며, 설치 후 업데이트 확인 기본 채널은 stable이다. 사용자가 직접 저장한 채널 선택은 유지한다. 정식 최신 버전은 v0.1.6을 유지한다.
 - 일반 빌드의 기본 채널은 **nightly**이며, 같은 기본 버전에서 **nightly → beta → stable** 순서로 배포한다. 예: `0.1.7-nightly.20261023.1+2` → `0.1.7-beta.1+2` → `0.1.7+2`. nightly·beta는 GitHub 사전 릴리스이고 stable만 Latest로 등록한다. beta 게시 전에는 같은 기본 버전의 공개 nightly가, stable 게시 전에는 공개 beta가 있어야 한다. 승격은 사용자 지시 후 새 버전·릴리즈노트·태그를 준비하고 다시 빌드하는 방식이며 자동 승격하지 않는다.
 - 각 단계의 태그는 `v0.1.7-nightly.20261023.1`, `v0.1.7-beta.1`, `v0.1.7` 형태다. Actions는 태그에서 채널을 확인하고 모든 플랫폼에 `--dart-define=OPLAYER_UPDATE_CHANNEL=채널`을 넣는다. 별도 지정 없이 로컬에서 빌드하면 nightly 채널이다. 내부 빌드 번호 `+2`와 기존 서명 키는 유지한다.
 - 브랜치 push·PR·버전 번호 변경만으로는 빌드하지 않는다. 사용자가 배포를 지시할 때만 해당 커밋에 `v0.1.1` 같은 버전 태그를 만들고 push한다. `v*` 태그 push를 받으면 Windows, Android(mobile), Android TV(tv), Linux(x64), macOS(Apple Silicon 러너)를 빌드한다. Android·TV는 같은 배포 키로 각각 서명하며 Windows에서 정적 분석·Dart 테스트·브라우저 JavaScript 테스트도 실행한다.
@@ -143,7 +143,7 @@ DRM(Widevine/FairPlay, SAMPLE-AES)으로 보호된 스트림은 재생·다운�
 
 ### 추가된 재생·탐색 기능
 
-- 로컬·원격 목록/격자에서 왼쪽으로 밀어 ‘삭제’를 누르면 실제 파일·폴더를 삭제한다. 폴더는 하위 항목도 함께 삭제하며 휴지통 이동·되돌리기는 제공하지 않는다. WebDAV·FTP·SFTP·SMB는 서버 쓰기 권한이 필요하고, 등록한 루트·SMB 공유 자체는 삭제 대상에서 제외한다. 삭제 중에는 진행 표시·중복 클릭 방지를 제공하고 성공·실패 후 목록을 다시 조회한다. 폴더 안의 별도 잠금 항목도 인증해야 한다. DLNA와 기본 공식 클라우드 확장앱은 읽기 전용이며 삭제 지원을 선언한 확장앱만 해당 버튼을 제공한다([개발 규약](plugins/README.md)).
+- 로컬·원격 목록/격자에서 왼쪽으로 밀어 ‘삭제’를 누르면 실제 파일·폴더를 삭제한다. 폴더는 하위 항목도 함께 삭제하며 휴지통 이동·되돌리기는 제공하지 않는다. WebDAV·FTP·SFTP·SMB는 서버 쓰기 권한이 필요하고, 등록한 루트·SMB 공유 자체는 삭제 대상에서 제외한다. 삭제 중에는 진행 표시·중복 클릭 방지를 제공하고 성공·실패 후 목록을 다시 조회한다. 폴더 안의 별도 잠금 항목도 인증해야 한다. DLNA와 삭제 미지원 클라우드 확장앱에는 삭제 버튼을 제공하지 않으며, Drive 업로드 권한과 파일 삭제 지원은 별도로 취급한다([개발 규약](plugins/README.md)).
 - 모바일 설정 → 재생 → ‘플레이어 화면 회전’에서 가로 고정·세로 고정·자동 회전을 선택한다. 재생 화면의 기존 회전 버튼도 같은 설정을 순환하고 선택을 저장한다. Android 자동 회전은 OS 세로 잠금과 관계없이 센서를 사용하고, 플레이어를 닫으면 시스템 회전 정책으로 복원한다. 데스크톱·Android TV에는 제공하지 않는다([Android 센서 회전](https://developer.android.com/guide/topics/manifest/activity-element#screen)).
 - `.6`부터 Android 모바일에 API 36 큰 화면 회전 호환 설정을 추가했다. Fold6 등 폴더블 내부 화면에서 가로·세로 고정 요청이 무시될 수 있는 Android 16 정책을 보완하며, 화면 크기 조절은 유지한다. Fold6 실기기 검증은 남아 있다. 이 호환 설정은 target API 37부터 지원되지 않으므로 대상 SDK를 올릴 때 별도 대응이 필요하다. iPad 멀티태스킹 제한은 플랫폼 정책을 따른다([Android 안내](https://developer.android.com/about/versions/16/behavior-changes-16#large-screens), [Flutter 안내](https://api.flutter.dev/flutter/services/SystemChrome/setPreferredOrientations.html)).
 - 로컬·네트워크·클라우드 폴더는 경로별로 정렬 기준(이름·날짜·크기), 오름차순/내림차순, ‘폴더 먼저 표시’를 기억한다. 정렬 메뉴에서 변경하면 즉시 저장되어 폴더 재방문과 앱 재시작 후에도 복원되며, 서버와 하위 폴더별로 독립 적용된다.
@@ -213,9 +213,9 @@ Chromecast·DLNA·PiP는 실제 Android/TV 기기 검증이 필요하다. nPlaye
 
 - OneDrive: Microsoft Entra 앱 등록에서 개인 Microsoft 계정을 포함하는 계정 유형과 모바일 및 데스크톱 플랫폼을 선택한다. 권한은 Files.Read, User.Read, offline_access. 커스텀 복귀 주소 `com.oplayer.oplayer://oauth/onedrive`와 데스크톱 `http://localhost:53682/callback`을 등록한다.
 - Dropbox: Scoped access / Full Dropbox 앱을 만들고 files.metadata.read, files.content.read, account_info.read 권한을 켠다. `com.oplayer.oplayer://oauth/dropbox`와 `http://localhost:53682/callback`을 등록한다.
-- Google Drive: Google Cloud 프로젝트에서 Drive API를 사용 설정하고 OAuth 동의 화면에 `https://www.googleapis.com/auth/drive.readonly`와 테스트 사용자를 추가한다. 파일·폴더 탐색 및 미디어 읽기 전용이며 업로드·수정 권한은 요청하지 않는다. Windows/macOS/Linux에서는 **데스크톱 앱** 유형의 Client ID와 Client Secret을 설정에 입력한다. 직접 입력한 Secret은 기기의 보안 저장소에 Client ID별로 보관한다. 운영자 등록값의 Actions 주입은 [Google 등록 안내](docs/google-sync.md)를 따른다. 데스크톱 배포본에 포함한 Secret은 바이너리에서 추출 가능하므로 서버 비밀로 사용하지 않는다. 로그인은 시스템 브라우저와 `http://127.0.0.1:53682/callback` 루프백, PKCE로 처리한다.
+- Google Drive: Google Cloud 프로젝트에서 Drive API를 사용 설정하고 OAuth 동의 화면에 `https://www.googleapis.com/auth/drive`와 테스트 사용자를 추가한다. 공식 Drive 확장앱 1.3.0은 전체 탐색·읽기·업로드를 지원하며 기존 읽기 전용 계정은 다시 연결해야 한다. 다운로드 저장 위치 또는 다른 저장소로 이동에서 Drive 폴더를 선택할 수 있다. Windows/macOS/Linux에서는 **데스크톱 앱** 유형의 Client ID와 Client Secret을 설정에 입력한다. 직접 입력한 Secret은 기기의 보안 저장소에 Client ID별로 보관한다. 운영자 등록값의 Actions 주입은 [Google 등록 안내](docs/google-sync.md)를 따른다. 데스크톱 배포본에 포함한 Secret은 바이너리에서 추출 가능하므로 서버 비밀로 사용하지 않는다. 로그인은 시스템 브라우저와 `http://127.0.0.1:53682/callback` 루프백, PKCE로 처리한다.
 - Google Drive Android/Android TV: **Android** 유형의 OAuth 클라이언트를 만든다. 앱 등록 화면에 표시되는 현재 패키지와 서명 SHA-1을 그대로 등록하고 Client ID를 입력한다. 모바일 `com.oplayer.oplayer`와 TV `com.oplayer.oplayer.tv`, 디버그/배포 서명은 각각 등록한다. Google Play 서비스의 공식 Authorization SDK를 사용하며 Android 루프백·커스텀 스킴은 사용하지 않는다. TV도 Google Play 서비스 및 계정·동의 UI가 필요하다. iOS의 Google Drive 연결은 지원하지 않는다.
-- `drive.readonly`는 제한된 범위이므로 공개 배포 로그인에는 Google OAuth 검증이 필요하다. 외부 테스트 모드에서는 등록한 테스트 사용자만 접속할 수 있고 갱신 토큰이 7일 후 만료될 수 있다. [Google OAuth 안내](https://developers.google.com/identity/protocols/oauth2/native-app), [Android 인증 안내](https://developer.android.com/identity/authorization), [Drive 권한 안내](https://developers.google.com/workspace/drive/api/guides/api-specific-auth).
+- `drive`는 제한된 범위이므로 공개 배포 로그인에는 Google OAuth 검증이 필요하다. 외부 테스트 모드에서는 등록한 테스트 사용자만 접속할 수 있고 갱신 토큰이 7일 후 만료될 수 있다. [Google OAuth 안내](https://developers.google.com/identity/protocols/oauth2/native-app), [Android 인증 안내](https://developer.android.com/identity/authorization), [Drive 권한 안내](https://developers.google.com/workspace/drive/api/guides/api-specific-auth).
 - Android/iOS 복귀 스킴은 이미 등록되어 있다. Windows/macOS/Linux는 시스템 브라우저와 루프백 콜백을 사용한다. PKCE S256, state, 복귀 주소를 검증하고 토큰은 보안 저장소에 보관한다.
 - 연결된 계정은 당시의 앱 ID를 유지하므로 설정에서 다른 앱 ID를 입력해도 기존 계정의 갱신 정보가 바뀌지 않는다. 연결 해제 시 로컬 토큰을 삭제한다. 서비스 웹사이트의 전체 로그인 세션을 종료하는 동작은 아니다.
 - 실제 앱 등록 ID와 사용자의 동의가 있어야 로그인할 수 있다. 자동 테스트는 로컬 OAuth 콜백·모의 공급자 응답으로 검증하며, 실계정과 실제 Android 기기 테스트는 별도로 필요하다.

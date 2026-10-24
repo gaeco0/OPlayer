@@ -93,7 +93,7 @@ class AppSettings extends ChangeNotifier {
 
   // ---- 다운로드 ----
   String? downloadDir; // null이면 기본 폴더
-  String? downloadServerId; // 설정 시 받은 뒤 이 서버로 업로드
+  String? downloadServerId; // Server or cloud account ID; upload after download.
   String? downloadServerDir;
   int maxConcurrentDownloads = 2;
   int hlsParallelSegments = 4;

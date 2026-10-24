@@ -43,7 +43,8 @@ class GoogleDriveBridge(private val activity: Activity, messenger: BinaryMesseng
             if (pending != null) { result.error("BUSY", "이미 Google 로그인 중입니다", null); return@setMethodCallHandler }
             val scopes = call.argument<List<String>>("scopes")
                 ?: listOf("https://www.googleapis.com/auth/drive.readonly")
-            val allowed = setOf("https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/drive.appdata")
+            val allowed = setOf("https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/drive.appdata",
+                "https://www.googleapis.com/auth/drive")
             if (scopes.isEmpty() || scopes.any { it !in allowed }) {
                 result.error("SCOPE", "지원하지 않는 Google 권한입니다", null)
                 return@setMethodCallHandler

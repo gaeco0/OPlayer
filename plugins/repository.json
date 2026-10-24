@@ -46,7 +46,7 @@
     {
       "id": "cloud.gdrive",
       "name": "Google Drive",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "kind": "resource",
       "capabilities": [
         "storage"
@@ -58,11 +58,12 @@
         "앱 기본 OAuth 등록",
         "폴더 탐색",
         "파일명 검색",
+        "대용량 분할 업로드",
         "미디어 재생"
       ],
-      "description": "앱 기본 OAuth 등록을 사용하는 Google Drive 연결·폴더 탐색·파일명 검색·미디어 재생",
+      "description": "앱 기본 OAuth 등록을 사용하는 Google Drive 읽기·쓰기·폴더 탐색·파일명 검색·미디어 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.gdrive.js",
-      "sha256": "1ca5bc22fb4d65dbad6263a67ee495232dbfbe8ede98a79ba9f08dc09edc8e8f",
+      "sha256": "64c3d261414f6e430d0cc0ef22bd07148db3b868e293dbbcc0829c987c7e40e7",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     },
     {
