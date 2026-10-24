@@ -114,6 +114,13 @@ void main() {
     final received = Completer<void>();
     final acknowledge = Completer<void>();
     server.listen((request) async {
+      if (request.method == 'PROPFIND') {
+        await request.drain<void>();
+        request.response.statusCode = 207;
+        request.response.write('<d:multistatus xmlns:d="DAV:"/>');
+        await request.response.close();
+        return;
+      }
       if (request.method == 'GET') gets++;
       if (request.method == 'PUT') puts++;
       expect(request.uri.path, '/backup/video.mp4');

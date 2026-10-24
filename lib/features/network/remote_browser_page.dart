@@ -19,6 +19,7 @@ import '../browser/playlists_page.dart';
 import '../player/player_screen.dart';
 import '../photos/photo_viewer.dart';
 import '../web/download_manager.dart';
+import '../web/download_name_dialog.dart';
 
 /// SMB / FTP / WebDAV / DLNA / 클라우드 공용 폴더 브라우저
 class RemoteBrowserPage extends StatefulWidget {
@@ -352,12 +353,19 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
 
   Future<void> _download(RemoteEntry entry) async {
     try {
+      final fileName = await askDownloadName(context, initialName: resourceDownloadName(entry.name), resource: true);
+      if (fileName == null || !mounted) return;
       final manager = DownloadManager.instance;
-      await manager.addResource(widget.source, entry);
+      await manager.addResource(
+        widget.source,
+        entry,
+        fileName: fileName.name,
+        overwriteTarget: fileName.overwriteTarget,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${entry.name} 다운로드를 추가했습니다'),
+          content: Text('${fileName.name} 다운로드를 추가했습니다'),
           action: SnackBarAction(label: '다운로드 보기', onPressed: manager.openDownloads),
         ),
       );

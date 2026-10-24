@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/ffmpeg.dart';
 import '../../core/settings.dart';
+import '../../core/media_utils.dart';
 import '../../core/resource_locks.dart';
 import '../../sources/server_store.dart';
 import '../../sources/source_registry.dart';
@@ -30,6 +31,8 @@ class DownloadTask {
     required this.url,
     required this.fileName,
     required this.kind,
+    this.preferredFileName,
+    this.overwriteTarget,
     this.headers = const {},
     this.hlsKeys = const {},
     this.hlsPlaylists = const {},
@@ -49,6 +52,8 @@ class DownloadTask {
   final RemoteEntry? resourceEntry;
   bool outputDone = false;
   String fileName;
+  String? preferredFileName;
+  final String? overwriteTarget;
   DownloadKind kind;
   final Map<String, String> headers;
 
@@ -103,6 +108,8 @@ class DownloadTask {
     'quality': outputQuality.name,
     'outputDone': outputDone,
     'name': fileName,
+    if (preferredFileName != null) 'preferredName': preferredFileName,
+    if (overwriteTarget != null) 'overwriteTarget': overwriteTarget,
     'kind': kind.index,
     'h': headers,
     'page': pageUrl,
@@ -142,6 +149,8 @@ class DownloadTask {
             orElse: () => OutputQuality.original,
           ),
           fileName: j['name'] as String,
+          preferredFileName: j['preferredName'] as String?,
+          overwriteTarget: j['overwriteTarget'] as String?,
           kind: DownloadKind.values[j['kind'] as int],
           headers: (j['h'] as Map?)?.cast<String, String>() ?? const {},
           pageUrl: j['page'] as String?,
@@ -282,6 +291,8 @@ class DownloadManager extends ChangeNotifier {
   DownloadTask add({
     required String url,
     required String title,
+    String? fileName,
+    String? overwriteTarget,
     Map<String, String> headers = const {},
     Map<String, Uint8List> hlsKeys = const {},
     Map<String, String> hlsPlaylists = const {},
@@ -291,11 +302,13 @@ class DownloadManager extends ChangeNotifier {
   }) {
     final isHls = hls ?? url.toLowerCase().contains('.m3u8');
     final quality = outputQuality ?? AppSettings.instance.outputQuality;
-    final ext = isHls ? (quality == OutputQuality.audio ? '.m4a' : '.mp4') : _extOf(url);
+    final name = suggestedFileName(url: url, title: fileName ?? title, hls: isHls, outputQuality: quality);
     final task = DownloadTask(
       id: DateTime.now().microsecondsSinceEpoch.toRadixString(36),
       url: url,
-      fileName: _safeName(title) + ext,
+      fileName: name,
+      preferredFileName: fileName == null ? null : name,
+      overwriteTarget: overwriteTarget,
       kind: isHls ? DownloadKind.hls : DownloadKind.direct,
       headers: headers,
       hlsKeys: Map.of(hlsKeys),
@@ -402,14 +415,21 @@ class DownloadManager extends ChangeNotifier {
 
   /// A resource file is copied byte-for-byte to the device, independent of the
   /// browser's transcoding preset and remote upload destination.
-  Future<DownloadTask> addResource(MediaSource source, RemoteEntry entry) async {
+  Future<DownloadTask> addResource(
+    MediaSource source,
+    RemoteEntry entry, {
+    String? fileName,
+    String? overwriteTarget,
+  }) async {
     if (entry.isDir) throw UnsupportedError('파일을 선택해 주세요. 폴더 다운로드는 지원하지 않습니다');
     await ResourceLocks.instance.requireAccess(source.keyFor(entry.path));
     await ResourceLocks.instance.requireAccess(downloadsResourceKey);
     final task = DownloadTask(
       id: DateTime.now().microsecondsSinceEpoch.toRadixString(36),
       url: source.keyFor(entry.path),
-      fileName: resourceDownloadName(entry.name),
+      fileName: resourceDownloadName(fileName ?? entry.name),
+      preferredFileName: fileName == null ? null : resourceDownloadName(fileName),
+      overwriteTarget: overwriteTarget,
       kind: DownloadKind.resource,
       resourceSourceId: source.id,
       resourceScheme: source.scheme,
@@ -455,6 +475,7 @@ class DownloadManager extends ChangeNotifier {
     final client = IOClient(NetworkService.instance.createHttpClient(browser: t.kind != DownloadKind.resource));
     _clients[t.id] = client;
     String? reservedPath;
+    String? overwriteReservation;
     try {
       // Establish Android foreground priority before the first request or file write.
       await _foreground?.update(downloadNotificationState(tasks));
@@ -469,7 +490,13 @@ class DownloadManager extends ChangeNotifier {
         await _requireDestinationAccess(t.localDirectory ?? (await downloadDir()).path);
       }
       // 원격 저장이면 앱 캐시에 받은 뒤 업로드하고 지운다
-      final dir = t.isRemote ? await _pendingUploadDir() : await _localDirectory(t);
+      final saveDirectory = t.isRemote ? null : await _localDirectory(t);
+      if (saveDirectory != null && t.overwriteTarget == resourceKey(p.join(saveDirectory.path, t.fileName))) {
+        final key = _reservationKey(t.overwriteTarget!);
+        if (!_reservedPaths.add(key)) throw StateError('같은 파일로 다운로드 중입니다');
+        overwriteReservation = key;
+      }
+      final dir = t.isRemote || t.overwriteTarget != null ? await _pendingUploadDir() : saveDirectory!;
       t.savePath ??= await _uniquePath(dir, t.fileName, reserve: true);
       reservedPath = t.savePath;
       _reservedPaths.add(_reservationKey(reservedPath!));
@@ -500,10 +527,11 @@ class DownloadManager extends ChangeNotifier {
         await _convertTask(t);
       }
       _check(t);
+      await _applyPreferredName(t, reservedPath);
       if (t.isRemote) {
         await _upload(t);
       } else {
-        await _saveLocally(t, dir);
+        await _saveLocally(t, saveDirectory!);
       }
       _check(t);
       t.status = DownloadStatus.done;
@@ -538,6 +566,7 @@ class DownloadManager extends ChangeNotifier {
       }
       _running.remove(t.id);
       if (reservedPath != null) _reservedPaths.remove(_reservationKey(reservedPath));
+      if (overwriteReservation != null) _reservedPaths.remove(overwriteReservation);
       if (t.savePath != null) _reservedPaths.remove(_reservationKey(t.savePath!));
       _resourceCancellation.remove(t.id);
       _resourceFinished.remove(t.id)?.complete();
@@ -555,12 +584,53 @@ class DownloadManager extends ChangeNotifier {
     return Directory(task.localDirectory!).create(recursive: true);
   }
 
+  Future<({String key, bool exists, bool directory, bool busy})> inspectFileName(
+    String name, {
+    required bool resource,
+  }) async {
+    name = resourceDownloadName(name);
+    final settings = AppSettings.instance;
+    final server = resource || settings.downloadServerId == null
+        ? null
+        : ServerStore.instance.server(settings.downloadServerId!);
+    if (server != null) {
+      final source = await SourceRegistry.instance.forServer(server);
+      if (!source.canUpload) throw UnsupportedError('이 저장소는 업로드를 지원하지 않습니다');
+      final directory = settings.downloadServerDir ?? '/';
+      final key = resourceKey(source.keyFor(MediaSource.joinRemote(directory, name)));
+      await ResourceLocks.instance.requireAccess(source.keyFor(directory));
+      await ResourceLocks.instance.requireAccess(key);
+      final entries = await source.list(directory);
+      final entry = entries.where((e) => e.name.toLowerCase() == name.toLowerCase()).firstOrNull;
+      final busy = tasks.any(
+        (t) =>
+            [DownloadStatus.running, DownloadStatus.queued].contains(t.status) &&
+            t.remoteServerId == server.id &&
+            resourceKey(source.keyFor(MediaSource.joinRemote(t.remoteDir ?? '/', t.preferredFileName ?? t.fileName))) ==
+                key,
+      );
+      return (key: key, exists: entry != null, directory: entry?.isDir ?? false, busy: busy);
+    }
+    final path = p.join((await downloadDir()).path, name);
+    await ResourceLocks.instance.requireAccess(path);
+    final type = await FileSystemEntity.type(path, followLinks: false);
+    return (
+      key: resourceKey(path),
+      exists: type != FileSystemEntityType.notFound,
+      directory: type == FileSystemEntityType.directory,
+      busy: _reservedPaths.contains(_reservationKey(path)) || await File('$path.part').exists(),
+    );
+  }
+
   Future<void> _saveLocally(DownloadTask task, Directory directory) async {
     final original = File(task.savePath!);
     if (p.equals(original.parent.absolute.path, directory.absolute.path)) return;
     await _requireDestinationAccess(original.path);
     _check(task);
-    final output = await _uniquePath(directory, task.fileName, reserve: true);
+    final desired = p.join(directory.path, task.fileName);
+    final overwrite = task.overwriteTarget == resourceKey(desired);
+    if (overwrite) await _requireDestinationAccess(desired);
+    final output = overwrite ? desired : await _uniquePath(directory, task.fileName, reserve: true);
     Directory? stagingDirectory;
     task
       ..moving = true
@@ -590,7 +660,11 @@ class DownloadManager extends ChangeNotifier {
       _check(task);
       if (await staging.length() != task.total) throw const FileSystemException('파일을 끝까지 복사하지 못했습니다');
       // A late name collision must preserve both files, too.
-      final target = await File(output).exists() ? await _uniquePath(directory, task.fileName, reserve: true) : output;
+      if (overwrite) await _requireDestinationAccess(output);
+      final target = !overwrite && await File(output).exists()
+          ? await _uniquePath(directory, task.fileName, reserve: true)
+          : output;
+      await _requireDestinationAccess(target);
       await staging.rename(target);
       task.savePath = target;
       task.fileName = p.basename(target);
@@ -606,6 +680,41 @@ class DownloadManager extends ChangeNotifier {
       _reservedPaths.remove(_reservationKey(output));
       if (stagingDirectory != null && await stagingDirectory.exists()) await stagingDirectory.delete(recursive: true);
     }
+  }
+
+  Future<void> _applyPreferredName(DownloadTask task, String? reservedPath) async {
+    final preferred = task.preferredFileName;
+    if (preferred == null) return;
+    final original = File(task.savePath!);
+    final name = task.kind == DownloadKind.resource
+        ? resourceDownloadName(preferred)
+        : browserDownloadName(preferred, p.extension(original.path));
+    if (task.isRemote || task.overwriteTarget != null) {
+      task.fileName = name;
+      task.preferredFileName = null;
+      _changed(immediate: true);
+      return;
+    }
+    if (p.basename(original.path) != name) {
+      final target = await _uniquePath(
+        original.parent,
+        name,
+        reserve: true,
+        reservationOwner: reservedPath,
+        currentFile: original.path,
+      );
+      try {
+        _check(task);
+        if (!p.equals(original.path, target)) await original.rename(target);
+        task.savePath = target;
+      } catch (_) {
+        _reservedPaths.remove(_reservationKey(target));
+        rethrow;
+      }
+    }
+    task.fileName = p.basename(task.savePath!);
+    task.preferredFileName = null;
+    _changed(immediate: true);
   }
 
   Future<void> _resource(DownloadTask task) async {
@@ -794,6 +903,24 @@ class DownloadManager extends ChangeNotifier {
     if (cfg == null) throw '저장할 서버가 삭제되었습니다';
     final src = await SourceRegistry.instance.forServer(cfg, authorizedUpload: true);
     if (!src.canUpload) throw '${cfg.name}은(는) 업로드를 지원하지 않습니다';
+    final directory = t.remoteDir ?? '/';
+    final entries = await src.list(directory);
+    var uploadName = t.fileName;
+    final targetKey = resourceKey(src.keyFor(MediaSource.joinRemote(directory, uploadName)));
+    final overwrite = t.overwriteTarget == targetKey;
+    if (overwrite) {
+      await _requireDestinationAccess(targetKey);
+      if (entries.any((e) => e.name.toLowerCase() == uploadName.toLowerCase() && e.isDir)) {
+        throw StateError('같은 이름의 폴더를 덮어쓸 수 없습니다');
+      }
+    } else {
+      final existing = entries.map((e) => e.name.toLowerCase()).toSet();
+      final base = p.basenameWithoutExtension(uploadName), extension = p.extension(uploadName);
+      for (var n = 1; existing.contains(uploadName.toLowerCase()); n++) {
+        uploadName = '$base ($n)$extension';
+      }
+    }
+    await _requireDestinationAccess(src.keyFor(MediaSource.joinRemote(directory, uploadName)));
     final local = File(t.savePath!);
     final size = await local.length();
     _check(t);
@@ -811,8 +938,8 @@ class DownloadManager extends ChangeNotifier {
     _uploadCancellation[t.id] = cancellation;
     final remotePath = await src.upload(
       local,
-      t.remoteDir ?? '/',
-      p.basename(t.savePath!),
+      directory,
+      uploadName,
       cancelled: cancellation.future,
       onProgress: (sent) {
         _check(t);
@@ -839,6 +966,7 @@ class DownloadManager extends ChangeNotifier {
     );
     _check(t);
     t.remoteKey = src.keyFor(remotePath);
+    t.fileName = uploadName;
     t.note = '${cfg.name}:$remotePath에 저장됨';
     t.received = size;
     try {
@@ -1125,17 +1253,41 @@ class DownloadManager extends ChangeNotifier {
     return t.length > 120 ? t.substring(0, 120) : t;
   }
 
-  String _reservationKey(String path) => Platform.isWindows ? p.normalize(path).toLowerCase() : path;
+  static String suggestedFileName({
+    required String url,
+    required String title,
+    required bool hls,
+    required OutputQuality outputQuality,
+  }) {
+    final extension = outputQuality == OutputQuality.audio
+        ? '.m4a'
+        : hls || outputQuality != OutputQuality.original
+        ? '.mp4'
+        : _extOf(url);
+    return browserDownloadName(_safeName(title), extension);
+  }
 
-  Future<String> _uniquePath(Directory dir, String name, {bool reserve = false}) async {
+  String _reservationKey(String path) => resourceKey(path);
+
+  Future<String> _uniquePath(
+    Directory dir,
+    String name, {
+    bool reserve = false,
+    String? reservationOwner,
+    String? currentFile,
+  }) async {
     final base = p.basenameWithoutExtension(name), ext = p.extension(name);
+    final ownedKey = reservationOwner == null ? null : _reservationKey(reservationOwner);
+    final currentKey = currentFile == null ? null : _reservationKey(currentFile);
     var candidate = p.join(dir.path, name);
     var i = 1;
-    while (await File(candidate).exists() ||
+    while ((_reservationKey(candidate) != currentKey && await File(candidate).exists()) ||
         await File('$candidate.part').exists() ||
-        (reserve
-            ? !_reservedPaths.add(_reservationKey(candidate))
-            : _reservedPaths.contains(_reservationKey(candidate)))) {
+        (_reservationKey(candidate) != ownedKey &&
+            _reservationKey(candidate) != currentKey &&
+            (reserve
+                ? !_reservedPaths.add(_reservationKey(candidate))
+                : _reservedPaths.contains(_reservationKey(candidate))))) {
       candidate = p.join(dir.path, '$base ($i)$ext');
       i++;
     }
@@ -1180,6 +1332,15 @@ String resourceDownloadName(String name) {
   final extension = clip(p.extension(safe), 30);
   if (RegExp(r'^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$', caseSensitive: false).hasMatch(base)) base = '_$base';
   return '${clip(base, 200)}$extension';
+}
+
+String browserDownloadName(String name, String extension) {
+  final safe = resourceDownloadName(name);
+  final previous = p.extension(safe).toLowerCase();
+  final stem = {...videoExtensions, ...audioExtensions, '.m3u8'}.contains(previous)
+      ? p.basenameWithoutExtension(safe)
+      : safe;
+  return resourceDownloadName('$stem$extension');
 }
 
 Map<String, Object?> downloadNotificationState(List<DownloadTask> tasks) {

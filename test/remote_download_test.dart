@@ -213,6 +213,12 @@ void main() {
       expect(await File(first.savePath!).readAsBytes(), [1, 2, 3, 4, 5, 6]);
       expect(await File(second.savePath!).readAsBytes(), [1, 2, 3, 4, 5, 6]);
       expect(await File('${dir.path}/movie.srt').readAsString(), 'keep-existing');
+      final renamed = await manager.addResource(source, entry, fileName: 'my subtitles.srt');
+      await _settled(renamed);
+      expect(renamed.status, DownloadStatus.done, reason: renamed.error);
+      expect(renamed.fileName, 'my subtitles.srt');
+      expect(renamed.resourceEntry!.path, entry.path);
+      expect(await File(renamed.savePath!).readAsBytes(), [1, 2, 3, 4, 5, 6]);
       final restored = DownloadTask.fromJson(jsonDecode(jsonEncode(first.toJson())));
       expect(restored.kind, DownloadKind.resource);
       expect(restored.resourceEntry!.path, entry.path);

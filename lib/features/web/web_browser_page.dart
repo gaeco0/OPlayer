@@ -17,6 +17,7 @@ import '../../core/media_utils.dart';
 import '../../core/mouse_nav.dart';
 import '../../core/media_item.dart';
 import '../browser/home_screen.dart';
+import 'download_name_dialog.dart';
 import '../player/player_screen.dart';
 import 'download_manager.dart';
 import 'browser_interactions.dart';
@@ -1185,6 +1186,17 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                                                     ),
                                                   );
                                                   if (quality == null) return;
+                                                  if (!mounted || !c.mounted) return;
+                                                  final fileName = await askDownloadName(
+                                                    context,
+                                                    initialName: DownloadManager.suggestedFileName(
+                                                      url: m.url,
+                                                      title: m.pageTitle.isEmpty ? m.label : m.pageTitle,
+                                                      hls: m.kind == MediaKind.hls,
+                                                      outputQuality: quality,
+                                                    ),
+                                                  );
+                                                  if (fileName == null || !mounted || !c.mounted) return;
                                                   final resolved = await _resolvePluginMedia(m);
                                                   if (resolved.kind == MediaKind.hls) {
                                                     await _prepareDownloadKeys(resolved);
@@ -1196,6 +1208,8 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                                                   DownloadManager.instance.add(
                                                     url: resolved.url,
                                                     title: m.pageTitle.isEmpty ? m.label : m.pageTitle,
+                                                    fileName: fileName.name,
+                                                    overwriteTarget: fileName.overwriteTarget,
                                                     headers: h,
                                                     hlsKeys: _hlsKeys,
                                                     hlsPlaylists: _hlsPlaylists,
