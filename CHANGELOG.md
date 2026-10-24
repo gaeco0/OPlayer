@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+- Google OAuth 브랜딩에 사용할 공개 홈페이지·개인정보처리방침·이용약관을 GitHub Pages로 게시했습니다. 실제 앱의 기기 저장·Google 동기화/Drive 읽기·쓰기·외부 서비스·확장앱·보관/삭제 방법과 Limited Use 원칙을 문서화하고 120px 로고를 제공합니다.
+
 ## [0.1.7-nightly.20261024.4]
 
 Google 계정 동기화, Drive 읽기·쓰기 업로드, 운영자 OAuth 등록값 적용, OS 볼륨 연동과 리소스 검색을 추가한 nightly입니다. 내부 빌드 번호 `+2`, 기존 Android 배포 서명과 업데이트 확인 기본 채널 stable을 유지합니다.
