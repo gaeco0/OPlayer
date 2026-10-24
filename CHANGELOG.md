@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+- Android 제조사 회전 호환 정책 제외 속성의 선언 위치를 `<activity>`에서 공식 규격의 `<application>`으로 수정하고 `PROPERTY_COMPAT_IGNORE_REQUESTED_ORIENTATION=false`도 적용했습니다. API 36 큰 화면 제한 제외 속성은 해당 Activity에 유지합니다. `.6`에서 추가한 앱 내부 회전 보정은 OS 방향을 바꾸지 못하므로 제거했습니다. 가로·세로 고정은 네이티브 화면 방향 요청을 사용하며 Fold6의 실제 시스템 회전 확인은 별도로 필요합니다.
+
 ## [0.1.7-nightly.20261024.6]
 
 Android가 고정 회전 요청을 무시할 때 플레이어 자체에서 방향을 보정하는 nightly입니다. 내부 빌드 번호 `+2`, Android ARM64 버전 코드 `2002`, 기존 배포 서명과 업데이트 확인 기본 채널 stable을 유지합니다.
