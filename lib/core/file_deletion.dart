@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 
 import 'resource_locks.dart';
+import 'resource_playback_store.dart';
 
 /// A folder cannot be used to bypass independently protected descendants.
 Future<void> authorizeDeletion(String resource, {required bool directory}) async {
@@ -36,4 +37,5 @@ Future<void> deleteLocalEntry(String path, {required String parent}) async {
     default:
       throw const FileSystemException('삭제할 항목이 존재하지 않습니다');
   }
+  await ResourcePlaybackStore.instance.forget(target, directory: type == FileSystemEntityType.directory);
 }

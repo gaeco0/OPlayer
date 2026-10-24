@@ -15,6 +15,7 @@ import '../browser/swipe_delete_tile.dart';
 import '../../core/file_deletion.dart';
 import '../../core/file_renaming.dart';
 import '../../core/playlist_store.dart';
+import '../../core/resource_playback_store.dart';
 import '../browser/file_actions.dart';
 import '../browser/playlists_page.dart';
 import '../player/player_screen.dart';
@@ -40,6 +41,13 @@ class _Crumb {
 }
 
 class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
+  String get _playbackResource => jsonEncode([widget.source.scheme, widget.source.id, widget.source.rootPath]);
+  bool _highlighted(String key, {bool folder = false}) =>
+      ResourcePlaybackStore.instance.highlighted(_playbackResource, key, folder: folder);
+  void _playbackChanged() {
+    if (mounted) setState(() {});
+  }
+
   late final List<_Crumb> _stack = [_Crumb(widget.source.rootPath, widget.source.rootTitle)];
   final _cache = <String, List<RemoteEntry>>{};
   List<RemoteEntry> _all = [];
@@ -159,11 +167,15 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
   @override
   void initState() {
     super.initState();
+    ResourcePlaybackStore.instance.addListener(_playbackChanged);
+    ResourceLocks.instance.addListener(_playbackChanged);
     _load();
   }
 
   @override
   void dispose() {
+    ResourcePlaybackStore.instance.removeListener(_playbackChanged);
+    ResourceLocks.instance.removeListener(_playbackChanged);
     _searchTimer?.cancel();
     _searchController.dispose();
     super.dispose();
@@ -263,7 +275,8 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
       return;
     }
     final videos = _items.where((x) => x.isPlayableMedia).toList();
-    final playlist = videos.map((v) => widget.source.itemFor(v, _all)).toList();
+    final folders = _stack.map((c) => widget.source.keyFor(c.path)).toList();
+    final playlist = videos.map((v) => widget.source.itemFor(v, _all).inResource(_playbackResource, folders)).toList();
     await Navigator.of(context).push(PlayerScreen.route(playlist, videos.indexOf(e)));
     if (mounted) setState(() {});
   }
@@ -274,6 +287,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
     await authorizeDeletion(source.keyFor(entry.path), directory: entry.isDir);
     try {
       await source.delete(entry);
+      await ResourcePlaybackStore.instance.forget(source.keyFor(entry.path), directory: entry.isDir);
     } finally {
       // A recursive deletion may partially succeed even when the server fails.
       _cache.clear();
@@ -317,6 +331,9 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
                           : _stack.length == 1
                           ? widget.source.displayName
                           : _stack.last.title,
+                      style: !_selecting && _highlighted(widget.source.keyFor(_stack.last.path), folder: true)
+                          ? TextStyle(color: lastPlayedColor(context))
+                          : null,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -325,7 +342,12 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
                         '/$crumbs',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 12, color: OColors.of(context).textSecondary),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _highlighted(widget.source.keyFor(_stack.last.path), folder: true)
+                              ? lastPlayedColor(context)
+                              : OColors.of(context).textSecondary,
+                        ),
                       ),
                   ],
                 ),
@@ -494,6 +516,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
       if (grid) {
         return VideoGridTile(
           resumeKey: key,
+          lastPlayed: _highlighted(key),
           name: e.name,
           size: e.size,
           thumbnailUrl: e.thumbnailUrl,
@@ -513,6 +536,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
       }
       return VideoListTile(
         resumeKey: key,
+        lastPlayed: _highlighted(key),
         name: e.name,
         size: e.size,
         modified: e.modified,
@@ -548,7 +572,12 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
         itemBuilder: (_, i) {
           final e = _items[i];
           final tile = e.isDir
-              ? FolderGridTile(name: e.name, resource: src.keyFor(e.path), onTap: () => _enter(e))
+              ? FolderGridTile(
+                  name: e.name,
+                  resource: src.keyFor(e.path),
+                  lastPlayed: _highlighted(src.keyFor(e.path), folder: true),
+                  onTap: () => _enter(e),
+                )
               : fileTile(e, grid: true);
           return _wrap(e, tile);
         },
@@ -562,7 +591,12 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
       itemBuilder: (_, i) {
         final e = _items[i];
         final tile = e.isDir
-            ? FolderListTile(name: e.name, resource: src.keyFor(e.path), onTap: () => _enter(e))
+            ? FolderListTile(
+                name: e.name,
+                resource: src.keyFor(e.path),
+                lastPlayed: _highlighted(src.keyFor(e.path), folder: true),
+                onTap: () => _enter(e),
+              )
             : fileTile(e, grid: false);
         return _wrap(e, tile);
       },

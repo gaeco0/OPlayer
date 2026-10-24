@@ -1,6 +1,13 @@
 import 'package:path/path.dart' as p;
 import 'resource_locks.dart';
 
+class PlaybackLocation {
+  const PlaybackLocation({required this.resource, required this.file, required this.folders});
+  final String resource;
+  final String file;
+  final List<String> folders;
+}
+
 /// 재생 가능한 항목 하나. 로컬 파일, 네트워크(SMB/FTP/WebDAV/DLNA), 클라우드, 웹 URL 모두 이 형태로 플레이어에 전달된다.
 class MediaItem {
   const MediaItem({
@@ -14,6 +21,7 @@ class MediaItem {
     this.browserMedia = false,
     this.onRelease,
     this.playbackErrors,
+    this.playbackLocation,
   });
 
   /// 이어보기/최근 재생 저장 키 (로컬은 경로, 원격은 "smb://서버ID/경로" 같은 고유값)
@@ -28,6 +36,21 @@ class MediaItem {
   final bool browserMedia;
   final Future<void> Function()? onRelease;
   final Stream<String>? playbackErrors;
+  final PlaybackLocation? playbackLocation;
+
+  MediaItem inResource(String resource, List<String> folders) => MediaItem(
+    key: key,
+    uri: uri,
+    title: title,
+    headers: headers,
+    subtitles: subtitles,
+    localPath: localPath,
+    resolver: resolver,
+    browserMedia: browserMedia,
+    onRelease: onRelease,
+    playbackErrors: playbackErrors,
+    playbackLocation: PlaybackLocation(resource: resource, file: key, folders: List.unmodifiable(folders)),
+  );
 
   /// 외부 자막 (uri, 표시이름)
   final List<SubtitleRef> subtitles;

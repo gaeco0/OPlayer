@@ -1,4 +1,5 @@
 import '../settings/resource_access_view.dart';
+import '../settings/issue_report_page.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -442,6 +443,13 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
           title: const Text('화면 회전 진단'),
           content: SingleChildScrollView(child: SelectableText(report)),
           actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => IssueReportPage(orientation: data)));
+              },
+              child: const Text('GitHub 이슈 보내기'),
+            ),
             TextButton(
               onPressed: () async {
                 await Clipboard.setData(ClipboardData(text: report));

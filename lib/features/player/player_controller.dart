@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/media_item.dart';
 import '../../core/media_utils.dart';
 import '../../core/resume_store.dart';
+import '../../core/resource_playback_store.dart';
 import '../../core/google_sync.dart';
 import '../../core/settings.dart';
 import '../../core/resource_locks.dart';
@@ -390,11 +391,13 @@ class PlayerController extends ChangeNotifier {
   bool fastForwarding = false;
 
   DateTime _lastSave = DateTime.fromMillisecondsSinceEpoch(0);
+  String? _markedPlayingKey;
 
   /// 이어보기 위치가 있으면 반환 (UI에서 "이어서 보기" 물어봄)
   Duration? pendingResume;
 
   Future<void> open({bool askResume = true}) async {
+    _markedPlayingKey = null;
     _playbackPermit = null;
     final generation = ++_openGeneration;
     _startWatchdog?.cancel();
@@ -663,6 +666,14 @@ class PlayerController extends ChangeNotifier {
   }
 
   void _onPosition(Duration pos) {
+    if (!preparing &&
+        error == null &&
+        player.state.playing &&
+        pos > Duration.zero &&
+        _markedPlayingKey != current.key) {
+      _markedPlayingKey = current.key;
+      unawaited(ResourcePlaybackStore.instance.record(current).catchError((Object _) {}));
+    }
     if (pos > Duration.zero) _startWatchdog?.cancel();
     // A-B 반복
     if (abA != null && abB != null && pos >= abB!) {
