@@ -30,6 +30,97 @@ void main() {
     }
   });
 
+  test(
+    'Google Drive plugin receives the account registration and uses native authenticated listing and refresh',
+    () async {
+      const boundId = 'bound-drive.apps.googleusercontent.com';
+      var script = await File('plugins/cloud.gdrive.js').readAsString();
+      script +=
+          '''
+      const originalList = plugin.list;
+      plugin.list = function(input) {
+        if (OPlayer.config.clientId !== '$boundId') throw Error('Wrong account registration');
+        if (OPlayer.config.accessToken || OPlayer.config.refreshToken || OPlayer.config.clientSecret ||
+            OPlayer.app.googleOAuth.clientSecret) throw Error('Exposed credentials');
+        return originalList(input);
+      };
+    ''';
+      await store.load(script);
+      await store.setOAuthClientId('cloud.gdrive', 'new-default.apps.googleusercontent.com');
+      await SecureStore.instance.writeRequired(
+        PluginStore.oauthSecretKey('cloud.gdrive', boundId),
+        'drive-test-secret',
+      );
+      final account = CloudAccount(
+        id: 'google-drive-test',
+        provider: CloudProvider.gdrive,
+        name: 'Drive',
+        oauthClientId: boundId,
+      );
+      final source = cloudSourceFor(account);
+      addTearDown(source.close);
+      expect(source.tokens.client.scopes, ['https://www.googleapis.com/auth/drive.readonly']);
+      await source.tokens.save(
+        OAuthTokens(
+          accessToken: 'old-drive-token',
+          refreshToken: 'drive-refresh',
+          expiry: DateTime.now().add(const Duration(hours: 1)),
+        ),
+      );
+      var lists = 0, refreshes = 0;
+      await http.runWithClient(
+        () async {
+          expect(await source.accountName(), 'drive@example.com');
+          final rows = await source.list('root');
+          expect(rows.map((r) => r.name), ['movie.mp4', 'subfolder']);
+          expect(rows.first.path, 'video-id');
+          expect(rows.last.isDir, true);
+          final stream = await source.streamFor('video-id');
+          expect(stream.url, 'https://www.googleapis.com/drive/v3/files/video-id?alt=media&supportsAllDrives=true');
+          expect(stream.headers, {'Authorization': 'Bearer new-drive-token'});
+          expect(lists, 3);
+          expect(refreshes, 1);
+        },
+        () => MockClient((request) async {
+          expect(request.followRedirects, false);
+          if (request.url.host == 'oauth2.googleapis.com') {
+            refreshes++;
+            expect(request.bodyFields, {
+              'client_id': boundId,
+              'client_secret': 'drive-test-secret',
+              'grant_type': 'refresh_token',
+              'refresh_token': 'drive-refresh',
+            });
+            return http.Response('{"access_token":"new-drive-token","expires_in":3600}', 200);
+          }
+          expect(request.url.host, 'www.googleapis.com');
+          if (request.url.path.endsWith('/about')) {
+            expect(request.headers['Authorization'], 'Bearer old-drive-token');
+            return http.Response('{"user":{"emailAddress":"drive@example.com"}}', 200);
+          }
+          lists++;
+          expect(request.url.queryParameters['q'], "'root' in parents and trashed=false");
+          if (lists == 1) {
+            expect(request.headers['Authorization'], 'Bearer old-drive-token');
+            return http.Response('{"error":"expired"}', 401);
+          }
+          expect(request.headers['Authorization'], 'Bearer new-drive-token');
+          if (request.url.queryParameters['pageToken'] == null) {
+            return http.Response(
+              '{"nextPageToken":"next-page","files":[{"id":"video-id","name":"movie.mp4","mimeType":"video/mp4","size":"123"}]}',
+              200,
+            );
+          }
+          expect(request.url.queryParameters['pageToken'], 'next-page');
+          return http.Response(
+            '{"files":[{"id":"folder-id","name":"subfolder","mimeType":"application/vnd.google-apps.folder"}]}',
+            200,
+          );
+        }),
+      );
+    },
+  );
+
   test('SigV4 matches the published AWS example and encodes paths, queries and session tokens', () {
     // Public example credentials, NOT an account credential:
     // https://docs.aws.amazon.com/AmazonS3/latest/developerguide/sigv4-query-string-auth.html
