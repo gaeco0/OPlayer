@@ -55,14 +55,14 @@ class DownloadTask {
   String? preferredFileName;
   final String? overwriteTarget;
   DownloadKind kind;
-  final Map<String, String> headers;
+  Map<String, String> headers;
 
   /// Keys resolved by the page's own HLS loader. Kept in memory only.
-  final Map<String, Uint8List> hlsKeys;
+  Map<String, Uint8List> hlsKeys;
 
   /// Preserve the signed key/segment URLs issued to the browser session.
-  final Map<String, String> hlsPlaylists;
-  final String? pageUrl;
+  Map<String, String> hlsPlaylists;
+  String? pageUrl;
   final DateTime createdAt;
 
   DownloadStatus status = DownloadStatus.queued;
@@ -206,6 +206,15 @@ class DownloadManager extends ChangeNotifier {
   final _reservedPaths = <String>{};
   final _clients = <String, http.Client>{};
   final _browserClients = <http.Client, BrowserDownloadTransport>{};
+
+  String _newTaskId() {
+    var value = DateTime.now().microsecondsSinceEpoch;
+    while (tasks.any((task) => task.id == value.toRadixString(36))) {
+      value++;
+    }
+    return value.toRadixString(36);
+  }
+
   late SharedPreferences _prefs;
   Timer? _notifyTimer;
   DownloadForeground? _foreground;
@@ -303,23 +312,56 @@ class DownloadManager extends ChangeNotifier {
     final isHls = hls ?? url.toLowerCase().contains('.m3u8');
     final quality = outputQuality ?? AppSettings.instance.outputQuality;
     final name = suggestedFileName(url: url, title: fileName ?? title, hls: isHls, outputQuality: quality);
+    final st = AppSettings.instance;
+    final destination =
+        st.downloadServerId != null &&
+            (ServerStore.instance.server(st.downloadServerId!) != null ||
+                ServerStore.instance.account(st.downloadServerId!) != null)
+        ? st.downloadServerId
+        : null;
+    // Reuse the task ID (and its segment cache), but replace expired session data.
+    final previous = isHls
+        ? tasks
+              .where(
+                (t) =>
+                    t.kind == DownloadKind.hls &&
+                    t.url == url &&
+                    (t.preferredFileName ?? t.fileName) == name &&
+                    t.outputQuality == quality &&
+                    t.overwriteTarget == overwriteTarget &&
+                    t.remoteServerId == destination &&
+                    (destination == null || t.remoteDir == (st.downloadServerDir ?? '/')) &&
+                    !t.localDone &&
+                    !_running.contains(t.id) &&
+                    [DownloadStatus.failed, DownloadStatus.paused].contains(t.status),
+              )
+              .firstOrNull
+        : null;
+    if (previous != null) {
+      previous
+        ..headers = Map.of(headers)
+        ..hlsKeys = Map.of(hlsKeys)
+        ..hlsPlaylists = Map.of(hlsPlaylists)
+        ..pageUrl = pageUrl
+        ..speed = 0
+        ..phase = '기존 조각 확인 중';
+      resume(previous);
+      return previous;
+    }
     final task = DownloadTask(
-      id: DateTime.now().microsecondsSinceEpoch.toRadixString(36),
+      id: _newTaskId(),
       url: url,
       fileName: name,
       preferredFileName: fileName == null ? null : name,
       overwriteTarget: overwriteTarget,
       kind: isHls ? DownloadKind.hls : DownloadKind.direct,
-      headers: headers,
+      headers: Map.of(headers),
       hlsKeys: Map.of(hlsKeys),
       hlsPlaylists: Map.of(hlsPlaylists),
       pageUrl: pageUrl,
       outputQuality: quality,
     );
-    final st = AppSettings.instance;
-    if (st.downloadServerId != null &&
-        (ServerStore.instance.server(st.downloadServerId!) != null ||
-            ServerStore.instance.account(st.downloadServerId!) != null)) {
+    if (destination != null) {
       task
         ..remoteServerId = st.downloadServerId
         ..remoteDir = st.downloadServerDir ?? '/';
@@ -425,7 +467,7 @@ class DownloadManager extends ChangeNotifier {
     await ResourceLocks.instance.requireAccess(source.keyFor(entry.path));
     await ResourceLocks.instance.requireAccess(downloadsResourceKey);
     final task = DownloadTask(
-      id: DateTime.now().microsecondsSinceEpoch.toRadixString(36),
+      id: _newTaskId(),
       url: source.keyFor(entry.path),
       fileName: resourceDownloadName(fileName ?? entry.name),
       preferredFileName: fileName == null ? null : resourceDownloadName(fileName),
@@ -1099,6 +1141,36 @@ class DownloadManager extends ChangeNotifier {
     }
 
     final tmp = await _tempDir(t);
+    // Index alone is not an identity: a refreshed/live playlist may contain other
+    // segments at the same offsets. Legacy caches without this manifest restart.
+    final manifest = File(p.join(tmp.path, 'segments.json'));
+    final identity = jsonEncode([
+      for (final pl in tracks)
+        [
+          pl.initSegment?.toString(),
+          pl.totalDuration,
+          for (final s in pl.segments)
+            [
+              s.uri.toString(),
+              s.sequence,
+              s.byteRange?.$1,
+              s.byteRange?.$2,
+              s.key?.method,
+              s.key?.uri?.toString(),
+              s.key?.iv == null ? null : base64Encode(s.key!.iv!),
+            ],
+        ],
+    ]);
+    if (!await manifest.exists() || await manifest.readAsString() != identity) {
+      for (final name in ['v', 'a']) {
+        final directory = Directory(p.join(tmp.path, name));
+        if (!await directory.exists()) continue;
+        await for (final entry in directory.list(followLinks: false)) {
+          if (entry is File && ['.seg', '.tmp'].contains(p.extension(entry.path))) await entry.delete();
+        }
+      }
+      await manifest.writeAsString(identity, flush: true);
+    }
     final keys = <Uri, Uint8List>{};
     Future<Uint8List> keyFor(Uri u) async =>
         keys[u] ??= t.hlsKeys[u.toString()] ?? Hls.parseAes128Key(await _get(client, u, t.headers));
@@ -1114,8 +1186,15 @@ class DownloadManager extends ChangeNotifier {
     }
     t.total = jobs.length;
     t.done = 0;
+    t.received = 0;
     for (final (track, i, _) in jobs) {
-      if (await File(segPath(track, i)).exists()) t.done++;
+      final file = File(segPath(track, i));
+      if (await file.exists() && await file.length() > 0) {
+        t.done++;
+        t.received += await file.length();
+      } else if (await file.exists()) {
+        await file.delete();
+      }
     }
     t.phase = audio == null ? '조각 받는 중' : '영상·음성 조각 받는 중';
     _changed(immediate: true);
