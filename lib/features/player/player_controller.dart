@@ -60,6 +60,19 @@ bool audioOnlyTracks(Tracks tracks) {
 bool backgroundPlaybackAllowed({required bool android, required bool audioOnly, required bool enabled}) =>
     enabled || (android && audioOnly);
 
+/// Bitmap codecs require native OSD: their subtitle text stream is empty.
+bool bitmapSubtitle(SubtitleTrack track) =>
+    track.id != 'no' &&
+    const {
+      'hdmv_pgs_subtitle',
+      'pgssub',
+      'dvd_subtitle',
+      'dvdsub',
+      'dvb_subtitle',
+      'dvbsub',
+      'xsub',
+    }.contains(track.codec?.toLowerCase());
+
 /// 플레이어 상태 전체. UI는 이 컨트롤러와 media_kit 스트림만 바라본다.
 class PlayerController extends ChangeNotifier {
   PlayerController({
@@ -91,6 +104,7 @@ class PlayerController extends ChangeNotifier {
       player.stream.videoParams.listen((_) => _queueUpscaling()),
       player.stream.position.listen(_onPosition),
       player.stream.tracks.listen((_) {
+        unawaited(_refreshSubtitleRendering());
         notifyListeners();
         final audio = audioOnly;
         if (_lastAudioOnly != audio) {
@@ -98,6 +112,7 @@ class PlayerController extends ChangeNotifier {
           if (!preparing) unawaited(_refreshInterpolation());
         }
       }),
+      player.stream.track.listen((_) => unawaited(_refreshSubtitleRendering())),
       player.stream.completed.listen((done) {
         if (done) _onCompleted();
       }),
@@ -657,7 +672,13 @@ class PlayerController extends ChangeNotifier {
   Future<bool> _externalSubtitleSelected(String uri, String title) async {
     final native = player.platform;
     if (native is! NativePlayer) return true;
-    final tracks = jsonDecode(await native.getProperty('track-list')) as List;
+    List<dynamic> tracks;
+    try {
+      tracks = jsonDecode(await native.getProperty('track-list')) as List;
+    } catch (_) {
+      return false;
+    }
+    if (_disposed) return false;
     return tracks.any((t) {
       if (t['type'] != 'sub' || t['external'] != true || t['selected'] != true || t['title'] != title) return false;
       final file = t['external-filename'] as String?;
@@ -690,6 +711,30 @@ class PlayerController extends ChangeNotifier {
     _subtitleLoad++;
     _cancelOnlineSubtitle();
     return player.setSubtitleTrack(track);
+  }
+
+  // Flutter renders text subtitles; bitmap subtitles have no sub-text to draw.
+  // Keep native OSD enabled only for those tracks to avoid duplicate text.
+  Future<void> _refreshSubtitleRendering() async {
+    final native = player.platform;
+    if (_disposed || native is! NativePlayer) return;
+    // External track state may contain only a URI, without its decoder/codec.
+    List<dynamic> tracks;
+    try {
+      tracks = jsonDecode(await native.getProperty('track-list')) as List;
+    } catch (_) {
+      return; // The player may have closed while the property read was pending.
+    }
+    if (_disposed) return;
+    final bitmap = tracks.any(
+      (t) =>
+          t['type'] == 'sub' &&
+          t['selected'] == true &&
+          bitmapSubtitle(SubtitleTrack('${t['id']}', null, null, codec: t['codec'] as String?)),
+    );
+    await _nativeProperty('sub-visibility', bitmap ? 'yes' : 'no');
+    await _nativeProperty('sub-scale', '$subtitleScale');
+    await _nativeProperty('sub-pos', '${((1 - subtitleBottom) * 100).round()}');
   }
 
   Future<void> selectExternalSubtitle(SubtitleRef subtitle) {
@@ -988,9 +1033,10 @@ class PlayerController extends ChangeNotifier {
     await _savePlaybackSettings();
   }
 
-  /// 자막은 media_kit_video의 Flutter SubtitleView가 그리므로 폰트 배율만 상태로 둔다.
+  /// Text uses Flutter styling; bitmap tracks apply scale to native OSD too.
   void setSubtitleScale(double s) {
     subtitleScale = s.clamp(0.5, 3.0);
+    unawaited(_refreshSubtitleRendering());
     notifyListeners();
     _savePlaybackSettings();
   }
@@ -1050,6 +1096,7 @@ class PlayerController extends ChangeNotifier {
 
   void setSubtitleBottom(double value) {
     subtitleBottom = value.clamp(0, 0.8);
+    unawaited(_refreshSubtitleRendering());
     _savePlaybackSettings();
     notifyListeners();
   }
@@ -1162,6 +1209,7 @@ class PlayerController extends ChangeNotifier {
     await _applyAudioFilters();
     await _nativeProperty('audio-delay', '${audioDelay.inMilliseconds / 1000}');
     await _nativeProperty('sub-delay', '${subtitleDelay.inMilliseconds / 1000}');
+    await _refreshSubtitleRendering();
     await _nativeProperty('video-rotate', '$videoRotation');
     await _nativeProperty('vf', [if (flipHorizontal) 'hflip', if (flipVertical) 'vflip'].join(','));
     await _nativeProperty('brightness', '$videoBrightness');

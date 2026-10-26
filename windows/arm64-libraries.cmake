@@ -1,5 +1,5 @@
 # Architecture-specific binaries for media_kit's Windows ARM64 renderer.
-# Keep x64 dependencies unchanged. Sources and licenses: third_party/angle-arm64.
+# Sources and licenses: third_party/angle-arm64 and third_party/libmpv.
 function(oplayer_verified_download url hash destination)
   if(EXISTS "${destination}")
     file(SHA256 "${destination}" actual)
@@ -10,13 +10,7 @@ function(oplayer_verified_download url hash destination)
   file(DOWNLOAD "${url}" "${destination}" EXPECTED_HASH "SHA256=${hash}" TLS_VERIFY ON)
 endfunction()
 
-set(LIBMPV_SRC "${CMAKE_BINARY_DIR}/libmpv")
-set(mpv_archive "${CMAKE_BINARY_DIR}/mpv-arm64.7z")
-oplayer_verified_download(
-  "https://github.com/media-kit/libmpv-win32-video-cmake/releases/download/20241021/mpv-dev-aarch64-20241021-git-0f78584.7z"
-  "d445d02ab2ee60b1b5988f08ce4d2394cdcc594e98321b746a313313e96133ae" "${mpv_archive}")
-file(ARCHIVE_EXTRACT INPUT "${mpv_archive}" DESTINATION "${LIBMPV_SRC}")
-file(COPY "${LIBMPV_SRC}/include/mpv/" DESTINATION "${LIBMPV_SRC}/include")
+include("${CMAKE_SOURCE_DIR}/mpv-libraries.cmake")
 
 # Reuse architecture-independent EGL/GLES headers from the existing package.
 set(header_archive "${CMAKE_BINARY_DIR}/ANGLE.7z")

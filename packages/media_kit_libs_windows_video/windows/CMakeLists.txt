@@ -66,39 +66,7 @@ endfunction()
 if(FLUTTER_TARGET_PLATFORM STREQUAL "windows-arm64")
   include("${CMAKE_SOURCE_DIR}/arm64-libraries.cmake")
 else()
-# libmpv archive containing the pre-built shared libraries & headers.
-set(LIBMPV "mpv-dev-x86_64-20230924-git-652a1dd.7z")
-
-# Download URL & MD5 hash of the libmpv archive.
-set(LIBMPV_URL "https://github.com/media-kit/libmpv-win32-video-build/releases/download/2023-09-24/${LIBMPV}")
-set(LIBMPV_MD5 "a832ef24b3a6ff97cd2560b5b9d04cd8")
-
-# Download location of the libmpv archive.
-set(LIBMPV_ARCHIVE "${CMAKE_BINARY_DIR}/${LIBMPV}")
-set(LIBMPV_SRC "${CMAKE_BINARY_DIR}/libmpv")
-
-download_and_verify(
-  ${LIBMPV_URL}
-  ${LIBMPV_MD5}
-  ${LIBMPV_ARCHIVE}
-)
-
-check_directory_exists_and_not_empty(${LIBMPV_SRC} LIBMPV_SRC_VALID)
-
-# Extract the libmpv archive.
-if(NOT LIBMPV_SRC_VALID)
-  message(STATUS "Extracting ${LIBMPV}...")
-  make_directory("${LIBMPV_SRC}")
-  add_custom_target("${PROJECT_NAME}_LIBMPV_EXTRACT" ALL)
-  add_custom_command(
-    TARGET "${PROJECT_NAME}_LIBMPV_EXTRACT"
-    COMMAND "${CMAKE_COMMAND}" -E tar xzf "\"${LIBMPV_ARCHIVE}\""
-    COMMAND xcopy "\"${LIBMPV_SRC}/include/mpv\"" "\"${LIBMPV_SRC}/mpv\"" /E /H /C /I
-    COMMAND rmdir "\"${LIBMPV_SRC}/include\"" /S /Q
-    COMMAND ren "\"${LIBMPV_SRC}/mpv\"" "\"include\""
-    WORKING_DIRECTORY "${LIBMPV_SRC}"
-  )
-endif()
+include("${CMAKE_SOURCE_DIR}/mpv-libraries.cmake")
 
 # ------------------------------------------------------------------------------
 

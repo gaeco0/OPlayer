@@ -66,6 +66,8 @@ dependencies:
     path: packages/quickjs_engine
 
 dependency_overrides:
+  media_kit_libs_android_video:
+    path: packages/media_kit_libs_android_video
   media_kit_libs_windows_video:
     path: packages/media_kit_libs_windows_video
   # smb_connect 0.0.9가 pointycastle ^3에 묶여 있어 dartssh2 4.x(새 Dart 호환)와 충돌 → 4.x로 통일
@@ -106,6 +108,7 @@ flutter:
     - assets/licenses/ffmpeg-kit.txt
     - assets/licenses/byedpi.txt
     - assets/licenses/quickjs.txt
+    - assets/licenses/libmpv.txt
     - assets/native/windows/ciadpi.exe
 
   # To add assets to your application, add an assets section, like this:

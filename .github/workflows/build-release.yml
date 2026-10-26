@@ -86,6 +86,11 @@ jobs:
       - if: matrix.arch == 'x64'
         run: python .github/scripts/verify-architecture.test.py
       - run: flutter build windows --release --no-pub --dart-define-from-file=.dart_tool/google-oauth-defines.json --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
+      - name: Verify native subtitle decoding and rendered pixels
+        if: matrix.arch == 'x64'
+        env:
+          OPLAYER_TEST_LIBMPV: ${{ github.workspace }}/build/windows/x64/runner/Release/libmpv-2.dll
+        run: flutter test --no-pub test/subtitle_native_test.dart
       - run: python .github/scripts/verify-architecture.py windows-${{ matrix.arch }}
       - name: Package complete application
         if: github.event_name != 'pull_request'

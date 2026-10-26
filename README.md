@@ -214,6 +214,7 @@ Chromecast·DLNA·PiP는 실제 Android/TV 기기 검증이 필요하다. nPlaye
 ## 온라인 자막 확장앱
 
 - 외부 자막을 선택하면 재생 엔진에서 실제로 선택됐는지 확인합니다. 읽지 못한 파일은 오류를 표시합니다. SMI는 네이티브 로딩 실패 시 FFmpeg로 UTF-8 SRT를 만들어 적용하며 원본은 변경하지 않습니다. Android는 내장 FFmpeg, 데스크톱은 설치된 FFmpeg를 사용합니다. 자동 인코딩은 UTF-8·UTF-16 BOM과 한국어 CP949를 처리하며 다른 인코딩은 자막 설정에서 지정합니다. 변환 중 영상 전환·자막 변경·종료 시 이전 결과를 적용하지 않습니다.
+- Windows·Android는 자막 디코더를 포함한 LGPL 엔진을 사용합니다. SRT·SMI 등 텍스트 자막은 Flutter 레이어, PGS·VobSub·DVB 등 이미지 자막은 엔진에서 직접 표시해 중복 출력을 막습니다. 자동/수동 트랙 선택·외부 자막 전환에 같은 정책을 적용합니다. 엔진 버전·출처·라이선스는 [libmpv 안내](third_party/libmpv/NOTICE.md)를 참고하세요.
 - OpenSubtitles 다운로드에서 ‘허용되지 않은 자막 다운로드 도메인’이 나오면 설정 → 확장앱에서 목록을 새로고침하고 공식 저장소의 OpenSubtitles를 **1.0.4로 교체**한다. `*.opensubtitles.org`·`*.opensubtitles.com` 다운로드와 HTTP 링크의 HTTPS 전환을 지원하며, 앱 재설치는 필요 없다.
 - 플레이어 자막 메뉴 → **온라인 자막 검색·적용**에서 영상 제목을 자동 입력하고 한국어(`ko`)를 기본으로 검색한다. 제목·언어·공급자를 바꿀 수 있고, 결과 선택 또는 ‘검색 후 첫 결과 적용’으로 내려받아 현재 영상에 적용한다.
 - **OpenSubtitles**는 공식 저장소에서 선택 설치한다. 설정 → 확장앱 → OpenSubtitles 설정에서 API Key를 입력한다. 사용자 이름·비밀번호는 선택 사항이며, 비워 두면 로그인 없이 검색·다운로드한다. 계정을 입력하면 해당 계정으로 다운로드하며 서비스의 할당량을 따른다. User-Agent·기본 언어도 확장앱에서 설정한다. 연결 정보는 공통 보안 저장소에 보관한다. API Key 발급·사용 조건은 [공식 안내](https://opensubtitles.tawk.help/article/getting-started)를 따른다.

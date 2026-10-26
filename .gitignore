@@ -52,6 +52,8 @@ migrate_working_dir/
 /packages/quickjs_engine/android/.gradle/
 /packages/quickjs_engine/android/build/
 /packages/quickjs_engine/native/build/
+/packages/media_kit_libs_android_video/android/.gradle/
+/packages/media_kit_libs_android_video/android/build/
 
 # Symbolication related
 app.*.symbols
