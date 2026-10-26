@@ -30,6 +30,7 @@ Future<void> main(List<String> args) async {
       'quickjs_engine',
     ], await rootBundle.loadString('assets/licenses/quickjs.txt'));
     yield LicenseEntryWithLineBreaks(const ['ByeDPI'], await rootBundle.loadString('assets/licenses/byedpi.txt'));
+    yield LicenseEntryWithLineBreaks(const ['libmpv'], await rootBundle.loadString('assets/licenses/libmpv.txt'));
     yield LicenseEntryWithLineBreaks(
       const ['FFmpeg', 'FFmpegKit'],
       'Android: ffmpeg-kit-main-min-16kb 6.1.4 (LGPL-3.0).\n'
