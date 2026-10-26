@@ -15,6 +15,9 @@ GPLv3 text are included here and in the app's open-source licenses screen.
 - Build sources/configuration: the pinned release's source archive and
   https://github.com/zhongfly/mpv-winbuild/tree/2026-10-25-baa3e11d42
 - SHA-256 hashes are pinned in `windows/mpv-libraries.cmake` and verified before extraction.
+- The build extracts with official 7-Zip 25.01 (`7zr.exe`), pinned and SHA-256 checked,
+  to support ARM64 BCJ compression: https://github.com/ip7z/7zip/releases/tag/25.01.
+  This build tool is not bundled in OPlayer.
 - Rebuild using the distributor's recipe with its LGPL variant. Dependencies retain
   their own licenses; source recipes enumerate them. The resulting library is a
   separate `libmpv-2.dll` in the application directory.
