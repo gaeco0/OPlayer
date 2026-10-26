@@ -37,6 +37,7 @@ void main() {
   late _SubtitlePlayer engine;
   late PlayerController controller;
   final executions = <List<String>>[];
+  final normalizations = <Map<String, dynamic>>[];
   Completer<void>? converting;
   var succeeds = true;
   setUp(() async {
@@ -51,8 +52,15 @@ void main() {
     converting = null;
     succeeds = true;
     executions.clear();
+    normalizations.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
       if (call.method == 'version') return 'test';
+      if (call.method == 'subtitleUtf8') {
+        final args = Map<String, dynamic>.from(call.arguments as Map);
+        normalizations.add(args);
+        await File(args['output'] as String).writeAsString('정상 UTF-8');
+        return null;
+      }
       final args = List<String>.from((call.arguments as Map)['arguments'] as List);
       executions.add(args);
       await converting?.future;
@@ -88,8 +96,11 @@ void main() {
       expect(await converted.readAsString(), contains('자막 테스트'));
       expect(await smi.readAsString(), original);
       final args = executions.single;
-      expect(args[args.indexOf('-sub_charenc') + 1], 'UTF-8');
-      expect(args[args.indexOf('-i') + 1], smi.uri.toFilePath());
+      expect(normalizations.single['encoding'], 'UTF-8');
+      expect(normalizations.single['input'], smi.uri.toFilePath());
+      expect(args, isNot(contains('-sub_charenc')));
+      expect(args[args.indexOf('-i') + 1], normalizations.single['output']);
+      expect(await File(normalizations.single['output'] as String).exists(), false);
       expect(engine.loaded.single.title, 'Korean');
       await controller.loadExternalSubtitle(SubtitleRef(converted.uri.toString(), 'SRT'));
       expect(executions, hasLength(1));
@@ -103,19 +114,33 @@ void main() {
     succeeds = false;
     await expectLater(controller.loadExternalSubtitle(SubtitleRef(smi.uri.toString(), 'Legacy')), throwsStateError);
     final args = executions.single;
-    expect(args[args.indexOf('-sub_charenc') + 1], 'CP949');
+    expect(normalizations.single['encoding'], 'CP949');
+    expect(args, isNot(contains('-sub_charenc')));
+    expect(await File(normalizations.single['output'] as String).exists(), false);
     expect(engine.loaded, isEmpty);
     expect(engine.state.track.subtitle.id, 'auto');
     expect(await File(args.last).exists(), false);
   });
 
   test('an engine that already supports SAMI keeps native loading without FFmpeg', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     engine.supportsSami = true;
     final smi = File('${directory.path}/native.smi');
     await smi.writeAsString('<SAMI></SAMI>');
     await controller.loadExternalSubtitle(SubtitleRef(smi.uri.toString(), 'Native'));
     expect(engine.loaded.single.id, smi.uri.toString());
     expect(executions, isEmpty);
+  });
+
+  test('Android normalizes SAMI even when the engine accepts it without charset conversion', () async {
+    engine.supportsSami = true;
+    final smi = File('${directory.path}/legacy.smi');
+    await smi.writeAsBytes([0xb0, 0xa1]);
+    await controller.loadExternalSubtitle(SubtitleRef(smi.uri.toString(), 'Korean'));
+    expect(normalizations.single['encoding'], 'CP949');
+    expect(executions, hasLength(1));
+    expect(engine.loaded.single.id, endsWith('.srt'));
+    expect(await smi.readAsBytes(), [0xb0, 0xa1]);
   });
 
   test('a slow subtitle conversion cannot replace the subtitle of a newly opened video', () async {

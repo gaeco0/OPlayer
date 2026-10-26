@@ -194,6 +194,19 @@ class MainActivity : FlutterActivity() {
                 try {
                     when (call.method) {
                         "version" -> result.success(FFmpegKitConfig.getFFmpegVersion())
+                        "subtitleUtf8" -> {
+                            val input = requireNotNull(call.argument<String>("input"))
+                            val output = requireNotNull(call.argument<String>("output"))
+                            val encoding = requireNotNull(call.argument<String>("encoding"))
+                            Thread {
+                                try {
+                                    SubtitleText.toUtf8(input, output, encoding)
+                                    runOnUiThread { result.success(null) }
+                                } catch (e: Exception) {
+                                    runOnUiThread { result.error("SUBTITLE_ENCODING", e.message, null) }
+                                }
+                            }.start()
+                        }
                         "execute" -> {
                             val args = call.argument<List<String>>("arguments")
                             if (args == null || args.isEmpty()) {
