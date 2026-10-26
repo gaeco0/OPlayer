@@ -73,6 +73,18 @@ bool bitmapSubtitle(SubtitleTrack track) =>
       'xsub',
     }.contains(track.codec?.toLowerCase());
 
+VideoControllerConfiguration playbackVideoConfiguration({
+  required bool hardwareDecoding,
+  required TargetPlatform platform,
+}) => VideoControllerConfiguration(
+  // The Windows ANGLE texture path must not sample decoder surface padding.
+  hwdec: !hardwareDecoding
+      ? 'no'
+      : platform == TargetPlatform.windows
+      ? 'auto-copy'
+      : 'auto-safe',
+);
+
 /// 플레이어 상태 전체. UI는 이 컨트롤러와 media_kit 스트림만 바라본다.
 class PlayerController extends ChangeNotifier {
   PlayerController({
@@ -142,7 +154,7 @@ class PlayerController extends ChangeNotifier {
   bool _hasVideoController = false;
   VideoController _createVideoController() {
     _hasVideoController = true;
-    final output = VideoController(player);
+    final output = VideoController(player, configuration: _videoConfiguration);
     output.rect.addListener(_queueUpscaling);
     return output;
   }
@@ -518,6 +530,7 @@ class PlayerController extends ChangeNotifier {
               : '',
         );
       }
+      await _applyNativeOptions();
       final headers = await _applyHttpIdentity(item.headers);
       if (!isCurrentOpen(generation)) return;
       final opening = player.open(
@@ -573,7 +586,7 @@ class PlayerController extends ChangeNotifier {
     if (pl is! NativePlayer) return;
     final st = AppSettings.instance;
     try {
-      await pl.setProperty('hwdec', st.hardwareDecoding ? 'auto-safe' : 'no');
+      await pl.setProperty('hwdec', _videoConfiguration.hwdec!);
       if (st.subtitleEncoding != 'auto') {
         await pl.setProperty('sub-codepage', st.subtitleEncoding);
       }
@@ -583,6 +596,11 @@ class PlayerController extends ChangeNotifier {
       await pl.setProperty('demuxer-readahead-secs', '20');
     } catch (_) {}
   }
+
+  VideoControllerConfiguration get _videoConfiguration => playbackVideoConfiguration(
+    hardwareDecoding: AppSettings.instance.hardwareDecoding,
+    platform: defaultTargetPlatform,
+  );
 
   List<String> _folderFilesFor(String path) {
     if (folderFiles.isNotEmpty && p.dirname(folderFiles.first) == p.dirname(path)) {
@@ -628,13 +646,19 @@ class PlayerController extends ChangeNotifier {
     final previous = player.state.track.subtitle;
     try {
       var uri = s.uri;
+      var codepage = AppSettings.instance.subtitleEncoding;
       final source = Uri.tryParse(uri);
-      if (source?.scheme == 'file' && p.extension(source!.path).toLowerCase() == '.smi') {
-        try {
-          await player.setSubtitleTrack(SubtitleTrack.uri(uri, title: s.title));
-          if (!active() || await _externalSubtitleSelected(uri, s.title)) return;
-        } catch (_) {
-          if (!active()) return;
+      if (source?.scheme == 'file' && {'.smi', '.sami'}.contains(p.extension(source!.path).toLowerCase())) {
+        // Android's bundled libmpv disables iconv: selecting legacy SAMI can
+        // succeed while emitting mojibake. Normalize it before native loading.
+        if (!Ffmpeg.embedded) {
+          try {
+            await _nativeProperty('sub-codepage', codepage);
+            await player.setSubtitleTrack(SubtitleTrack.uri(uri, title: s.title));
+            if (!active() || await _externalSubtitleSelected(uri, s.title)) return;
+          } catch (_) {
+            if (!active()) return;
+          }
         }
         Directory temporary;
         try {
@@ -652,8 +676,10 @@ class PlayerController extends ChangeNotifier {
         }
         _onlineSubtitleFiles.add(converted);
         uri = Uri.file(converted.path).toString();
+        codepage = 'utf-8';
       }
       if (!active()) return;
+      await _nativeProperty('sub-codepage', codepage);
       await player.setSubtitleTrack(SubtitleTrack.uri(uri, title: s.title));
       if (!active()) return;
       if (!await _externalSubtitleSelected(uri, s.title)) {

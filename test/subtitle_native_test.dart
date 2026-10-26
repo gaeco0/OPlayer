@@ -22,6 +22,8 @@ void main() {
   }
 
   test('native PGS pixels render, then SRT/SMI switch back to the text layer without duplicates', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
     SharedPreferences.setMockInitialValues({});
     FlutterSecureStorage.setMockInitialValues({});
     await AppSettings.instance.init();
@@ -47,6 +49,7 @@ void main() {
       await native.setProperty('ao', 'null');
       await native.setProperty('sub-auto', 'no');
       await player.open(Media(File('test/fixtures/subtitles/subtitle-bitmap.mkv').absolute.path), play: false);
+      expect(await native.getProperty('hwdec'), 'auto-copy');
       if (player.state.duration == Duration.zero) {
         await player.stream.duration.firstWhere((value) => value > Duration.zero).timeout(const Duration(seconds: 5));
       }

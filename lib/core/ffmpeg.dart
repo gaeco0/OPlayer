@@ -110,6 +110,7 @@ class Ffmpeg {
   static Future<(bool, String)> convertSubtitle({required String input, required String output}) async {
     final bin = await locate();
     if (bin == null) return (false, 'SMI 자막 변환에 FFmpeg가 필요합니다');
+    File? prepared;
     try {
       var encoding = AppSettings.instance.subtitleEncoding;
       if (encoding == 'auto') {
@@ -127,15 +128,26 @@ class Ffmpeg {
           }
         }
       }
+      var actualInput = input;
+      if (embedded) {
+        prepared = File('$output.input.smi');
+        // Android libmpv disables iconv. Decode with the OS charset support,
+        // then feed UTF-8 to FFmpeg without relying on its iconv build options.
+        await _channel.invokeMethod<void>('subtitleUtf8', {
+          'input': input,
+          'output': prepared.path,
+          'encoding': encoding,
+        });
+        actualInput = prepared.path;
+      }
       final (code, error) = await _execute(bin, [
         '-y',
         '-hide_banner',
         '-loglevel',
         'error',
-        '-sub_charenc',
-        encoding,
+        if (!embedded) ...['-sub_charenc', encoding],
         '-i',
-        input,
+        actualInput,
         '-map',
         '0:s:0',
         '-c:s',
@@ -146,6 +158,12 @@ class Ffmpeg {
       return (code == 0 && await file.exists() && await file.length() > 0, error.trim());
     } catch (e) {
       return (false, '$e');
+    } finally {
+      if (prepared != null) {
+        try {
+          await prepared.delete();
+        } on FileSystemException catch (_) {}
+      }
     }
   }
 
