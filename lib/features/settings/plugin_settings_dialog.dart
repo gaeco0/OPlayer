@@ -21,6 +21,10 @@ Future<bool> showPluginSettingsDialog(BuildContext context, OPlugin plugin) asyn
     values[idKey] = store.oauthClientId(plugin);
   }
   final secretKey = plugin.oauth['clientSecretSetting'] as String? ?? 'clientSecret';
+  bool usesBundledGoogleSecret() =>
+      plugin.oauth['tokenEndpoint'] == 'https://oauth2.googleapis.com/token' &&
+      plugin.oauth['authEndpoint'] == 'https://accounts.google.com/o/oauth2/v2/auth' &&
+      (CloudConfig.googleBundledSecret('${values[idKey] ?? ''}')?.isNotEmpty ?? false);
   if (plugin.authType == 'oauth' && '${values[secretKey] ?? ''}'.isEmpty && '${values[idKey] ?? ''}'.isNotEmpty) {
     values[secretKey] =
         await SecureStore.instance.readRequired(PluginStore.oauthSecretKey(plugin.id, values[idKey] as String)) ?? '';
@@ -90,17 +94,18 @@ Future<bool> showPluginSettingsDialog(BuildContext context, OPlugin plugin) asyn
                             enableSuggestions: false,
                             decoration: InputDecoration(
                               labelText: field['label'] as String,
-                              helperText: field['description'] as String?,
+                              helperText: field['key'] == secretKey && usesBundledGoogleSecret()
+                                  ? '비워 두면 앱에 포함된 Client Secret을 자동 사용합니다.'
+                                  : field['description'] as String?,
+                              helperMaxLines: 3,
                             ),
-                            onChanged: (v) =>
-                                values[field['key'] as String] = field['type'] == 'password' ? v : v.trim(),
+                            onChanged: (v) {
+                              values[field['key'] as String] = field['type'] == 'password' ? v : v.trim();
+                              if (field['key'] == idKey) setState(() {});
+                            },
                             validator: (v) {
                               final text = (v ?? '').trim();
-                              if (field['key'] == secretKey &&
-                                  text.isEmpty &&
-                                  plugin.oauth['tokenEndpoint'] == 'https://oauth2.googleapis.com/token' &&
-                                  plugin.oauth['authEndpoint'] == 'https://accounts.google.com/o/oauth2/v2/auth' &&
-                                  (CloudConfig.googleBundledSecret('${values[idKey] ?? ''}')?.isNotEmpty ?? false)) {
+                              if (field['key'] == secretKey && text.isEmpty && usesBundledGoogleSecret()) {
                                 return null;
                               }
                               if (field['required'] == true && text.isEmpty) return '${field['label']} 값을 입력해 주세요';
