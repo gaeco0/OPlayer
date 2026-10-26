@@ -68,6 +68,17 @@ const publish = require('./publish-release.cjs');
     assert.equal(calls.at(-1), 'published');
     releases.length = 0;
     await assert.rejects(() => publish(args), /stable requires a published.*beta/);
+    for (const predecessor of [
+      {tag_name: 'v0.1.0-nightly.1', draft: true, prerelease: true},
+      {tag_name: 'v0.0.9-nightly.1', draft: false, prerelease: true},
+    ]) {
+      releases.push(predecessor);
+      await assert.rejects(() => publish(args), /stable requires a published/);
+      releases.length = 0;
+    }
+    releases.push({tag_name: 'v0.1.0-nightly.1', draft: false, prerelease: true});
+    await publish(args);
+    releases.length = 0;
     for (const channel of ['nightly', 'beta']) {
       const version = `0.1.0-${channel}.1`;
       fs.writeFileSync('pubspec.yaml', `version: ${version}+2\n`);

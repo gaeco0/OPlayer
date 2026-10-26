@@ -36,12 +36,12 @@ module.exports = async ({github, context, core}) => {
   }).join('');
   fs.writeFileSync('release-assets/SHA256SUMS.txt', checksums);
   files.push('SHA256SUMS.txt');
-  const predecessor = {beta: 'nightly', stable: 'beta'}[metadata.channel];
-  if (predecessor) {
+  const predecessors = {beta: ['nightly'], stable: ['beta', 'nightly']}[metadata.channel];
+  if (predecessors) {
     const releases = await github.paginate(github.rest.repos.listReleases, {...repository, per_page: 100});
-    const prefix = `v${metadata.version.split('-')[0]}-${predecessor}.`;
-    if (!releases.some(item => !item.draft && item.prerelease && item.tag_name.startsWith(prefix))) {
-      throw new Error(`${metadata.channel} requires a published ${prefix} release first`);
+    const prefixes = predecessors.map(channel => `v${metadata.version.split('-')[0]}-${channel}.`);
+    if (!releases.some(item => !item.draft && item.prerelease && prefixes.some(prefix => item.tag_name.startsWith(prefix)))) {
+      throw new Error(`${metadata.channel} requires a published ${prefixes.join(' or ')} release first`);
     }
   }
   let release;
