@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -103,6 +104,49 @@ class Ffmpeg {
     }
     final result = await Process.run(bin, args);
     return (result.exitCode, '${result.stderr}');
+  }
+
+  /// Some bundled mpv builds cannot open SAMI. Convert to UTF-8 SRT instead.
+  static Future<(bool, String)> convertSubtitle({required String input, required String output}) async {
+    final bin = await locate();
+    if (bin == null) return (false, 'SMI 자막 변환에 FFmpeg가 필요합니다');
+    try {
+      var encoding = AppSettings.instance.subtitleEncoding;
+      if (encoding == 'auto') {
+        final bytes = await File(input).readAsBytes();
+        if (bytes.length >= 2 && bytes[0] == 0xff && bytes[1] == 0xfe) {
+          encoding = 'UTF-16LE';
+        } else if (bytes.length >= 2 && bytes[0] == 0xfe && bytes[1] == 0xff) {
+          encoding = 'UTF-16BE';
+        } else {
+          try {
+            utf8.decode(bytes);
+            encoding = 'UTF-8';
+          } on FormatException {
+            encoding = 'CP949';
+          }
+        }
+      }
+      final (code, error) = await _execute(bin, [
+        '-y',
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-sub_charenc',
+        encoding,
+        '-i',
+        input,
+        '-map',
+        '0:s:0',
+        '-c:s',
+        'srt',
+        output,
+      ]);
+      final file = File(output);
+      return (code == 0 && await file.exists() && await file.length() > 0, error.trim());
+    } catch (e) {
+      return (false, '$e');
+    }
   }
 
   /// MPEG-4/AAC encoders are included in the LGPL Android FFmpeg build.

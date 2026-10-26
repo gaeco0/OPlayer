@@ -237,7 +237,13 @@ class _SubtitlePanel extends StatelessWidget {
                     dense: true,
                     leading: const Icon(Icons.subtitles_outlined, color: Colors.white70),
                     title: Text(f.title, style: _white),
-                    onTap: () => c.selectExternalSubtitle(f),
+                    onTap: () async {
+                      try {
+                        await c.selectExternalSubtitle(f);
+                      } catch (e) {
+                        onToast('$e');
+                      }
+                    },
                   ),
               ],
               const _Section('싱크 (탭하면 초기화)'),
