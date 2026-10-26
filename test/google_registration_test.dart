@@ -30,6 +30,7 @@ void main() {
     await store.init();
     await store.load(await File('plugins/cloud.gdrive.js').readAsString());
     expect(oauthClientFor(CloudProvider.gdrive).clientId, expected);
+    expect(oauthClientFor(CloudProvider.gdrive).clientSecret, CloudConfig.googleBundledSecret(expected));
     await store.load(
       (await File('plugins/cloud.gdrive.js').readAsString()).replaceFirst('cloud.gdrive', 'cloud.google.generic'),
     );

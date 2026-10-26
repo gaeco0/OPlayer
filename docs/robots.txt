@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://oplayer.gaeco.kr/sitemap.xml
