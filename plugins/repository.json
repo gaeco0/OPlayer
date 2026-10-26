@@ -55,13 +55,10 @@
       "author": "OPlayer",
       "features": [
         "클라우드 연결",
-        "앱 기본 OAuth 등록",
         "폴더 탐색",
-        "파일명 검색",
-        "대용량 분할 업로드",
         "미디어 재생"
       ],
-      "description": "앱 기본 OAuth 등록을 사용하는 Google Drive 읽기·쓰기·폴더 탐색·파일명 검색·미디어 재생",
+      "description": "Google Drive 계정 연결·폴더 탐색·미디어 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.gdrive.js",
       "sha256": "64c3d261414f6e430d0cc0ef22bd07148db3b868e293dbbcc0829c987c7e40e7",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
@@ -142,6 +139,48 @@
       "description": "영상 색상·회전·반전 설정 프리셋",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/player.video-presets.js",
       "sha256": "6be4f7fc574adb6cb9b731dc7c2227146a9a570a98e3a9297227573eb29e4105",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+    },
+    {
+      "id": "resource.jellyfin",
+      "name": "Jellyfin",
+      "version": "1.0.0",
+      "kind": "resource",
+      "capabilities": [
+        "storage"
+      ],
+      "pluginApi": 4,
+      "author": "OPlayer",
+      "features": [
+        "사용자 로그인",
+        "라이브러리·폴더 탐색",
+        "영상·음악 검색",
+        "원본 미디어 재생"
+      ],
+      "description": "사용자 지정 Jellyfin 서버의 라이브러리·영상·음악 탐색과 검색·원본 재생",
+      "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/resource.jellyfin.js",
+      "sha256": "72170f42518f9f6e3031e9fe2081379bb6d74b3b46eae017565e3ecc2e5ccb8b",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+    },
+    {
+      "id": "resource.peertube",
+      "name": "PeerTube",
+      "version": "1.0.0",
+      "kind": "resource",
+      "capabilities": [
+        "storage"
+      ],
+      "pluginApi": 4,
+      "author": "OPlayer",
+      "features": [
+        "인스턴스 연결",
+        "공개 영상 탐색",
+        "선택적 사용자 로그인",
+        "영상 검색·재생"
+      ],
+      "description": "사용자 지정 PeerTube 인스턴스의 공개·내 영상 탐색, 검색과 HTTP/HLS 재생",
+      "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/resource.peertube.js",
+      "sha256": "ecbca562972d748a26865ad241d0d3f9205bc2a2fbf8e00679d6a31eba33958f",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     },
     {
