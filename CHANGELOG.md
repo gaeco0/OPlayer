@@ -5,9 +5,16 @@
 
 ## [Unreleased]
 
+## [0.1.7-nightly.20261026.3]
+
+Windows 하드웨어 출력과 Android SMI 인코딩을 수정한 nightly입니다. 내부 빌드 번호 `+2`, Android ARM64 버전 코드 `2002`, 기존 서명과 업데이트 확인 기본 채널 stable을 유지합니다.
+
 - Windows 하드웨어 디코딩을 ANGLE 출력과 호환되는 `auto-copy`로 변경해 업데이트 후 하드웨어 디코딩에서만 나타나는 하단 초록색 띠에 대응했습니다. 디코더 설정을 영상 컨트롤러 생성과 파일 열기에 일관되게 전달해 초기화 시 설정이 덮이는 경로도 수정했습니다. GPU 디코딩·화면 출력은 유지하며 프레임 복사 비용이 추가될 수 있습니다. 보고된 GPU·영상에서의 재확인은 필요합니다.
 - Android SMI·SAMI를 OS 문자셋 기능으로 UTF-8로 정규화하고 내장 FFmpeg로 SRT를 만들어 적용합니다. 재생 엔진의 iconv 누락으로 CP949가 깨지거나 열기 실패로 이어지는 경로를 우회하고, 변환된 UTF-8 자막에 이전 코드페이지 설정이 적용되지 않도록 했습니다. UTF-8/UTF-16 BOM·CP949 확장 한글을 처리하고 원본 보존·임시 입력 정리·변환 중 파일 전환 취소를 유지합니다. Android 실기기 검증은 별도로 필요합니다.
 - 실제 Windows mpv의 디코더 옵션·자막 합성 검사를 포함한 전체 Flutter 테스트 270개와 정적 분석, Android 앱의 Java·Kotlin 컴파일을 통과했습니다. Android 문자셋 변환 코드를 JDK에서 직접 실행해 CP949 확장 한글·UTF-8/UTF-16 BOM·잘못된 바이트의 명시적 실패·원본 보존을 검사하고 이후 Android CI에도 같은 검사를 추가했습니다.
+
+- Windows·Linux x64/ARM64, macOS ARM64, Android·Android TV 전체 빌드를 제공합니다. 기본 자동 설치 확장앱은 0개이며 게시 성공 후 최신 nightly 3개만 보관합니다.
+
 ## [0.1.7-nightly.20261026.2]
 
 Windows·Android 자막 표시를 수정한 nightly입니다. 내부 빌드 번호 `+2`, Android ARM64 버전 코드 `2002`, 기존 서명과 업데이트 확인 기본 채널 stable을 유지합니다.
