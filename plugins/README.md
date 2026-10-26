@@ -25,6 +25,42 @@ S3 호환 스토리지·Box·네이버 MYBOX도 공식 저장소에서 선택 �
 | S3 호환 스토리지 | Endpoint·버킷·리전·Access Key ID·Secret Access Key, 선택적 Session Token | AWS S3·R2·MinIO 등, 경로/가상 호스트 방식, ListObjects V1/V2, 목록 조회·재생 |
 | Box | 사용자 OAuth 앱의 Client ID·Client Secret, 표시된 복귀 주소 등록 | 로그인·토큰 자동 갱신·폴더 탐색·재생 |
 | 네이버 MYBOX | MYBOX 웹에서 생성한 개인 액세스 토큰(PAT) | 일반 폴더 탐색·재생, 암호 폴더·공유받은 폴더는 API 미지원 |
+| PeerTube | HTTPS 인스턴스 주소, 선택적 사용자 이름·비밀번호 | 공개 영상·내 영상 탐색, 검색, HTTP/HLS 재생 |
+| Jellyfin | HTTPS 서버 주소·사용자 이름·비밀번호, 기기 식별 이름 | 라이브러리·폴더 탐색, 영상·음악 검색, 원본 스트림 재생 |
+
+### PeerTube·Jellyfin 연결
+
+1. 설정 → 확장앱에서 공식 저장소 목록을 새로고침하고 **PeerTube** 또는 **Jellyfin**을 설치합니다.
+2. 해당 확장앱의 톱니바퀴에서 서버 주소와 계정을 저장합니다. 주소는 웹 화면 경로 대신 기본 주소를 넣습니다.
+   예: `https://tube.example` 또는 `https://media.example/jellyfin`. `/api/v1`, `/web/index.html`은 붙이지 않습니다.
+3. 사이드바의 클라우드 연결에서 설치한 공급자를 선택하면 계정이 리소스로 추가됩니다. 여러 서버는 설정을 바꿔
+   각각 연결할 수 있으며, 기존 연결은 연결 당시 서버·계정을 유지합니다. 기본 자동 설치는 하지 않습니다.
+
+두 확장앱은 API 4의 공통 HTTP·폼 로그인·비밀값 참조만 사용합니다. 기존 API 4 앱에서는 앱 업데이트 없이
+JS와 저장소 목록 새로고침만으로 설치합니다. 현재 호스트 재생 URL 규약이 HTTPS를 요구하므로 HTTP 전용
+LAN 서버에는 HTTPS 리버스 프록시가 필요합니다. 공급자별 설정이나 인증 코드를 앱 본체에 추가하지 않습니다.
+
+- **PeerTube 1.0.0**: 계정 없이 공개 영상 탐색·검색·재생이 가능합니다. 로그인하면 최상위의 **내 영상** 폴더와
+  계정이 볼 수 있는 영상이 추가됩니다. 비공개 파일에는 계정 OAuth 토큰 대신 서버가 발급한 짧은 재생 토큰을
+  사용하며 HLS 하위 URL에도 전달되게 요청합니다. 파일이 있으면 높은 해상도의 HTTP 파일을 우선 사용하고,
+  없으면 HLS를 선택합니다. P2P 전송·업로드·비밀번호 보호 영상·2단계 인증 로그인은 지원하지 않습니다.
+  일반 목록/검색은 인스턴스에 보이는 영상 범위이고 내 영상 검색은 해당 목록에서 필터링합니다.
+- **Jellyfin 1.0.0**: 사용자 로그인, 라이브러리·시리즈·시즌·폴더 탐색, 현재 폴더 이하 영상·음악 검색과 원본
+  스트림 재생을 제공합니다. 서버의 재생 권한이 필요합니다. API 4가 보관된 비밀값을 재생 헤더/URL로 직접
+  내보내지 않으므로 재생 시작 때 서버에 다시 로그인해 재생용 URL을 구성합니다. URL의 토큰도 인증 정보이므로
+  다른 사람에게 공유하지 마세요. 여러 기기는 확장앱 설정의 기기 식별 이름을 다르게 지정합니다.
+  서버 트랜스코딩·Live TV·서버 시청 기록 동기화·Jellyfin 외부 자막 자동 연결은 제공하지 않습니다.
+
+비밀번호·세션은 기존 OS 보안 저장소에 보관하고 API 요청 인증은 설정한 서버의 기본 경로 안에서만 허용합니다.
+리소스 잠금·로컬 이어보기·재생목록은 기존 앱 기능을 사용합니다. 실제 개인 서버 연결은 서버 설정에 따라
+확인이 필요하며, 저장소 테스트는 기존 QuickJS 실행기와 모의 서버 응답으로 로그인·갱신·탐색·검색·재생 URL을 검증합니다.
+
+공식 API 근거: [PeerTube REST](https://docs.joinpeertube.org/api-rest-reference.html),
+[PeerTube 인증](https://docs.joinpeertube.org/api/rest-getting-started),
+[Jellyfin API](https://api.jellyfin.org/),
+[Jellyfin 공식 SDK](https://github.com/jellyfin/jellyfin-sdk-typescript).
+
+### S3·Box·MYBOX 연결
 
 S3 Endpoint는 HTTPS를 사용합니다(로컬 개발용 localhost·127.0.0.1 HTTP 허용). 리전은 서버가 요구하는 값으로
 지정하세요. 예: AWS `ap-northeast-2`, R2 `auto`, MinIO 기본값 `us-east-1`.

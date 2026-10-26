@@ -85,6 +85,8 @@ void main() {
         'cloud.s3',
         'cloud.box',
         'cloud.mybox',
+        'resource.peertube',
+        'resource.jellyfin',
         'subtitle.opensubtitles',
       ]),
     );
