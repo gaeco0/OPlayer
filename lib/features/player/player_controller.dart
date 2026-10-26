@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -9,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../core/media_item.dart';
 import '../../core/media_utils.dart';
+import '../../core/ffmpeg.dart';
 import '../../core/resume_store.dart';
 import '../../core/resource_playback_store.dart';
 import '../../core/google_sync.dart';
@@ -358,6 +360,7 @@ class PlayerController extends ChangeNotifier {
   final _pickedSubtitles = <SubtitleRef>[];
   final _onlineSubtitleFiles = <File>[];
   int _subtitleRequest = 0;
+  int _subtitleLoad = 0;
   bool onlineSubtitleBusy = false;
   String? onlineSubtitleError;
   final onlineSubtitles = SubtitlePlugins(PluginStore.instance);
@@ -427,6 +430,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> open({bool askResume = true}) async {
+    _subtitleLoad++;
     preparing = true;
     _positionReady = false;
     pendingResume = null;
@@ -513,7 +517,7 @@ class PlayerController extends ChangeNotifier {
       if (_disposed || generation != _openGeneration) return;
       await player.setRate(baseRate);
       await _restorePlaybackSettings();
-      if (st.subtitleAutoLoad) _attachSiblingSubtitles();
+      if (st.subtitleAutoLoad) unawaited(_attachSiblingSubtitles(generation));
       unawaited(_autoOnlineSubtitles(generation));
     } catch (e) {
       if (generation == _openGeneration) _startWatchdog?.cancel();
@@ -588,15 +592,82 @@ class PlayerController extends ChangeNotifier {
     return [...siblings, ...(resolved ?? current).subtitles, ..._pickedSubtitles];
   }
 
-  void _attachSiblingSubtitles() {
+  Future<void> _attachSiblingSubtitles(int generation) async {
     final subs = externalSubtitles;
     if (subs.isNotEmpty) {
       // 첫 번째 외부 자막 자동 선택 (내장 자막은 자막 패널에서 선택)
-      loadExternalSubtitle(subs.first);
+      try {
+        await loadExternalSubtitle(subs.first);
+      } catch (e) {
+        if (isCurrentOpen(generation)) {
+          warning = '자막을 열지 못했습니다: $e';
+          notifyListeners();
+        }
+      }
     }
   }
 
-  Future<void> loadExternalSubtitle(SubtitleRef s) => player.setSubtitleTrack(SubtitleTrack.uri(s.uri, title: s.title));
+  Future<void> loadExternalSubtitle(SubtitleRef s) async {
+    final generation = _openGeneration, ticket = ++_subtitleLoad;
+    bool active() => isCurrentOpen(generation) && ticket == _subtitleLoad;
+    final previous = player.state.track.subtitle;
+    try {
+      var uri = s.uri;
+      final source = Uri.tryParse(uri);
+      if (source?.scheme == 'file' && p.extension(source!.path).toLowerCase() == '.smi') {
+        try {
+          await player.setSubtitleTrack(SubtitleTrack.uri(uri, title: s.title));
+          if (!active() || await _externalSubtitleSelected(uri, s.title)) return;
+        } catch (_) {
+          if (!active()) return;
+        }
+        Directory temporary;
+        try {
+          temporary = await getTemporaryDirectory();
+        } catch (_) {
+          temporary = Directory.systemTemp;
+        }
+        final directory = await Directory(p.join(temporary.path, 'oplayer-subtitles')).create(recursive: true);
+        final converted = File(p.join(directory.path, 'sami_${DateTime.now().microsecondsSinceEpoch}_$ticket.srt'));
+        final (ok, error) = await Ffmpeg.convertSubtitle(input: source.toFilePath(), output: converted.path);
+        if (!active() || !ok) {
+          if (await converted.exists()) await converted.delete();
+          if (!active()) return;
+          throw StateError(error.isEmpty ? 'SMI 자막 변환에 실패했습니다' : error);
+        }
+        _onlineSubtitleFiles.add(converted);
+        uri = Uri.file(converted.path).toString();
+      }
+      if (!active()) return;
+      await player.setSubtitleTrack(SubtitleTrack.uri(uri, title: s.title));
+      if (!active()) return;
+      if (!await _externalSubtitleSelected(uri, s.title)) {
+        throw StateError('재생 엔진이 자막을 열지 못했습니다. 자막 형식·파일·인코딩을 확인해 주세요');
+      }
+    } catch (_) {
+      if (active()) {
+        try {
+          await player.setSubtitleTrack(previous);
+        } catch (_) {}
+      }
+      rethrow;
+    }
+  }
+
+  Future<bool> _externalSubtitleSelected(String uri, String title) async {
+    final native = player.platform;
+    if (native is! NativePlayer) return true;
+    final tracks = jsonDecode(await native.getProperty('track-list')) as List;
+    return tracks.any((t) {
+      if (t['type'] != 'sub' || t['external'] != true || t['selected'] != true || t['title'] != title) return false;
+      final file = t['external-filename'] as String?;
+      if (file == null || file == uri) return true;
+      final expected = Uri.tryParse(uri);
+      if (expected?.scheme != 'file') return false;
+      final actual = Uri.tryParse(file);
+      return p.equals(actual?.scheme == 'file' ? actual!.toFilePath() : file, expected!.toFilePath());
+    });
+  }
 
   Future<void> pickSubtitle(String path) async {
     _cancelOnlineSubtitle();
@@ -616,6 +687,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> selectSubtitleTrack(SubtitleTrack track) {
+    _subtitleLoad++;
     _cancelOnlineSubtitle();
     return player.setSubtitleTrack(track);
   }
