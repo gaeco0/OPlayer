@@ -1,0 +1,78 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:oplayer/core/media_item.dart';
+import 'package:oplayer/core/settings.dart';
+import 'package:oplayer/features/player/player_controller.dart';
+import 'package:oplayer/features/player/widgets/controls_overlay.dart';
+import 'package:oplayer/features/player/widgets/side_panels.dart';
+
+class _Engine extends PlatformPlayer {
+  _Engine() : super(configuration: const PlayerConfiguration());
+}
+
+void main() {
+  testWidgets('player screen button opens quality controls and both switches change playback settings', (t) async {
+    SharedPreferences.setMockInitialValues({});
+    await AppSettings.instance.init();
+    final controller = PlayerController(
+      playlist: const [MediaItem(key: 'test', uri: 'https://example.com/video.mp4', title: 'Video')],
+      startIndex: 0,
+      playbackEngine: Player(platformPlayer: _Engine()),
+    );
+    t.view.physicalSize = const Size(1200, 900);
+    t.view.devicePixelRatio = 1;
+    addTearDown(() {
+      controller.dispose();
+      t.view.reset();
+    });
+    var panel = PanelKind.none;
+    await t.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, update) => Stack(
+              children: [
+                ControlsOverlay(
+                  c: controller,
+                  onBack: () {},
+                  onToast: (_) {},
+                  onRotate: null,
+                  orientationIcon: Icons.screen_rotation,
+                  onPanel: (value) => update(() => panel = value),
+                ),
+                SidePanel(
+                  kind: panel,
+                  c: controller,
+                  onClose: () => update(() => panel = PanelKind.none),
+                  onToast: (_) {},
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    await t.tap(find.byTooltip('화면·화질'));
+    await t.pumpAndSettle();
+    expect(panel, PanelKind.aspect);
+    final upscaling = find.widgetWithText(SwitchListTile, '고화질 업스케일');
+    final interpolation = find.widgetWithText(SwitchListTile, '가벼운 프레임 혼합');
+    expect(upscaling.hitTestable(), findsOneWidget);
+    expect(interpolation.hitTestable(), findsOneWidget);
+    await t.tap(upscaling);
+    await t.pumpAndSettle();
+    expect(AppSettings.instance.videoUpscaling, true);
+    await t.tap(interpolation);
+    await t.pumpAndSettle();
+    expect(AppSettings.instance.frameInterpolation, true);
+    await t.tap(upscaling);
+    await t.pumpAndSettle();
+    await t.tap(interpolation);
+    await t.pumpAndSettle();
+    expect(AppSettings.instance.videoUpscaling, false);
+    expect(AppSettings.instance.frameInterpolation, false);
+    await t.pumpWidget(const SizedBox());
+  });
+}

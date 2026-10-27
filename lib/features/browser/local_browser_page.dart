@@ -51,6 +51,9 @@ class LocalBrowserPage extends StatefulWidget {
 
 class _LocalBrowserPageState extends State<LocalBrowserPage> {
   late final List<String> _stack = [widget.rootPath];
+  PageStorageBucket? _navigationStorage;
+  bool _navigationRestored = false;
+  Object get _navigationKey => ('local-navigation', widget.rootPath);
   List<FsItem> _items = [];
   List<String> _allFiles = [];
   bool _loading = true;
@@ -163,11 +166,33 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
     super.initState();
     ResourcePlaybackStore.instance.addListener(_playbackChanged);
     ResourceLocks.instance.addListener(_playbackChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_navigationRestored) return;
+    _navigationRestored = true;
+    _navigationStorage = PageStorage.maybeOf(context);
+    final saved = _navigationStorage?.readState(context, identifier: _navigationKey);
+    if (saved is Map && saved['stack'] is List<String>) {
+      final paths = saved['stack'] as List<String>;
+      if (paths.isNotEmpty && paths.first == widget.rootPath) {
+        _stack
+          ..clear()
+          ..addAll(paths);
+        _grid = saved['grid'] == true;
+      }
+    }
     _load();
   }
 
   @override
   void dispose() {
+    _navigationStorage?.writeState(context, {
+      'stack': List<String>.of(_stack),
+      'grid': _grid,
+    }, identifier: _navigationKey);
     ResourcePlaybackStore.instance.removeListener(_playbackChanged);
     ResourceLocks.instance.removeListener(_playbackChanged);
     super.dispose();
@@ -415,6 +440,7 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
 
     if (_grid) {
       return GridView.builder(
+        key: PageStorageKey((_navigationKey, _cwd, 'grid')),
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
         gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -457,6 +483,7 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
     }
 
     return ListView.separated(
+      key: PageStorageKey((_navigationKey, _cwd, 'list')),
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.only(bottom: 96),
       itemCount: _items.length,

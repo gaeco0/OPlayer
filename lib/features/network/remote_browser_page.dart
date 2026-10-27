@@ -49,6 +49,9 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
   }
 
   late final List<_Crumb> _stack = [_Crumb(widget.source.rootPath, widget.source.rootTitle)];
+  PageStorageBucket? _navigationStorage;
+  bool _navigationRestored = false;
+  Object get _navigationKey => ('remote-navigation', widget.source);
   final _cache = <String, List<RemoteEntry>>{};
   List<RemoteEntry> _all = [];
   List<RemoteEntry> _items = [];
@@ -169,11 +172,39 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
     super.initState();
     ResourcePlaybackStore.instance.addListener(_playbackChanged);
     ResourceLocks.instance.addListener(_playbackChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_navigationRestored) return;
+    _navigationRestored = true;
+    _navigationStorage = PageStorage.maybeOf(context);
+    final saved = _navigationStorage?.readState(context, identifier: _navigationKey);
+    if (saved is Map && saved['stack'] is List<_Crumb>) {
+      final crumbs = saved['stack'] as List<_Crumb>;
+      if (crumbs.isNotEmpty && crumbs.first.path == widget.source.rootPath) {
+        _stack
+          ..clear()
+          ..addAll(crumbs);
+        _grid = saved['grid'] == true;
+        _videosOnly = saved['videosOnly'] != false;
+        _searchOpen = saved['searchOpen'] == true;
+        _searchController.text = saved['query'] as String? ?? '';
+      }
+    }
     _load();
   }
 
   @override
   void dispose() {
+    _navigationStorage?.writeState(context, {
+      'stack': List<_Crumb>.of(_stack),
+      'grid': _grid,
+      'videosOnly': _videosOnly,
+      'searchOpen': _searchOpen,
+      'query': _searchController.text,
+    }, identifier: _navigationKey);
     ResourcePlaybackStore.instance.removeListener(_playbackChanged);
     ResourceLocks.instance.removeListener(_playbackChanged);
     _searchTimer?.cancel();
@@ -560,6 +591,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
 
     if (_grid) {
       return GridView.builder(
+        key: PageStorageKey((_navigationKey, _stack.last.path, _query, 'grid')),
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
         gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -584,6 +616,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
       );
     }
     return ListView.separated(
+      key: PageStorageKey((_navigationKey, _stack.last.path, _query, 'list')),
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.only(bottom: 96),
       itemCount: _items.length,
