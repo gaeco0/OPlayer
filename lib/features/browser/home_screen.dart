@@ -64,7 +64,7 @@ IconData cloudIcon(CloudProvider p) => switch (p) {
 };
 
 /// nPlayer 홈: 좌측 소스 목록(로컬 / 네트워크 / 클라우드 / 도구) + 우측 브라우저.
-/// 폰에서는 Drawer, 태블릿·데스크톱(폭 900+)에서는 고정 사이드바.
+/// Android는 짧은 변 600dp 이상, 그 외는 폭 900dp 이상에서 고정 사이드바.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -157,8 +157,9 @@ class _HomeScreenState extends State<HomeScreen> {
       _serverConfig = null;
       _serverSource = null;
     }
-    if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
-      Navigator.pop(context);
+    final scaffold = _scaffoldKey.currentState;
+    if (scaffold?.widget.drawer != null && (scaffold?.isDrawerOpen ?? false)) {
+      scaffold!.closeDrawer();
     }
   }
 
@@ -387,7 +388,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final wide = MediaQuery.sizeOf(context).width >= 900;
+    final size = MediaQuery.sizeOf(context);
+    final wide = Theme.of(context).platform == TargetPlatform.android ? size.shortestSide >= 600 : size.width >= 900;
     final sidebar = _Sidebar(
       selected: _selected,
       device: _deviceRoot == null ? null : _deviceSource(),
