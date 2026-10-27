@@ -15,7 +15,7 @@ nPlayer의 UI/UX를 기준으로, 로컬·네트워크·클라우드 재생과 �
 - 공식 저장소에서 **disable-devtool 차단** 브라우저 확장앱을 선택 설치할 수 있습니다. 1.1.0부터 모든 웹사이트와 교차 도메인 iframe에 적용되며 켠 뒤 새로고침합니다. 콘솔 억제 설정·변형 대응 제한은 [확장앱 안내](plugins/README.md#disable-devtool-차단)를 참고하세요. 앱 v0.1.6부터 전체 사이트 권한을 지원하며 이후에는 확장앱만 업데이트합니다.
 - Windows `Alt+Enter` 전체화면과 온라인 자막 검색·적용을 지원합니다. [변경 내역](CHANGELOG.md)과 [v0.1.7 정식 배포 파일](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.7)을 참고하세요. API 4를 지원하지 않는 v0.1.4 앱은 한 번 업데이트해야 합니다.
 
-- 현재 nightly: [0.1.8-nightly.20261028.1](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.8-nightly.20261028.1). WebDAV 최근 재생 자막·재생목록 메뉴/개별 잠금·플레이어 화질 패널·메뉴 이동 후 탐색 위치 복원을 포함한다. 직전 nightly의 Android 큰 화면 고정 메뉴와 Google 기본 Secret 안내도 유지한다. 정식 Latest·업데이트 확인 기본값은 stable v0.1.7이다.
+- 현재 nightly: [0.1.8-nightly.20261028.2](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.8-nightly.20261028.2). 재생 영상 위 업스케일·보간 직접 전환과 자막 활성 표시를 제공하고 작은 세로 화면에서는 더보기로 이동한다. WebDAV 최근 재생 자막·재생목록 잠금·탐색 위치 복원 개선도 유지한다. 정식 Latest·업데이트 확인 기본값은 stable v0.1.7이다.
 
 ## 파일·재생목록 관리 (v0.1.7)
 
