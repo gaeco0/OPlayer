@@ -40,7 +40,11 @@ void main() {
     await DownloadManager.instance.init();
     t.view.physicalSize = const Size(1400, 900);
     t.view.devicePixelRatio = 1;
-    await t.pumpWidget(MaterialApp(theme: OTheme.dark(), home: const HomeScreen()));
+    Widget app(TargetPlatform platform) => MaterialApp(
+      theme: OTheme.dark().copyWith(platform: platform),
+      home: const HomeScreen(),
+    );
+    await t.pumpWidget(app(TargetPlatform.windows));
     await t.pump(const Duration(milliseconds: 500));
     expect(find.text('OPlayer'), findsOneWidget);
     expect(find.text('최근 재생'), findsOneWidget);
@@ -95,6 +99,38 @@ void main() {
     t.view.physicalSize = const Size(400, 800);
     await t.pump();
     expect(find.byIcon(Icons.menu), findsOneWidget);
+    // A medium-width desktop keeps its drawer; Android expanded screens pin it
+    // in both orientations, while folded phones and narrow multi-window do not.
+    t.view.physicalSize = const Size(690, 829);
+    await t.pump();
+    expect(find.byIcon(Icons.menu), findsOneWidget);
+    await t.pumpWidget(app(TargetPlatform.android));
+    await t.pump(const Duration(milliseconds: 300));
+    for (final size in [const Size(690, 829), const Size(829, 690), const Size(600, 960)]) {
+      t.view.physicalSize = size;
+      await t.pump();
+      expect(find.byType(Drawer), findsNothing);
+      expect(find.byIcon(Icons.menu), findsNothing);
+      expect(find.text('최근 재생').hitTestable(), findsOneWidget);
+      expect(find.textContaining('다운로드한 파일이 없습니다'), findsOneWidget);
+    }
+    for (final size in [const Size(390, 844), const Size(900, 390), const Size(580, 800)]) {
+      t.view.physicalSize = size;
+      await t.pump();
+      expect(find.byIcon(Icons.menu), findsOneWidget);
+      expect(find.textContaining('다운로드한 파일이 없습니다'), findsOneWidget);
+    }
+    await t.tap(find.byIcon(Icons.menu));
+    await t.pump(const Duration(milliseconds: 400));
+    t.view.physicalSize = const Size(690, 829);
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 400));
+    await t.tap(find.text('최근 재생'));
+    await t.pump();
+    await t.pump(const Duration(milliseconds: 400));
+    expect(find.text('재생 기록이 없습니다'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, '최근 재생').hitTestable(), findsOneWidget);
+    expect(find.byIcon(Icons.menu), findsNothing);
     await t.pumpWidget(const SizedBox());
     await t.pump(const Duration(seconds: 5));
     t.view.reset();

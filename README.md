@@ -15,6 +15,8 @@ nPlayer의 UI/UX를 기준으로, 로컬·네트워크·클라우드 재생과 �
 - 공식 저장소에서 **disable-devtool 차단** 브라우저 확장앱을 선택 설치할 수 있습니다. 1.1.0부터 모든 웹사이트와 교차 도메인 iframe에 적용되며 켠 뒤 새로고침합니다. 콘솔 억제 설정·변형 대응 제한은 [확장앱 안내](plugins/README.md#disable-devtool-차단)를 참고하세요. 앱 v0.1.6부터 전체 사이트 권한을 지원하며 이후에는 확장앱만 업데이트합니다.
 - Windows `Alt+Enter` 전체화면과 온라인 자막 검색·적용을 지원합니다. [변경 내역](CHANGELOG.md)과 [v0.1.7 정식 배포 파일](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.7)을 참고하세요. API 4를 지원하지 않는 v0.1.4 앱은 한 번 업데이트해야 합니다.
 
+- 현재 nightly: [0.1.8-nightly.20261027.1](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.8-nightly.20261027.1). Android 폴드 펼침·태블릿의 고정 메뉴와 Google 기본 Client Secret 자동 사용 안내를 보완했다. 정식 Latest·업데이트 확인 기본값은 stable v0.1.7을 유지한다.
+
 ## 파일·재생목록 관리 (v0.1.7)
 
 - 이어보기는 저장된 위치에서 파일을 열고, 연결·동기화 준비 중에는 기존 위치를 보존합니다. 설정의 자동/확인/끄기를 따르며 확인 모드에서는 선택할 때까지 일시정지합니다. 10초 이하 또는 95% 이상 본 기록은 기존 정책대로 처음부터 재생합니다.
