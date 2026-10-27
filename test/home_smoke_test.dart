@@ -31,6 +31,7 @@ void main() {
     final folder = (await t.runAsync(() async {
       final folder = await Directory.systemTemp.createTemp('oplayer_navigation_');
       await Directory('${folder.path}/nested-test').create();
+      await File('${folder.path}/nested-test/inside.mp3').writeAsString('audio');
       return folder;
     }))!;
     addTearDown(() => folder.delete(recursive: true));
@@ -83,6 +84,13 @@ void main() {
     t.view.physicalSize = const Size(1400, 900);
     await t.pump();
     expect(find.text('재생 기록이 없습니다'), findsOneWidget);
+    await t.tap(find.text(p.basename(folder.path)));
+    for (var i = 0; i < 30 && find.text('inside.mp3').evaluate().isEmpty; i++) {
+      await t.pump(const Duration(milliseconds: 20));
+      await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+    }
+    expect(find.text('inside.mp3'), findsOneWidget);
+    expect(find.byIcon(Icons.arrow_back), findsOneWidget);
     await t.tap(find.text('설정'));
     await t.pump();
     await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 500))); // ffmpeg 탐색(실제 프로세스)

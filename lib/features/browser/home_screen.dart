@@ -350,17 +350,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     child: snap.hasError ? Text('연결할 수 없습니다\n${snap.error}') : const CircularProgressIndicator(),
                   ),
                 )
-              : RemoteBrowserPage(
-                  source: snap.data!,
-                  onOpenDrawer: _openDrawer,
-                  actions: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined),
-                      tooltip: '서버 편집',
-                      onPressed: () => _addServer(edit: cfg),
-                    ),
-                  ],
-                ),
+              : RemoteBrowserPage(source: snap.data!, onOpenDrawer: _openDrawer),
         );
       case SourceKind.cloud:
         final a = ServerStore.instance.account(s.id!);
@@ -698,6 +688,7 @@ String? _sourceResource(Source source) => switch (source.kind) {
   SourceKind.downloads => downloadsResourceKey,
   SourceKind.device || SourceKind.folder => source.path,
   SourceKind.recent => recentResourceKey,
+  SourceKind.playlists => playlistsResourceKey,
   SourceKind.server =>
     ServerStore.instance.server(source.id!) == null
         ? null

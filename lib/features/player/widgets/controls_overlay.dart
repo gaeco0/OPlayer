@@ -216,6 +216,7 @@ class _TopBar extends StatelessWidget {
                 PopupMenuItem(value: PanelKind.subtitle, child: Text('자막')),
                 PopupMenuItem(value: PanelKind.audio, child: Text('오디오')),
                 PopupMenuItem(value: PanelKind.speed, child: Text('재생 속도')),
+                PopupMenuItem(value: PanelKind.aspect, child: Text('화면·화질 (업스케일·보간)')),
                 PopupMenuItem(value: PanelKind.more, child: Text('더보기')),
               ],
             )
@@ -331,14 +332,7 @@ class _BottomBar extends StatelessWidget {
                 onTap: () => c.seekRelative(const Duration(seconds: 10)),
               ),
               const Spacer(),
-              _IconBtn(
-                icon: Icons.aspect_ratio,
-                tooltip: '화면 비율',
-                onTap: () {
-                  c.cycleAspect();
-                  onToast(c.aspect.label);
-                },
-              ),
+              _IconBtn(icon: Icons.aspect_ratio, tooltip: '화면·화질', onTap: () => onPanel(PanelKind.aspect)),
               _IconBtn(icon: Icons.playlist_play, tooltip: '재생목록', onTap: () => onPanel(PanelKind.playlist)),
             ],
           ),

@@ -117,8 +117,15 @@ class WebDavSource extends MediaSource {
   }
 
   @override
-  Future<MediaItem?> itemForPath(String path, String title) async =>
-      itemFor(RemoteEntry(name: p.url.basename(path), path: path, isDir: false), const []);
+  Future<MediaItem?> itemForPath(String path, String title) async {
+    List<RemoteEntry> siblings = const [];
+    try {
+      siblings = await list(p.url.dirname(path));
+    } catch (_) {
+      // Listing may be denied even when the media itself remains readable.
+    }
+    return itemFor(RemoteEntry(name: p.url.basename(path), path: path, isDir: false), siblings);
+  }
 
   @override
   bool get canUpload => true;

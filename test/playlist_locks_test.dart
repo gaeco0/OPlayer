@@ -1,0 +1,77 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:oplayer/core/playlist_store.dart';
+import 'package:oplayer/core/resource_locks.dart';
+import 'package:oplayer/core/resume_store.dart';
+import 'package:oplayer/core/settings.dart';
+import 'package:oplayer/features/browser/playlists_page.dart';
+
+void main() {
+  testWidgets('playlist menu and individual lists relock independently without unlocking their files', (t) async {
+    final locks = ResourceLocks.instance;
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(privacyChannel, (_) async => null);
+    SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
+    late String a, b;
+    const file = 'https://example.com/private.mp3';
+    await t.runAsync(() async {
+      await AppSettings.instance.init();
+      await ResumeStore.instance.init();
+      await locks.init();
+      await locks.setPin('123456');
+      locks.onAuthenticate = (_) => locks.verifyPin('123456');
+      a = await PlaylistStore.instance.create('Movies', [const PlaylistTrack(file, 'Private track')]);
+      b = await PlaylistStore.instance.create('Music');
+      await locks.toggle(playlistResourceKey(a), 'Movies');
+      await locks.toggle(playlistResourceKey(b), 'Music');
+      await locks.toggle(file, 'Private file');
+    });
+    addTearDown(() async {
+      locks.onAuthenticate = null;
+      locks.background(false);
+      FlutterSecureStorage.setMockInitialValues({});
+      await locks.init();
+      messenger.setMockMethodCallHandler(privacyChannel, null);
+    });
+    await t.pumpWidget(MaterialApp(home: PlaylistsPage(onOpenDrawer: () {})));
+    await t.pumpAndSettle();
+    expect(find.text('Movies'), findsOneWidget);
+    expect(find.text('잠김'), findsNWidgets(2));
+    locks.onAuthenticate = (_) async => false;
+    await t.tap(find.text('Movies'));
+    await t.pumpAndSettle();
+    expect(find.byType(PlaylistPage), findsNothing);
+    locks.onAuthenticate = (_) => locks.verifyPin('123456');
+    await t.runAsync(() => locks.requireAccess(playlistResourceKey(a)));
+    await t.tap(find.text('Movies'));
+    await t.pumpAndSettle();
+    expect(find.text('Private track'), findsOneWidget);
+    expect(locks.isLocked(playlistResourceKey(b)), true);
+    expect(locks.isLocked(file), true);
+    locks.background(true);
+    locks.background(false);
+    await t.pumpAndSettle();
+    expect(find.text('Private track'), findsNothing);
+    expect(find.byTooltip('선택모드'), findsNothing);
+    await t.runAsync(() => locks.requireAccess(playlistResourceKey(a)));
+    await t.pumpAndSettle();
+    expect(find.text('Private track'), findsOneWidget);
+    await t.runAsync(() => locks.toggle(playlistsResourceKey, '재생목록'));
+    await t.pumpAndSettle();
+    expect(find.text('Private track'), findsNothing);
+    await t.runAsync(() => locks.requireAccess(playlistsResourceKey));
+    await t.pumpAndSettle();
+    expect(find.text('Private track'), findsOneWidget);
+    expect(locks.isLocked(playlistResourceKey(b)), true);
+    expect(locks.isLocked(file), true);
+    await t.runAsync(() => locks.init());
+    await t.pumpAndSettle();
+    expect(locks.isLocked(playlistsResourceKey), true);
+    expect(locks.isLocked(playlistResourceKey(a)), true);
+    expect(find.text('Private track'), findsNothing);
+    await t.pumpWidget(const SizedBox());
+  });
+}

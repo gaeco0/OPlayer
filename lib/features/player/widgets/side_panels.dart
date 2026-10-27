@@ -71,7 +71,7 @@ class SidePanel extends StatelessWidget {
     PanelKind.speed => '재생 속도',
     PanelKind.subtitle => '자막',
     PanelKind.audio => '오디오',
-    PanelKind.aspect => '화면 비율',
+    PanelKind.aspect => '화면·화질',
     PanelKind.playlist => '재생목록',
     PanelKind.more => '설정',
     PanelKind.none => '',
@@ -376,7 +376,6 @@ class _AspectPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListView(
     children: [
-      _Radios<AspectMode>(values: AspectMode.values, selected: c.aspect, label: (m) => m.label, onChanged: c.setAspect),
       const _Section('업스케일'),
       SwitchListTile(
         title: const Text('고화질 업스케일', style: _white),
@@ -422,6 +421,8 @@ class _AspectPanel extends StatelessWidget {
           padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
           child: Text('프레임 혼합 설정 적용됨', style: _label),
         ),
+      const _Section('화면 비율'),
+      _Radios<AspectMode>(values: AspectMode.values, selected: c.aspect, label: (m) => m.label, onChanged: c.setAspect),
       const _Section('영상 필터 확장앱'),
       ListenableBuilder(
         listenable: PluginStore.instance,
