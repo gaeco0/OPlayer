@@ -10,6 +10,11 @@ import 'package:oplayer/features/player/widgets/side_panels.dart';
 
 class _Engine extends PlatformPlayer {
   _Engine() : super(configuration: const PlayerConfiguration());
+
+  void selectSubtitle(SubtitleTrack subtitle) {
+    state = state.copyWith(track: state.track.copyWith(subtitle: subtitle));
+    trackController.add(state.track);
+  }
 }
 
 void main() {
@@ -107,10 +112,7 @@ void main() {
     expect(background(upscaleButton), Colors.transparent);
     expect(foreground(upscaleButton), Colors.white);
     expect(background(subtitleButton), Colors.transparent);
-    engine.state = engine.state.copyWith(
-      track: engine.state.track.copyWith(subtitle: const SubtitleTrack('1', 'ko', 'Korean')),
-    );
-    engine.trackController.add(engine.state.track);
+    engine.selectSubtitle(const SubtitleTrack('1', 'ko', 'Korean'));
     await t.pumpAndSettle();
     expect(background(subtitleButton), Colors.white);
     expect(foreground(subtitleButton), Colors.black);
@@ -119,8 +121,7 @@ void main() {
     expect(panel, PanelKind.subtitle);
     await t.tap(find.byIcon(Icons.close));
     await t.pumpAndSettle();
-    engine.state = engine.state.copyWith(track: engine.state.track.copyWith(subtitle: SubtitleTrack.no()));
-    engine.trackController.add(engine.state.track);
+    engine.selectSubtitle(SubtitleTrack.no());
     await t.pumpAndSettle();
     expect(background(subtitleButton), Colors.transparent);
     // 최소 가로 폭에서는 버튼이 넘치지 않아야 합니다.
