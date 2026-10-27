@@ -16,10 +16,11 @@ void main() {
   testWidgets('player screen button opens quality controls and both switches change playback settings', (t) async {
     SharedPreferences.setMockInitialValues({});
     await AppSettings.instance.init();
+    final engine = _Engine();
     final controller = PlayerController(
       playlist: const [MediaItem(key: 'test', uri: 'https://example.com/video.mp4', title: 'Video')],
       startIndex: 0,
-      playbackEngine: Player(platformPlayer: _Engine()),
+      playbackEngine: Player(platformPlayer: engine),
     );
     t.view.physicalSize = const Size(1200, 900);
     t.view.devicePixelRatio = 1;
@@ -58,7 +59,7 @@ void main() {
     await t.pumpAndSettle();
     expect(panel, PanelKind.aspect);
     final upscaling = find.widgetWithText(SwitchListTile, '고화질 업스케일');
-    final interpolation = find.widgetWithText(SwitchListTile, '가벼운 프레임 혼합');
+    final interpolation = find.widgetWithText(SwitchListTile, '프레임 보간');
     expect(upscaling.hitTestable(), findsOneWidget);
     expect(interpolation.hitTestable(), findsOneWidget);
     await t.tap(upscaling);
@@ -73,6 +74,73 @@ void main() {
     await t.pumpAndSettle();
     expect(AppSettings.instance.videoUpscaling, false);
     expect(AppSettings.instance.frameInterpolation, false);
+    // 데스크톱 더보기에서도 두 설정을 바로 조작할 수 있어야 합니다.
+    await t.tap(find.byIcon(Icons.close));
+    await t.pumpAndSettle();
+    await t.tap(find.byTooltip('더보기'));
+    await t.pumpAndSettle();
+    expect(panel, PanelKind.more);
+    expect(upscaling.hitTestable(), findsOneWidget);
+    expect(interpolation.hitTestable(), findsOneWidget);
+    await t.tap(upscaling);
+    await t.pumpAndSettle();
+    await t.tap(interpolation);
+    await t.pumpAndSettle();
+    expect(AppSettings.instance.videoUpscaling, true);
+    expect(AppSettings.instance.frameInterpolation, true);
+    await t.tap(find.byIcon(Icons.close));
+    await t.pumpAndSettle();
+    final upscaleButton = find.widgetWithText(TextButton, '업스케일');
+    final interpolateButton = find.widgetWithText(TextButton, '보간');
+    final subtitleButton = find.widgetWithText(TextButton, '자막');
+    Color? background(Finder button) => t.widget<TextButton>(button).style!.backgroundColor!.resolve({});
+    Color? foreground(Finder button) => t.widget<TextButton>(button).style!.foregroundColor!.resolve({});
+    expect(background(upscaleButton), Colors.white);
+    expect(foreground(upscaleButton), Colors.black);
+    expect(background(interpolateButton), Colors.white);
+    await t.tap(upscaleButton);
+    await t.pumpAndSettle();
+    await t.tap(interpolateButton);
+    await t.pumpAndSettle();
+    expect(AppSettings.instance.videoUpscaling, false);
+    expect(AppSettings.instance.frameInterpolation, false);
+    expect(background(upscaleButton), Colors.transparent);
+    expect(foreground(upscaleButton), Colors.white);
+    expect(background(subtitleButton), Colors.transparent);
+    engine.state = engine.state.copyWith(
+      track: engine.state.track.copyWith(subtitle: const SubtitleTrack('1', 'ko', 'Korean')),
+    );
+    engine.trackController.add(engine.state.track);
+    await t.pumpAndSettle();
+    expect(background(subtitleButton), Colors.white);
+    expect(foreground(subtitleButton), Colors.black);
+    await t.tap(subtitleButton);
+    await t.pumpAndSettle();
+    expect(panel, PanelKind.subtitle);
+    await t.tap(find.byIcon(Icons.close));
+    await t.pumpAndSettle();
+    engine.state = engine.state.copyWith(track: engine.state.track.copyWith(subtitle: SubtitleTrack.no()));
+    engine.trackController.add(engine.state.track);
+    await t.pumpAndSettle();
+    expect(background(subtitleButton), Colors.transparent);
+    // 최소 가로 폭에서는 버튼이 넘치지 않아야 합니다.
+    t.view.physicalSize = const Size(600, 360);
+    await t.pumpAndSettle();
+    expect(t.takeException(), isNull);
+    expect(upscaleButton.hitTestable(), findsOneWidget);
+    // 작은 세로 화면에서는 오버레이 버튼 대신 더보기에서 설정합니다.
+    t.view.physicalSize = const Size(360, 800);
+    await t.pumpAndSettle();
+    expect(upscaleButton, findsNothing);
+    expect(interpolateButton, findsNothing);
+    await t.tap(find.byTooltip('재생 설정'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('더보기'));
+    await t.pumpAndSettle();
+    expect(panel, PanelKind.more);
+    expect(upscaling.hitTestable(), findsOneWidget);
+    expect(interpolation.hitTestable(), findsOneWidget);
+    expect(t.takeException(), isNull);
     await t.pumpWidget(const SizedBox());
   });
 }

@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart' show Track;
+
+import '../../../core/settings.dart';
 
 import '../../../app/theme.dart';
 import '../player_controller.dart';
@@ -133,6 +136,77 @@ class ControlsOverlay extends StatelessWidget {
   }
 }
 
+/// 재생 화면에서 화질 설정을 바로 전환하고 자막 선택 상태를 표시합니다.
+class _PlaybackToggles extends StatelessWidget {
+  const _PlaybackToggles({required this.c, required this.onPanel});
+  final PlayerController c;
+  final ValueChanged<PanelKind> onPanel;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: AppSettings.instance,
+    builder: (context, _) => Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _PlaybackToggle(
+          label: '업스케일',
+          icon: Icons.high_quality_outlined,
+          active: AppSettings.instance.videoUpscaling,
+          onTap: c.upscalingBusy || c.audioOnly
+              ? null
+              : () => AppSettings.instance.update((s) => s.videoUpscaling = !s.videoUpscaling),
+        ),
+        _PlaybackToggle(
+          label: '보간',
+          icon: Icons.auto_awesome_motion_outlined,
+          active: AppSettings.instance.frameInterpolation,
+          onTap: c.interpolationBusy || c.audioOnly
+              ? null
+              : () => AppSettings.instance.update((s) => s.frameInterpolation = !s.frameInterpolation),
+        ),
+        StreamBuilder<Track>(
+          stream: c.player.stream.track,
+          initialData: c.player.state.track,
+          builder: (context, snapshot) {
+            final id = snapshot.data?.subtitle.id;
+            return _PlaybackToggle(
+              label: '자막',
+              icon: Icons.closed_caption_outlined,
+              active: id != null && id != 'no' && id != 'auto',
+              onTap: () => onPanel(PanelKind.subtitle),
+            );
+          },
+        ),
+      ],
+    ),
+  );
+}
+
+class _PlaybackToggle extends StatelessWidget {
+  const _PlaybackToggle({required this.label, required this.icon, required this.active, required this.onTap});
+  final String label;
+  final IconData icon;
+  final bool active;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    selected: active,
+    child: TextButton.icon(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        backgroundColor: active ? Colors.white : Colors.transparent,
+        foregroundColor: active ? Colors.black : Colors.white,
+        disabledForegroundColor: active ? Colors.black38 : Colors.white38,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        minimumSize: const Size(0, 40),
+      ),
+      icon: Icon(icon, size: 20),
+      label: Text(label),
+    ),
+  );
+}
+
 class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.c,
@@ -194,8 +268,6 @@ class _TopBar extends StatelessWidget {
           if (onCompact != null) _IconBtn(icon: Icons.picture_in_picture, tooltip: '작은 창', onTap: onCompact),
           if (onCast != null) _IconBtn(icon: Icons.cast, tooltip: '외부 기기로 재생', onTap: onCast),
           if (onPip != null) _IconBtn(icon: Icons.picture_in_picture_alt, tooltip: '화면 속 화면', onTap: onPip),
-          if (!narrow)
-            _IconBtn(icon: Icons.closed_caption_outlined, tooltip: '자막', onTap: () => onPanel(PanelKind.subtitle)),
           if (!narrow) _IconBtn(icon: Icons.audiotrack_outlined, tooltip: '오디오', onTap: () => onPanel(PanelKind.audio)),
           if (!narrow)
             TextButton(
@@ -333,6 +405,7 @@ class _BottomBar extends StatelessWidget {
               ),
               const Spacer(),
               _IconBtn(icon: Icons.aspect_ratio, tooltip: '화면·화질', onTap: () => onPanel(PanelKind.aspect)),
+              if (MediaQuery.sizeOf(context).width >= 600) _PlaybackToggles(c: c, onPanel: onPanel),
               _IconBtn(icon: Icons.playlist_play, tooltip: '재생목록', onTap: () => onPanel(PanelKind.playlist)),
             ],
           ),

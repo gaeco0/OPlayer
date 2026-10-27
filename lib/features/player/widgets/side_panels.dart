@@ -368,6 +368,66 @@ extension on String {
   String ifEmpty(String other) => isEmpty ? other : this;
 }
 
+// 화면·화질과 더보기에서 동일한 재생 설정을 제공합니다.
+class _QualityControls extends StatelessWidget {
+  const _QualityControls({required this.c});
+  final PlayerController c;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: AppSettings.instance,
+    builder: (context, _) => Column(
+      children: [
+        const _Section('업스케일'),
+        SwitchListTile(
+          title: const Text('고화질 업스케일', style: _white),
+          subtitle: Text(c.audioOnly ? '오디오 전용 재생에는 적용하지 않습니다' : '화면에 맞춰 선명하게 확대 · 설정 자동 저장', style: _label),
+          value: AppSettings.instance.videoUpscaling,
+          onChanged: c.upscalingBusy || c.audioOnly
+              ? null
+              : (v) => AppSettings.instance.update((s) => s.videoUpscaling = v),
+        ),
+        if (c.upscalingBusy) const LinearProgressIndicator(),
+        if (c.upscalingIssue != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Text(c.upscalingIssue!, style: _label),
+          )
+        else if (c.upscalingApplied)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Text(
+              c.upscalingOutput == null
+                  ? '확대되는 화면에서 적용됩니다'
+                  : '${c.upscalingSource.width.toInt()}×${c.upscalingSource.height.toInt()} → ${c.upscalingOutput!.width.toInt()}×${c.upscalingOutput!.height.toInt()}',
+              style: _label,
+            ),
+          ),
+        const _Section('프레임 보간'),
+        SwitchListTile(
+          title: const Text('프레임 보간', style: _white),
+          subtitle: Text(c.audioOnly ? '오디오 전용 재생에는 적용하지 않습니다' : '가벼운 프레임 혼합으로 끊김 완화 · 설정 자동 저장', style: _label),
+          value: AppSettings.instance.frameInterpolation,
+          onChanged: c.interpolationBusy || c.audioOnly
+              ? null
+              : (v) => AppSettings.instance.update((s) => s.frameInterpolation = v),
+        ),
+        if (c.interpolationBusy) const LinearProgressIndicator(),
+        if (c.interpolationIssue != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Text(c.interpolationIssue!, style: _label),
+          )
+        else if (c.interpolationApplied)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Text('프레임 혼합 설정 적용됨', style: _label),
+          ),
+      ],
+    ),
+  );
+}
+
 // ---------------- 화면 비율 ----------------
 class _AspectPanel extends StatelessWidget {
   const _AspectPanel({required this.c});
@@ -376,51 +436,7 @@ class _AspectPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListView(
     children: [
-      const _Section('업스케일'),
-      SwitchListTile(
-        title: const Text('고화질 업스케일', style: _white),
-        subtitle: Text(c.audioOnly ? '오디오 전용 재생에는 적용하지 않습니다' : '화면에 맞춰 선명하게 확대 · 설정 자동 저장', style: _label),
-        value: AppSettings.instance.videoUpscaling,
-        onChanged: c.upscalingBusy || c.audioOnly
-            ? null
-            : (v) => AppSettings.instance.update((s) => s.videoUpscaling = v),
-      ),
-      if (c.upscalingBusy) const LinearProgressIndicator(),
-      if (c.upscalingIssue != null)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          child: Text(c.upscalingIssue!, style: _label),
-        )
-      else if (c.upscalingApplied)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          child: Text(
-            c.upscalingOutput == null
-                ? '확대되는 화면에서 적용됩니다'
-                : '${c.upscalingSource.width.toInt()}×${c.upscalingSource.height.toInt()} → ${c.upscalingOutput!.width.toInt()}×${c.upscalingOutput!.height.toInt()}',
-            style: _label,
-          ),
-        ),
-      const _Section('프레임 보간'),
-      SwitchListTile(
-        title: const Text('가벼운 프레임 혼합', style: _white),
-        subtitle: Text(c.audioOnly ? '오디오 전용 재생에는 적용하지 않습니다' : '화면 주사율에 맞춰 끊김 완화 · 설정 자동 저장', style: _label),
-        value: AppSettings.instance.frameInterpolation,
-        onChanged: c.interpolationBusy || c.audioOnly
-            ? null
-            : (v) => AppSettings.instance.update((s) => s.frameInterpolation = v),
-      ),
-      if (c.interpolationBusy) const LinearProgressIndicator(),
-      if (c.interpolationIssue != null)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          child: Text(c.interpolationIssue!, style: _label),
-        )
-      else if (c.interpolationApplied)
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          child: Text('프레임 혼합 설정 적용됨', style: _label),
-        ),
+      _QualityControls(c: c),
       const _Section('화면 비율'),
       _Radios<AspectMode>(values: AspectMode.values, selected: c.aspect, label: (m) => m.label, onChanged: c.setAspect),
       const _Section('영상 필터 확장앱'),
@@ -539,6 +555,7 @@ class _MorePanel extends StatelessWidget {
     final s = c.player.state;
     return ListView(
       children: [
+        _QualityControls(c: c),
         const _Section('취침 타이머'),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
