@@ -49,6 +49,12 @@ class ANGLESurfaceManager {
 
   void Draw(std::function<void()> callback);
 
+  struct Surface {
+    HANDLE handle;
+    int32_t width, height;
+    Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+  };
+  Surface Acquire();
   void Read();
 
   void MakeCurrent(bool value);

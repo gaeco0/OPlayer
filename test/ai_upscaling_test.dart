@@ -68,12 +68,16 @@ void main() {
     store.installed[provider.id] = provider;
     final model = (await service.catalog()).first;
     await service.materialize(model);
+    final networkPath = await service.network(model.key);
+    expect(networkPath, endsWith('.glsl.ous'));
+    expect(await File(networkPath!).exists(), true);
     final pending = service.materialize(model);
     store.disabled.add(provider.id);
     await expectLater(pending, throwsStateError);
     expect(await service.catalog(), isEmpty);
     await expectLater(service.materialize(model), throwsStateError);
     await expectLater(service.resolve(model.key), throwsStateError);
+    await expectLater(service.network(model.key), throwsStateError);
   });
 
   test('a new JS provider can return model weights without adding host-side model IDs', () async {
@@ -91,6 +95,7 @@ upscaleModel(){return {format:'mpv-glsl',shader:${jsonEncode(shader)}}}
     final model = (await service.fromPlugin(provider)).single;
     expect(await (await service.materialize(model)).readAsString(), shader);
     expect(await service.resolve(model.key), endsWith('$digest.glsl'));
+    expect(await service.network(model.key), isNull);
     store.disabled.add(provider.id);
     await expectLater(service.resolve(model.key), throwsStateError);
   });

@@ -48,6 +48,7 @@ class AppSettings extends ChangeNotifier {
   int upscalingResolution = 0;
   bool interpolationNpu = true;
   bool videoUpscaling = false;
+  bool upscalingNpu = true;
   String upscalingModel = 'lanczos';
   double defaultSpeed = 1.0;
   DefaultAspect defaultAspect = DefaultAspect.fit;
@@ -130,6 +131,7 @@ class AppSettings extends ChangeNotifier {
     'upscalingResolution': upscalingResolution,
     'interpolationNpu': interpolationNpu,
     'videoUpscaling': videoUpscaling,
+    'upscalingNpu': upscalingNpu,
     'upscalingModel': upscalingModel,
     'speed': defaultSpeed,
     'aspect': defaultAspect.index,
@@ -188,6 +190,7 @@ class AppSettings extends ChangeNotifier {
         : 0;
     interpolationNpu = j['interpolationNpu'] != false;
     videoUpscaling = j['videoUpscaling'] == true;
+    upscalingNpu = j['upscalingNpu'] != false;
     upscalingModel = j['upscalingModel'] is String ? j['upscalingModel'] as String : 'lanczos';
     defaultSpeed = (j['speed'] as num?)?.toDouble() ?? 1.0;
     defaultAspect = DefaultAspect.values[v('aspect', 0)];

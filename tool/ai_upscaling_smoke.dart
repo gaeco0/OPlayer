@@ -2,20 +2,25 @@
 // Requires .dart_tool/interpolation.mp4 (small, generated test fixture).
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:oplayer/core/plugins/upscale_models.dart';
 import 'package:oplayer/core/plugins/plugin.dart';
 import 'package:oplayer/core/plugins/plugin_store.dart';
 import 'package:oplayer/features/player/video_upscaling.dart';
+import 'package:oplayer/features/player/frame_interpolation.dart';
 
 Future<void> main(List<String> args) async {
   final baselineOnly = args.contains('--no-ai');
+  final closeActive = args.contains('--close-active');
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   final player = Player(configuration: const PlayerConfiguration(logLevel: MPVLogLevel.debug));
+  final boundary = GlobalKey();
   // Match OPlayer's Windows copy-back decoding policy.
   final video = VideoController(player, configuration: const VideoControllerConfiguration(hwdec: 'auto-copy'));
   final errors = <String>[];
@@ -27,7 +32,10 @@ Future<void> main(List<String> args) async {
   runApp(
     MaterialApp(
       home: Scaffold(
-        body: Video(controller: video, controls: NoVideoControls),
+        body: RepaintBoundary(
+          key: boundary,
+          child: Video(controller: video, controls: NoVideoControls),
+        ),
       ),
     ),
   );
@@ -45,6 +53,21 @@ Future<void> main(List<String> args) async {
     await player.seek(const Duration(seconds: 1));
     await Future<void>.delayed(const Duration(milliseconds: 300));
     final native = player.platform as NativePlayer;
+    final mixing = FrameInterpolation(read: native.getProperty, write: native.setProperty);
+    Future<void> visibleFrame() async {
+      await WidgetsBinding.instance.endOfFrame;
+      final render = boundary.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+      final image = await render.toImage(pixelRatio: .25);
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      image.dispose();
+      if (bytes == null) throw StateError('No composed frame');
+      var lit = 0;
+      for (var i = 0; i < bytes.lengthInBytes; i += 4) {
+        if (bytes.getUint8(i) + bytes.getUint8(i + 1) + bytes.getUint8(i + 2) > 30) lit++;
+      }
+      if (lit < bytes.lengthInBytes ~/ 200) throw StateError('Black composed video frame');
+    }
+
     final originalSize = video.rect.value!.size;
     final scaler = VideoUpscaler(
       read: native.getProperty,
@@ -84,15 +107,32 @@ Future<void> main(List<String> args) async {
         throw StateError('${model.name} trained weights were not compiled by the active GPU renderer');
       }
       await step('verified GPU coefficient $coefficient');
-      passes[model.name] = {'shader': await native.getProperty('glsl-shaders'), 'compiledCoefficient': coefficient};
+      passes[model.name] = <String, Object>{
+        'shader': await native.getProperty('glsl-shaders'),
+        'compiledCoefficient': coefficient,
+      };
       if (video.rect.value?.size != const Size(640, 360)) throw StateError('Wrong output texture size');
+      await mixing.apply(true, 60);
+      await player.play();
+      for (var frame = 0; frame < 12; frame++) {
+        await Future<void>.delayed(const Duration(milliseconds: 80));
+        await visibleFrame();
+      }
+      await player.pause();
+      await mixing.apply(false, 60);
+      passes[model.name]['composedFramesWithMixing'] = 12;
     }
-    await shaders.apply(null);
-    await scaler.apply(false, null);
-    await Future<void>.delayed(const Duration(seconds: 1));
-    final restored = await native.getProperty('glsl-shaders');
-    if (video.rect.value?.size != originalSize) throw StateError('Texture size was not restored');
-    if (restored.contains('.glsl')) throw StateError('Shader was not removed');
+    if (closeActive) {
+      await mixing.apply(true, 60);
+      await player.play();
+    } else {
+      await shaders.apply(null);
+      await scaler.apply(false, null);
+      await Future<void>.delayed(const Duration(seconds: 1));
+      final restored = await native.getProperty('glsl-shaders');
+      if (video.rect.value?.size != originalSize) throw StateError('Texture size was not restored');
+      if (restored.contains('.glsl')) throw StateError('Shader was not removed');
+    }
     await File('.dart_tool/ai-upscaling-smoke.json').writeAsString(jsonEncode(passes));
     debugPrint('AI_UPSCALING_SMOKE_OK: three trained CNNs executed on GPU; shaders and texture restored');
     success = true;
@@ -101,10 +141,10 @@ Future<void> main(List<String> args) async {
     debugPrint('$e\n$st');
   } finally {
     await File('.dart_tool/ai-gpu-all.log').writeAsString(messages.join('\n'));
-    runApp(const SizedBox());
+    if (!closeActive) runApp(const SizedBox());
     await Future<void>.delayed(const Duration(milliseconds: 500));
     await logs.cancel();
-    await player.dispose();
+    if (!closeActive) await player.dispose();
     await Future<void>.delayed(const Duration(milliseconds: 500));
   }
   await File(

@@ -108,46 +108,28 @@ VideoOutput::VideoOutput(int64_t handle,
 }
 
 VideoOutput::~VideoOutput() {
-  destroyed_ = true;
-  auto promise = std::promise<void>();
+  {std::lock_guard<std::mutex> lock(lifecycle_mutex_);destroyed_ = true;}
+  // Stop callbacks before queuing the final barrier. The mpv handle and its GL
+  // context must both remain alive until all queued renderer work has drained.
+  if (render_context_) mpv_render_context_set_update_callback(render_context_, nullptr, nullptr);
   if (texture_id_) {
-    registrar_->texture_registrar()->UnregisterTexture(
-        texture_id_, [&, texture_id = texture_id_]() {
-          // Add one more task into the thread pool queue & exit the destructor
-          // only when it gets executed. This will ensure that all the tasks
-          // posted to the thread pool i.e. render or resize before this are
-          // executed (and won't reference the dead object anymore), most
-          // notably |CheckAndResize| & |Render|.
-          auto future = thread_pool_ref_->Post([&, id = texture_id]() {
-            std::cout << "media_kit: VideoOutput: Free Texture: " << id
-                      << std::endl;
-            std::cout << "VideoOutput::~VideoOutput: "
-                      << reinterpret_cast<int64_t>(handle_) << std::endl;
-            std::lock_guard<std::mutex> lock(textures_mutex_);
-            texture_variants_.clear();
-            // H/W
-            textures_.clear();
-            // S/W
-            pixel_buffer_textures_.clear();
-            // Free (call destructor) |ANGLESurfaceManager| through the thread
-            // pool. This will ensure synchronized EGL or ANGLE usage & won't
-            // conflict with |Render| or |CheckAndResize| of other
-            // |VideoOutput|s.
-            surface_manager_.reset(nullptr);
-            promise.set_value();
-          });
-        });
+    std::promise<void> unregistered;
+    registrar_->texture_registrar()->UnregisterTexture(texture_id_, [&]() { unregistered.set_value(); });
+    unregistered.get_future().wait();
   }
-
-  promise.get_future().wait();
-  texture_id_ = 0;
-
-  thread_pool_ref_->Post([render_context = render_context_]() {
-    mpv_render_context_free(render_context);
-  });
+  thread_pool_ref_->Post([this]() {
+    if (surface_manager_) surface_manager_->MakeCurrent(true);
+    if (render_context_) mpv_render_context_free(render_context_);
+    render_context_ = nullptr;
+    if (surface_manager_) surface_manager_->MakeCurrent(false);
+    { std::lock_guard<std::mutex> lock(textures_mutex_);
+      texture_variants_.clear(); textures_.clear(); pixel_buffer_textures_.clear(); }
+    surface_manager_.reset(); pixel_buffer_.reset(); texture_id_ = 0;
+  }).get();
 }
 
 void VideoOutput::NotifyRender() {
+  std::lock_guard<std::mutex> lock(lifecycle_mutex_);
   if (destroyed_) {
     return;
   }
@@ -156,6 +138,7 @@ void VideoOutput::NotifyRender() {
 }
 
 void VideoOutput::Render() {
+  if (destroyed_) return;
   if (texture_id_) {
     // H/W
     if (surface_manager_ != nullptr) {
@@ -242,6 +225,7 @@ void VideoOutput::SetSize(std::optional<int64_t> width,
 }
 
 void VideoOutput::CheckAndResize() {
+  if (destroyed_) return;
   // Check if a new texture with different dimensions is needed.
   auto required_width = GetVideoWidth(), required_height = GetVideoHeight();
   if (required_width < 1 || required_height < 1) {
@@ -271,7 +255,7 @@ void VideoOutput::CheckAndResize() {
 void VideoOutput::Resize(int64_t required_width, int64_t required_height) {
   std::cout << required_width << " " << required_height << std::endl;
   // Unregister previously registered texture & delete underlying objects.
-  if (texture_id_) {
+  if (texture_id_ && surface_manager_ == nullptr) {
     registrar_->texture_registrar()->UnregisterTexture(
         texture_id_, [&, id = texture_id_]() {
           if (id) {
@@ -303,34 +287,32 @@ void VideoOutput::Resize(int64_t required_width, int64_t required_height) {
     // dimensions while preserving previous EGLDisplay & EGLContext.
     surface_manager_->SetSize(static_cast<int32_t>(required_width),
                               static_cast<int32_t>(required_height));
-    auto texture = std::make_unique<FlutterDesktopGpuSurfaceDescriptor>();
-    texture->struct_size = sizeof(FlutterDesktopGpuSurfaceDescriptor);
-    texture->handle = surface_manager_->handle();
-    texture->width = texture->visible_width = surface_manager_->width();
-    texture->height = texture->visible_height = surface_manager_->height();
-    texture->release_context = nullptr;
-    texture->release_callback = [](void*) {};
-    texture->format = kFlutterDesktopPixelFormatBGRA8888;
-    auto texture_variant =
-        std::make_unique<flutter::TextureVariant>(flutter::GpuSurfaceTexture(
-            kFlutterDesktopGpuSurfaceTypeDxgiSharedHandle, [&](auto, auto) {
-              std::lock_guard<std::mutex> lock(textures_mutex_);
-              if (texture_id_) {
-                surface_manager_->Read();
-                return textures_.at(texture_id_).get();
-              } else {
-                return (FlutterDesktopGpuSurfaceDescriptor*)nullptr;
-              }
-            }));
-    // Register new texture.
-    texture_id_ =
-        registrar_->texture_registrar()->RegisterTexture(texture_variant.get());
-    std::cout << "media_kit: VideoOutput: Create Texture: " << texture_id_
-              << std::endl;
-    std::lock_guard<std::mutex> lock(textures_mutex_);
-    textures_.emplace(std::make_pair(texture_id_, std::move(texture)));
-    texture_variants_.emplace(
-        std::make_pair(texture_id_, std::move(texture_variant)));
+    if (!texture_id_) {
+      // Keep one Flutter texture ID across resize. Each acquired frame owns its
+      // D3D resource until Flutter releases it, including retired-size frames.
+      auto texture_variant = std::make_unique<flutter::TextureVariant>(flutter::GpuSurfaceTexture(
+          kFlutterDesktopGpuSurfaceTypeDxgiSharedHandle, [this](auto, auto) -> const FlutterDesktopGpuSurfaceDescriptor* {
+            if (destroyed_) return nullptr;
+            auto surface = surface_manager_->Acquire();
+            auto resource = new Microsoft::WRL::ComPtr<ID3D11Texture2D>(std::move(surface.texture));
+            // Flutter reads visible dimensions after invoking release_callback.
+            // Only the resource lease may be released there, not the descriptor.
+            auto& descriptor = hardware_descriptor_;
+            descriptor.struct_size = sizeof(descriptor);
+            descriptor.handle = surface.handle;
+            descriptor.width = descriptor.visible_width = surface.width;
+            descriptor.height = descriptor.visible_height = surface.height;
+            descriptor.format = kFlutterDesktopPixelFormatBGRA8888;
+            descriptor.release_context = resource;
+            descriptor.release_callback = [](void* context) {
+              delete static_cast<Microsoft::WRL::ComPtr<ID3D11Texture2D>*>(context);
+            };
+            return &descriptor;
+          }));
+      texture_id_ = registrar_->texture_registrar()->RegisterTexture(texture_variant.get());
+      std::lock_guard<std::mutex> lock(textures_mutex_);
+      texture_variants_.emplace(texture_id_, std::move(texture_variant));
+    }
     // Notify public texture update callback.
     texture_update_callback_(texture_id_, required_width, required_height);
   }

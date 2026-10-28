@@ -156,7 +156,7 @@ class _PlaybackToggles extends StatelessWidget {
               Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const UpscaleModelsPage())),
           icon: Icons.high_quality_outlined,
           active: AppSettings.instance.videoUpscaling,
-          onTap: c.upscalingBusy || c.audioOnly
+          onTap: (c.upscalingBusy && !AppSettings.instance.videoUpscaling) || c.audioOnly
               ? null
               : () => AppSettings.instance.update((s) => s.videoUpscaling = !s.videoUpscaling),
         ),

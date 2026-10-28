@@ -387,7 +387,7 @@ class _QualityControls extends StatelessWidget {
           title: const Text('고화질 업스케일', style: _white),
           subtitle: Text(c.audioOnly ? '오디오 전용 재생에는 적용하지 않습니다' : '화면에 맞춰 선명하게 확대 · 설정 자동 저장', style: _label),
           value: AppSettings.instance.videoUpscaling,
-          onChanged: c.upscalingBusy || c.audioOnly
+          onChanged: (c.upscalingBusy && !AppSettings.instance.videoUpscaling) || c.audioOnly
               ? null
               : (v) => AppSettings.instance.update((s) => s.videoUpscaling = v),
         ),
@@ -400,6 +400,21 @@ class _QualityControls extends StatelessWidget {
           trailing: const Icon(Icons.chevron_right, color: Colors.white70),
           onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const UpscaleModelsPage())),
         ),
+        if (Platform.isAndroid)
+          SwitchListTile(
+            title: const Text('AI 업스케일 NPU 가속', style: _white),
+            subtitle: const Text('Snapdragon·Exynos 지원 NPU · 미지원 시 GPU 복귀', style: _label),
+            value: AppSettings.instance.upscalingNpu,
+            onChanged: (v) => AppSettings.instance.update((s) => s.upscalingNpu = v),
+          ),
+        if (c.aiUpscaling.applied)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Text(
+              'NPU + GPU · ${c.aiUpscaling.inferenceMs.toStringAsFixed(1)}ms/프레임 · 음성·자막 100ms 싱크 보정',
+              style: _label,
+            ),
+          ),
         const UpscaleTargetTile(color: Colors.white),
         if (c.upscalingBusy) const LinearProgressIndicator(),
         if (c.upscalingIssue != null)

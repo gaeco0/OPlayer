@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../network/network_service.dart';
 import 'plugin.dart';
+import 'upscale_network.dart';
 import 'plugin_runtime.dart';
 import 'plugin_store.dart';
 
@@ -217,6 +218,21 @@ class UpscaleModels {
     final model = models.where((m) => m.key == key).firstOrNull;
     if (model == null) throw StateError('선택한 모델의 확장앱을 켜거나 다른 모델을 선택해 주세요');
     return (await materialize(model)).absolute.path;
+  }
+
+  Future<String?> network(String key) async {
+    final model = (await catalog()).where((m) => m.key == key).firstOrNull;
+    if (model == null) throw StateError('모델 확장앱을 켜 주세요');
+    final shader = await materialize(model);
+    final bytes = upscaleNetwork(await shader.readAsString());
+    if (bytes == null) return null;
+    final file = File('${shader.path}.ous');
+    if (!await file.exists() || sha256.convert(await file.readAsBytes()) != sha256.convert(bytes)) {
+      await file.writeAsBytes(bytes, flush: true);
+    }
+    _requireProvider();
+    if (model.provider != null) store.require(model.provider!.id);
+    return file.absolute.path;
   }
 
   Future<UpscaleModel> addUrl(String value, String name) async {

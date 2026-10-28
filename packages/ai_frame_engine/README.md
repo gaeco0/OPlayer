@@ -1,6 +1,6 @@
 # OPlayer AI frame engine
 
-Native RIFE v4.6 frame interpolation. This package does not replace mpv's decoder,
+Native RIFE v4.6 frame interpolation and optional Android CNN upscaling. This package does not replace mpv's decoder,
 audio device, network transport, or playback controls. Dart native asset hooks
 compile and bundle a shared library for Windows, Android/TV, Linux and macOS.
 Requires Dart >=3.10 and CMake >=3.22, plus the platform C++ toolchain. Android
@@ -72,6 +72,23 @@ crashes with current AMD drivers. Android ARM64 cross-build passed with NDK
 28.2.13676358; Android playback has not been measured on a device.
 
 ## Android NPU (Snapdragon / Exynos only)
+
+Upscaling uses the same dedicated-device allowlist. The app translates only
+three pinned shaders from an installed/enabled provider (Anime4K CNN S, Denoise
+CNN S, FSRCNNX8) into an OUS1 graph with OHWI convolution weights, input channel
+splits, clamp-to-edge gathers and PReLU. No upscaling weights are bundled here.
+Other GLSL models retain GPU rendering. All graph operations must be supported
+by the selected NPU; compile/execution failure or insufficient speed falls back
+to the original GPU shader. NNAPI's CPU/GPU fallback is never selected.
+
+The worker captures <=1080p SDR source frames at 1x and <=60fps, computes the CNN
+on NPU and composes pixel-shuffle output on CPU for Flutter GPU display. Its
+bounded queue delays presentation/audio/text subtitles by 100ms and optionally
+blends adjacent upscaled frames. Bitmap subtitles retain the original renderer.
+It joins before mpv disposal. `test/upscale_network_test.dart` exercises all
+three converted networks through native reference inference, deterministic
+nonconstant output and malformed-model rejection; this does not validate a
+vendor NPU driver. Android device performance remains unverified.
 
 The Android-only preference defaults to on, while interpolation itself remains
 off by default. SoC properties must identify Snapdragon/Qualcomm or Exynos;

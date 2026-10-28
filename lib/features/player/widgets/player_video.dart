@@ -44,6 +44,15 @@ class PlayerVideo extends StatelessWidget {
                     child: RawImage(image: image, fit: fit, filterQuality: FilterQuality.medium),
                   ),
           ),
+          ValueListenableBuilder(
+            valueListenable: controller.aiUpscaling.frame,
+            builder: (context, image, _) => image == null
+                ? const SizedBox.shrink()
+                : ColoredBox(
+                    color: Colors.black,
+                    child: RawImage(image: image, fit: fit, filterQuality: FilterQuality.medium),
+                  ),
+          ),
           if (subtitleViewConfiguration.visible)
             IgnorePointer(
               child: SubtitleView(

@@ -31,6 +31,7 @@ import '../../core/plugins/interpolation_models.dart';
 import '../cast/cast_controller.dart';
 import 'frame_interpolation.dart';
 import 'ai_interpolation.dart';
+import 'ai_upscaling.dart';
 import 'video_upscaling.dart';
 import 'package:flutter/painting.dart';
 
@@ -189,6 +190,16 @@ class PlayerController extends ChangeNotifier {
   String _upscalingModelPreference = AppSettings.instance.upscalingModel;
   int _upscalingResolution = AppSettings.instance.upscalingResolution;
   String? _aiShaderError;
+  bool _upscalingNpuPreference = AppSettings.instance.upscalingNpu;
+  Future<void> _upscalingTail = Future.value();
+  late final aiUpscaling = AiUpscaling(changed: _aiUpscalingChanged);
+  void _aiUpscalingChanged() {
+    if (_disposed) return;
+    unawaited(_applyAiTiming());
+    _queueUpscaling();
+    notifyListeners();
+  }
+
   late final _upscaleShader = UpscaleShader((args) async {
     if (_disposed || player.platform is! NativePlayer) throw UnsupportedError('현재 엔진은 AI 업스케일을 지원하지 않습니다');
     await (player.platform as NativePlayer).command(args);
@@ -196,6 +207,7 @@ class PlayerController extends ChangeNotifier {
 
   void _onUpscalingProvidersChanged() {
     _aiShaderError = null;
+    aiUpscaling.issue = null;
     if (AppSettings.instance.upscalingModel != 'lanczos') _queueUpscaling();
     if (AppSettings.instance.interpolationMode == 'rife') {
       aiInterpolation.issue = null;
@@ -238,9 +250,15 @@ class PlayerController extends ChangeNotifier {
     final value = AppSettings.instance.videoUpscaling;
     final model = AppSettings.instance.upscalingModel;
     final resolution = AppSettings.instance.upscalingResolution;
-    if (_upscalingPreference == value && _upscalingModelPreference == model && _upscalingResolution == resolution) {
+    final npu = AppSettings.instance.upscalingNpu;
+    if (_upscalingPreference == value &&
+        _upscalingModelPreference == model &&
+        _upscalingResolution == resolution &&
+        _upscalingNpuPreference == npu) {
       return;
     }
+    _upscalingNpuPreference = npu;
+    aiUpscaling.issue = null;
     _upscalingResolution = resolution;
     _upscalingPreference = value;
     _upscalingModelPreference = model;
@@ -255,9 +273,15 @@ class PlayerController extends ChangeNotifier {
     _upscalingTimer = Timer(const Duration(milliseconds: 150), _refreshUpscaling);
   }
 
-  Future<void> _refreshUpscaling() async {
-    if (_disposed || preparing) return;
+  Future<void> _refreshUpscaling() {
     final request = ++_upscalingRequest;
+    final result = _upscalingTail.then((_) => _applyUpscaling(request));
+    _upscalingTail = result.catchError((Object _) {});
+    return result;
+  }
+
+  Future<void> _applyUpscaling(int request) async {
+    if (_disposed || preparing || request != _upscalingRequest) return;
     final source = upscalingSource;
     // Android VO rebind can briefly report no video dimensions. Restoring the
     // source texture here would resize again and start another VO rebind.
@@ -295,17 +319,58 @@ class PlayerController extends ChangeNotifier {
         shader = await UpscaleModels.instance.resolve(model);
         if (_disposed || request != _upscalingRequest) return;
       }
+      final useNpu =
+          Platform.isAndroid &&
+          AppSettings.instance.upscalingNpu &&
+          shader != null &&
+          target != null &&
+          _aiVisible &&
+          !_bitmapSubtitle &&
+          baseRate == 1 &&
+          !fastForwarding &&
+          !CastController.instance.active;
+      if (useNpu && aiUpscaling.issue == null) {
+        final key = '$shader:${target.width.toInt()}x${target.height.toInt()}';
+        if (!aiUpscaling.running || aiUpscaling.key != key) {
+          final network = await UpscaleModels.instance.network(model);
+          if (_disposed || request != _upscalingRequest) return;
+          if (network == null) {
+            aiUpscaling.issue = '이 GLSL 모델은 NPU 변환을 지원하지 않아 GPU로 재생합니다';
+          } else {
+            await aiUpscaling.start(
+              handle: await player.handle,
+              mpvLibrary: NativeLibrary.path,
+              model: network,
+              modelKey: key,
+              width: target.width.toInt(),
+              height: target.height.toInt(),
+            );
+            if (_disposed || request != _upscalingRequest) {
+              await aiUpscaling.stop();
+              return;
+            }
+          }
+        }
+      } else if (!useNpu) {
+        await aiUpscaling.stop();
+      }
+      if (aiUpscaling.applied) shader = null;
       await _upscaleShader.apply(shader);
       if (_disposed || request != _upscalingRequest) return;
-      await _upscaler.apply(enabled, target);
+      await _upscaler.apply(enabled && !aiUpscaling.applied, aiUpscaling.applied ? null : target);
       if (_disposed || request != _upscalingRequest) return;
       upscalingApplied = enabled;
       upscalingOutput = target;
-      if (enabled && model != 'lanczos' && shader == null && _aiShaderError == null) {
+      if (enabled && model != 'lanczos' && shader == null && !aiUpscaling.applied && _aiShaderError == null) {
         upscalingIssue = '목표 출력이 원본의 1.3배를 넘을 때 AI 모델을 적용합니다. 현재는 Lanczos를 사용합니다';
+      }
+      if (useNpu && aiUpscaling.issue != null) upscalingIssue = aiUpscaling.issue;
+      if (Platform.isAndroid && enabled && AppSettings.instance.upscalingNpu && _bitmapSubtitle) {
+        upscalingIssue = '비트맵 자막은 GPU 업스케일로 표시합니다';
       }
       if (_aiShaderError != null && model != 'lanczos') upscalingIssue = 'AI 적용 실패 · Lanczos로 재생합니다: $_aiShaderError';
     } catch (e) {
+      await aiUpscaling.stop();
       if (!_disposed && request == _upscalingRequest) {
         upscalingApplied = false;
         upscalingOutput = null;
@@ -326,7 +391,7 @@ class PlayerController extends ChangeNotifier {
       }
     } finally {
       if (!_disposed && request == _upscalingRequest) {
-        upscalingBusy = false;
+        upscalingBusy = aiUpscaling.busy;
         notifyListeners();
       }
     }
@@ -359,7 +424,11 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
   }
 
-  double get _aiDelay => aiInterpolation.applied ? AiInterpolation.delay.inMilliseconds / 1000 : 0;
+  double get _aiDelay => aiInterpolation.applied
+      ? AiInterpolation.delay.inMilliseconds / 1000
+      : aiUpscaling.applied
+      ? AiUpscaling.delay.inMilliseconds / 1000
+      : 0;
   Future<void> _timingTail = Future.value();
   Future<void> _applyAiTiming() {
     final result = _timingTail.then((_) async {
@@ -373,6 +442,7 @@ class PlayerController extends ChangeNotifier {
   void setAiVisible(bool visible) {
     if (_aiVisible == visible || _disposed) return;
     _aiVisible = visible;
+    _queueUpscaling();
     unawaited(_refreshInterpolation());
   }
 
@@ -436,6 +506,8 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
     try {
       if (AppSettings.instance.interpolationMode == 'rife' && desired) {
+        ++_upscalingRequest;
+        await aiUpscaling.stop();
         await _frameInterpolation.apply(false, _displayRate);
         if (_disposed || request != _interpolationRequest) return;
         if (!_aiVisible || _bitmapSubtitle || baseRate != 1 || fastForwarding || CastController.instance.active) {
@@ -654,9 +726,12 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> open({bool askResume = true}) async {
     preparing = true;
+    ++_upscalingRequest;
     await aiInterpolation.stop();
+    await aiUpscaling.stop();
     if (_disposed) return;
     aiInterpolation.issue = null;
+    aiUpscaling.issue = null;
     _subtitleLoad++;
     preparing = true;
     _positionReady = false;
@@ -960,6 +1035,7 @@ class PlayerController extends ChangeNotifier {
     );
     if (_bitmapSubtitle != bitmap) {
       _bitmapSubtitle = bitmap;
+      _queueUpscaling();
       unawaited(_refreshInterpolation());
     }
     await _nativeProperty('sub-visibility', bitmap ? 'yes' : 'no');
@@ -1089,7 +1165,11 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> _onCompleted() async {
     final completedGeneration = _openGeneration;
-    if (aiInterpolation.running) await Future<void>.delayed(AiInterpolation.delay);
+    if (aiInterpolation.running) {
+      await Future<void>.delayed(AiInterpolation.delay);
+    } else if (aiUpscaling.running) {
+      await Future<void>.delayed(AiUpscaling.delay);
+    }
     if (!isCurrentOpen(completedGeneration) || !player.state.completed) return;
     if (!_canSavePosition) return;
     final generation = _openGeneration;
@@ -1214,15 +1294,19 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> setRate(double r) async {
     aiInterpolation.issue = null;
+    aiUpscaling.issue = null;
     baseRate = double.parse(r.clamp(0.25, 4.0).toStringAsFixed(2));
     await player.setRate(baseRate);
+    _queueUpscaling();
     unawaited(_refreshInterpolation());
     notifyListeners();
   }
 
   Future<void> startFastForward() async {
     fastForwarding = true;
+    ++_upscalingRequest;
     await aiInterpolation.stop();
+    await aiUpscaling.stop();
     await _applyAiTiming();
     await player.setRate(baseRate * 2);
     notifyListeners();
@@ -1232,7 +1316,9 @@ class PlayerController extends ChangeNotifier {
     if (!fastForwarding) return;
     fastForwarding = false;
     aiInterpolation.issue = null;
+    aiUpscaling.issue = null;
     await player.setRate(baseRate);
+    _queueUpscaling();
     unawaited(_refreshInterpolation());
     notifyListeners();
   }
@@ -1477,7 +1563,12 @@ class PlayerController extends ChangeNotifier {
     for (final s in _subs) {
       s.cancel();
     }
-    unawaited(aiInterpolation.dispose().then((_) => player.dispose()).whenComplete(_clearOnlineSubtitleFiles));
+    unawaited(
+      Future.wait([
+        aiInterpolation.dispose(),
+        aiUpscaling.dispose(),
+      ]).then((_) => player.dispose()).whenComplete(_clearOnlineSubtitleFiles),
+    );
     super.dispose();
   }
 }

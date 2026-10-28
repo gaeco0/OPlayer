@@ -14,6 +14,7 @@
 
 #ifdef _WIN32
 #include <Windows.h>
+#include <objbase.h>
 #endif
 
 class ThreadPool {
@@ -36,6 +37,10 @@ class ThreadPool {
 inline ThreadPool::ThreadPool(size_t threads) : stop_(false) {
   for (size_t i = 0; i < threads; i++) {
     workers_.emplace_back([&] {
+#ifdef _WIN32
+      const auto apartment = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+      struct ApartmentExit { HRESULT result; ~ApartmentExit() { if (SUCCEEDED(result)) CoUninitialize(); } } apartment_exit{apartment};
+#endif
       for (;;) {
         std::packaged_task<void()> task;
         {

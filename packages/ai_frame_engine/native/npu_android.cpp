@@ -3,12 +3,14 @@
 // older Android releases. All calls go through the validated function pointers.
 #define __ANDROID_UNAVAILABLE_SYMBOLS_ARE_WEAK__ 1
 #include "npu.h"
+#include "upscale.h"
 #include <android/NeuralNetworks.h>
 #include <dlfcn.h>
 #include <sys/system_properties.h>
 #include <filesystem>
 #include <array>
 #include <stdexcept>
+#include <algorithm>
 
 // Resolve API 29+ at runtime so Android 24–28 and non-NPU devices still load.
 static_assert(ANEURALNETWORKS_DEVICE_ACCELERATOR == 4);
@@ -139,7 +141,9 @@ public:
       } else id=prelu(a.id,op.slope,shape);
       values.push_back({id,shape});
     }
-    const auto input_id=values.front().id,output_id=values.back().id;
+    finish(context,values.front().id,values.back().id,values.back().shape,"rife-v4.6-f334ed2260149ce0-block-v1:"+std::to_string(block));
+  }
+  void finish(NpuContext& context,uint32_t input_id,uint32_t output_id,const std::vector<uint32_t>& shape,const std::string& identity) {
     check(nn.ANeuralNetworksModel_identifyInputsAndOutputs(model,1,&input_id,1,&output_id));
     check(nn.ANeuralNetworksModel_relaxComputationFloat32toFloat16(model,true));
     check(nn.ANeuralNetworksModel_finish(model));
@@ -157,7 +161,7 @@ public:
       nn.ANeuralNetworksCompilation_setPreference(compilation,ANEURALNETWORKS_PREFER_SUSTAINED_SPEED);
       if(!context.cache.empty()) {
         std::array<uint8_t,32> token{};
-        const auto key=std::string("rife-v4.6-f334ed2260149ce0-block-v1:")+std::to_string(block)+":"+
+        const auto key=identity+":"+
           std::to_string(iw)+":"+std::to_string(ih)+":"+std::to_string(ic)+":"+candidate.name+":"+candidate.version;
         // Cache identity only; model authenticity is checked separately by SHA-256.
         for(int j=0;j<4;++j) {uint64_t hash=1469598103934665603ull+j;
@@ -169,8 +173,49 @@ public:
       nn.ANeuralNetworksCompilation_free(compilation);compilation=nullptr;
     }
     if(!compilation) throw std::runtime_error("No allowed NPU supports the full RIFE CNN block");
-    oh=values.back().shape[1];ow=values.back().shape[2];oc=values.back().shape[3];
+    oh=shape[1];ow=shape[2];oc=shape[3];
     input.resize(iw*ih*ic);output.resize(ow*oh*oc);
+  }
+  uint32_t integers(const std::vector<int32_t>& data) {
+    const uint32_t shape[]={(uint32_t)data.size()};
+    ANeuralNetworksOperandType type{ANEURALNETWORKS_TENSOR_INT32,1,shape,0,0};
+    check(nn.ANeuralNetworksModel_addOperand(model,&type));const auto id=next++;
+    check(nn.ANeuralNetworksModel_setOperandValue(model,id,data.data(),data.size()*4));return id;
+  }
+  void build_upscale(NpuContext& context,const UpscaleNetwork& network,const ncnn::Mat& bottom,const std::string& identity) {
+    iw=bottom.w;ih=bottom.h;ic=bottom.c;check(nn.ANeuralNetworksModel_create(&model));
+    const std::vector<uint32_t> base={1,(uint32_t)ih,(uint32_t)iw,(uint32_t)ic};
+    std::vector<uint32_t> values{tensor(base)};std::vector<int> channels{ic};
+    const auto none=scalar(0),zero=constant({0},{1}),one=scalar(1),axis=scalar(3);
+    for(const auto& op:network.ops) {
+      std::vector<uint32_t> sources;int count=0;
+      for(auto edge:op.inputs) {
+        auto id=values[edge.first];const std::vector<uint32_t> shape={1,(uint32_t)ih,(uint32_t)iw,(uint32_t)channels[edge.first]};
+        if(edge.second==2){const auto out=tensor(shape);operation(ANEURALNETWORKS_NEG,{id},out);id=out;}
+        if(edge.second){const auto out=tensor(shape);operation(ANEURALNETWORKS_MAXIMUM,{id,zero},out);id=out;}
+        sources.push_back(id);count+=channels[edge.first];
+      }
+      std::vector<uint32_t> shape={1,(uint32_t)ih,(uint32_t)iw,(uint32_t)count};
+      uint32_t id=sources.front();
+      if(sources.size()>1){const auto out=tensor(shape);sources.push_back(axis);operation(ANEURALNETWORKS_CONCATENATION,sources,out);id=out;}
+      // texOff uses clamp-to-edge. Two integer gathers reproduce it exactly,
+      // including corners, rather than silently substituting zero padding.
+      const int pad=op.kernel/2;
+      if(pad){
+        std::vector<int32_t> ys(ih+pad*2),xs(iw+pad*2);
+        for(int i=0;i<(int)ys.size();++i)ys[i]=std::clamp(i-pad,0,ih-1);
+        for(int i=0;i<(int)xs.size();++i)xs[i]=std::clamp(i-pad,0,iw-1);
+        shape[1]=ys.size();auto out=tensor(shape);operation(ANEURALNETWORKS_GATHER,{id,scalar(1),integers(ys)},out);id=out;
+        shape[2]=xs.size();out=tensor(shape);operation(ANEURALNETWORKS_GATHER,{id,scalar(2),integers(xs)},out);id=out;
+      }
+      const auto filter=constant(op.weights,{4,(uint32_t)op.kernel,(uint32_t)op.kernel,(uint32_t)count});
+      const auto bias=constant(op.bias,{4});shape={1,(uint32_t)ih,(uint32_t)iw,4};
+      auto out=tensor(shape);const auto z=scalar(0);
+      operation(ANEURALNETWORKS_CONV_2D,{id,filter,bias,z,z,z,z,one,one,none},out);id=out;
+      if(!op.alpha.empty()){out=tensor(shape);operation(ANEURALNETWORKS_PRELU,{id,constant(op.alpha,{4})},out);id=out;}
+      values.push_back(id);channels.push_back(4);
+    }
+    finish(context,values.front(),values.back(),{1,(uint32_t)ih,(uint32_t)iw,4},"upscale-clamp-v1:"+identity);
   }
   bool run(const ncnn::Mat& bottom,ncnn::Mat& top) override {
     for(int q=0;q<ic;++q) {const float* src=bottom.channel(q);
@@ -191,5 +236,9 @@ public:
 std::unique_ptr<NpuGraph> compile_npu(NpuContext& context,int block,const ncnn::Mat& input,const std::vector<NpuWeights>& weights) {
   try {auto graph=std::make_unique<AndroidGraph>();graph->build(context,block,input,weights);return graph;}
   catch(...) {return {};}
+}
+std::unique_ptr<NpuGraph> compile_upscale(NpuContext& context,const UpscaleNetwork& network,const ncnn::Mat& input,const std::string& identity) {
+  try{auto graph=std::make_unique<AndroidGraph>();graph->build_upscale(context,network,input,identity);return graph;}
+  catch(...){return {};}
 }
 #endif

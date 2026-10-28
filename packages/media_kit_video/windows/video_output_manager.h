@@ -41,11 +41,12 @@ class VideoOutputManager {
                std::optional<int64_t> height);
 
   // Destroys the |VideoOutput| with given handle.
-  void Dispose(int64_t handle);
+  void Dispose(int64_t handle, std::function<void()> done);
 
   ~VideoOutputManager();
 
  private:
+  std::unique_ptr<ThreadPool> lifecycle_pool_ = std::make_unique<ThreadPool>(1);
   std::mutex mutex_ = std::mutex();
   // All the operations involving ANGLE or EGL or libmpv must be performed on
   // same single thread to prevent any race conditions or invalid ANGLE usage.

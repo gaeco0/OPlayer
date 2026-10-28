@@ -11,11 +11,14 @@ void main() {
     SharedPreferences.setMockInitialValues({'settings_v1': '{}'});
     final settings = AppSettings.instance;
     await settings.init();
+    expect(settings.upscalingNpu, true);
     settings.update((s) {
+      s.upscalingNpu = false;
       s.upscalingResolution = 1080;
       s.interpolationModel = 'player.ai-interpolation/rife-v4-6';
     });
     await settings.init();
+    expect(settings.upscalingNpu, false);
     expect(settings.upscalingResolution, 1080);
     expect(settings.interpolationModel, 'player.ai-interpolation/rife-v4-6');
     for (final value in [null, '1080', 1080.0, 100000, -1]) {

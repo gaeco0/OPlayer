@@ -61,6 +61,7 @@ if(MEDIA_KIT_LIBS_AVAILABLE)
     ${PLUGIN_NAME} PRIVATE
     flutter
     flutter_wrapper_plugin
+    ole32
 
     # Link to libmpv & ANGLE.
     "${LIBMPV_SRC}/libmpv.dll.a"
@@ -100,6 +101,7 @@ else()
     ${PLUGIN_NAME} PRIVATE
     flutter
     flutter_wrapper_plugin
+    ole32
   )
 endif()
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
 
 import '../../core/plugins/plugin_store.dart';
 import '../../core/plugins/upscale_models.dart';
@@ -91,6 +92,13 @@ class _UpscaleModelsPageState extends State<UpscaleModelsPage> {
               value: settings.videoUpscaling,
               onChanged: _busy ? null : (v) => settings.update((s) => s.videoUpscaling = v),
             ),
+            if (Platform.isAndroid)
+              SwitchListTile(
+                title: const Text('AI 업스케일 NPU 가속'),
+                subtitle: const Text('Snapdragon·Exynos 지원 드라이버 · 기본 CNN 3개 · 미지원·속도 부족 시 GPU 복귀'),
+                value: settings.upscalingNpu,
+                onChanged: (v) => settings.update((s) => s.upscalingNpu = v),
+              ),
             const UpscaleTargetTile(),
             const Padding(
               padding: EdgeInsets.all(16),

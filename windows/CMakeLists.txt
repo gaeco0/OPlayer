@@ -59,6 +59,7 @@ add_subdirectory("runner")
 # which VS 2026 / MSVC 14.5x rejects unless this is defined. Must be set before the plugins are added.
 add_compile_definitions(_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
 include(flutter/generated_plugins.cmake)
+include(webview_lifetime.cmake)
 if(FLUTTER_TARGET_PLATFORM STREQUAL "windows-arm64" AND TARGET Webview2)
   get_property(webview_dir GLOBAL PROPERTY OPLAYER_ARM64_WEBVIEW_DIR)
   set_target_properties(Webview2 PROPERTIES

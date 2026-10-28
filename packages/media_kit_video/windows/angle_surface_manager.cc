@@ -42,9 +42,10 @@ void ANGLESurfaceManager::SetSize(int32_t width, int32_t height) {
   if (width == width_ && height == height_) {
     return;
   }
-  width_ = width;
-  height_ = height;
-  Create();
+  ::WaitForSingleObject(mutex_, INFINITE);
+  try { width_ = width; height_ = height; Create(); }
+  catch (...) { ::ReleaseMutex(mutex_); throw; }
+  ::ReleaseMutex(mutex_);
 }
 
 void ANGLESurfaceManager::Draw(std::function<void()> callback) {
@@ -56,15 +57,17 @@ void ANGLESurfaceManager::Draw(std::function<void()> callback) {
   ::ReleaseMutex(mutex_);
 }
 
-void ANGLESurfaceManager::Read() {
+ANGLESurfaceManager::Surface ANGLESurfaceManager::Acquire() {
   ::WaitForSingleObject(mutex_, INFINITE);
-  if (d3d_11_device_context_ != nullptr) {
-    d3d_11_device_context_->CopyResource(d3d_11_texture_2D_.Get(),
-                                         internal_d3d_11_texture_2D_.Get());
+  if (d3d_11_device_context_ && internal_d3d_11_texture_2D_ && d3d_11_texture_2D_) {
+    d3d_11_device_context_->CopyResource(d3d_11_texture_2D_.Get(), internal_d3d_11_texture_2D_.Get());
     d3d_11_device_context_->Flush();
   }
+  Surface frame{handle_,width_,height_,d3d_11_texture_2D_};
   ::ReleaseMutex(mutex_);
+  return frame;
 }
+void ANGLESurfaceManager::Read() { Acquire(); }
 
 void ANGLESurfaceManager::MakeCurrent(bool value) {
   if (value) {
