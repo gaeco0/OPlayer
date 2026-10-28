@@ -92,7 +92,9 @@ void main() {
     );
     for (final item in (catalog['plugins'] as List).cast<Map>()) {
       final fileName = Uri.parse(item['downloadUrl'] as String).pathSegments.last;
-      expect(sha256.convert(await File('plugins/$fileName').readAsBytes()).toString(), item['sha256']);
+      final scriptBytes = await File('plugins/$fileName').readAsBytes();
+      expect(scriptBytes.contains(13), false, reason: 'Repository JS must use LF, matching GitHub-served bytes');
+      expect(sha256.convert(scriptBytes).toString(), item['sha256']);
       expect(['player', 'browser', 'resource'], contains(item['kind']));
       expect(item['pluginApi'], 4);
       // New capabilities may be omitted from catalog hints for old-reader compatibility.

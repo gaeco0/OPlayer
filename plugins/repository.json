@@ -255,7 +255,7 @@
       ],
       "description": "AI 보간 모델 SDK 필요 · RIFE v4.6 · 1배속 SDR",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/player.ai-interpolation.js",
-      "sha256": "b018cda0a30c30b729d2e8ee65e4d7c2e06fc1c72e4adb2f294b87b317b3ae81",
+      "sha256": "eedf8d34f23db8028632dd2948408f341841da77efd28851edea85317d4208b6",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     }
   ]
