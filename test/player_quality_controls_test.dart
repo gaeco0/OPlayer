@@ -64,6 +64,18 @@ void main() {
     await t.pumpAndSettle();
     expect(AppSettings.instance.frameInterpolation, false);
     expect(AppSettings.instance.interpolationMode, 'rife');
+    await t.longPress(find.widgetWithText(TextButton, '업스케일'));
+    await t.pumpAndSettle();
+    expect(find.text('업스케일 모델 확장앱을 설치하고 켜 주세요'), findsOneWidget);
+    expect(AppSettings.instance.videoUpscaling, false);
+    await t.pageBack();
+    await t.pumpAndSettle();
+    await t.longPress(find.widgetWithText(TextButton, '보간'));
+    await t.pumpAndSettle();
+    expect(find.text('AI 보간 모델 확장앱을 설치하고 켜 주세요'), findsOneWidget);
+    expect(AppSettings.instance.frameInterpolation, false);
+    await t.pageBack();
+    await t.pumpAndSettle();
     t.view.physicalSize = const Size(360, 800);
     await t.pumpAndSettle();
     expect(button, findsNothing);

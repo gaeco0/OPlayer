@@ -240,6 +240,23 @@
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/player.ai-upscale.js",
       "sha256": "e8604e1dd30510286f33b94edd476b277884875acfa69e747c90b7f49ef09cd4",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+    },
+    {
+      "id": "player.ai-interpolation",
+      "name": "AI 보간 모델",
+      "version": "1.0.0",
+      "kind": "player",
+      "pluginApi": 4,
+      "author": "OPlayer",
+      "features": [
+        "RIFE v4.6 모델 선택",
+        "실시간 AI 보간",
+        "지원 엔진이 포함된 앱 필요"
+      ],
+      "description": "AI 보간 모델 SDK 필요 · RIFE v4.6 · 1배속 SDR",
+      "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/player.ai-interpolation.js",
+      "sha256": "b018cda0a30c30b729d2e8ee65e4d7c2e06fc1c72e4adb2f294b87b317b3ae81",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     }
   ]
 }

@@ -526,7 +526,7 @@ Linux/macOS는 `cmake -S ... -B ...`에서 `-A x64`를 빼고 같은 위치에 �
 AI 업스케일 SDK가 포함된 앱에서 `kind: "player"`, `api: 4`, `capabilities: ["upscaling"]`을 선언합니다.
 JS는 모델 목록과 가중치가 포함된 **mpv GLSL 텍스트**를 반환하고, 앱의 기존 mpv GPU가 추론합니다.
 QuickJS에서 픽셀을 계산하거나 WebView로 프레임을 복사하지 않습니다. 이 업스케일 API에는 ONNX·NCNN 파일을 전달할 수 없습니다.
-앱의 실시간 AI 보간은 별도 내장 RIFE/ncnn 엔진을 사용하며, 업스케일 JS 공급자 API와 분리되어 있습니다.
+앱의 실시간 AI 보간은 별도 내장 RIFE/ncnn 엔진과 `interpolation` 모델 공급자 API를 사용합니다.
 호스트 SDK가 없는 이전 버전은 이 기능을 사용할 수 없습니다. SDK를 포함한 앱으로 한 번 업데이트한 이후에는
 같은 계약을 사용하는 모델을 JS만 교체·설치하여 추가할 수 있습니다.
 
@@ -561,15 +561,36 @@ globalThis.plugin = {
 
 기본 제공 모델은 `player.ai-upscale.js`의 **Anime4K CNN S**, **Anime4K Denoise CNN S**, **FSRCNNX 8**입니다.
 가중치는 오프라인으로 앱에 포함하지만 PluginStore에 확장앱을 자동 설치하지 않습니다. 동일 ID의 업데이트된 공급자를
-사용자가 설치하면 번들 공급자 대신 사용하고, 끄거나 삭제하면 기본 번들로 복귀합니다. 그 외 설치된 모델 공급자도
-모델 목록에 합쳐집니다. 원본 셰이더·출처·해시는 `third_party/ai-upscale/NOTICE.md`, 라이선스 전문은
+모델은 해당 확장앱을 설치·활성화해야 선택·적용할 수 있습니다. 자동 설치나 번들 공급자 복귀는 하지 않습니다.
+확장앱을 끄거나 삭제하면 해당 AI 적용을 중지하고 기본 Lanczos로 복귀합니다. 설치된 다른 모델 공급자는 목록에 합쳐집니다. 원본 셰이더·출처·해시는 `third_party/ai-upscale/NOTICE.md`, 라이선스 전문은
 `assets/licenses/ai-upscale.txt`를 참고하세요. FSRCNNX는 일반 영상용 후보이며 S 두 종보다 연산량이 큽니다.
 
 ### URL로 사용자 모델 추가
 
 설정 → 재생 → 업스케일 모델 또는 플레이어 화면·화질/더보기 → 업스케일 모델 → URL 추가에서
-모델 이름과 HTTPS GLSL 주소를 입력합니다. 리디렉션도 HTTPS만 허용하며 앱 로그인 토큰·브라우저 쿠키를 보내지 않습니다.
+업스케일 확장앱이 활성화된 상태에서 모델 이름과 HTTPS GLSL 주소를 입력합니다. 리디렉션도 HTTPS만 허용하며 앱 로그인 토큰·브라우저 쿠키를 보내지 않습니다.
 다운로드 전체 시간·파일 크기·형식을 제한하고 내용 해시로 중복을 제거합니다. 등록 정보와 파일은 재시작 후 유지되어
 다음 재생에는 네트워크 없이 사용합니다. URL 모델은 최대 30개이고 목록에서 개별 삭제할 수 있습니다.
 현재 재생 중인 파일과의 충돌을 막기 위해 삭제 시 선택을 Lanczos로 바꾸고 내용별 캐시는 보관합니다.
 URL 모델은 사용자가 원본 라이선스와 신뢰할 수 있는 배포처를 확인해야 합니다. 임의 ONNX·NCNN URL은 지원하지 않습니다.
+
+## AI 보간 모델 API (플레이어 확장앱)
+
+AI 보간 모델 SDK가 포함된 앱에서 `capabilities: ["interpolation"]`을 선언하고
+`interpolationModels()`로 목록을 제공합니다. 기본 확장앱은 `player.ai-interpolation.js`입니다.
+설치·활성화한 공급자의 모델만 선택·실행되며 URL 모델이나 캐시로 설치 조건을 우회할 수 없습니다.
+기본 프레임 혼합은 확장앱 없이 사용합니다.
+
+```javascript
+// @oplayer {"api":4,"id":"player.my-interpolation","name":"My interpolation","version":"1.0.0","kind":"player","capabilities":["interpolation"],"hosts":[]}
+globalThis.plugin = {
+  interpolationModels() {
+    return [{id:"rife-v4-6", name:"RIFE v4.6", engine:"rife-v4.6"}];
+  }
+};
+```
+
+현재 지원 엔진은 `rife-v4.6` 하나이며 모델·가중치는 앱 내 고정 엔진의 검증된 자산을 사용합니다.
+임의 네이티브 경로·ONNX/NCNN 가중치·새 엔진은 이 API로 실행하지 않습니다. 목록 최대 30개,
+ID는 `^[a-z][a-z0-9_-]{0,63}$`, 이름은 1~100자이며 `공급자ID/모델ID`로 선택을 저장합니다.
+모델 선택은 보간 켜기·끄기 상태를 바꾸지 않습니다. 향후 다른 모델 계열은 해당 네이티브 엔진 지원이 필요합니다.

@@ -28,6 +28,10 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     directory = await Directory.systemTemp.createTemp('oplayer-ai-test-');
+    PluginStore.instance.installed.clear();
+    PluginStore.instance.disabled.clear();
+    final provider = OPlugin.parse(await File('plugins/player.ai-upscale.js').readAsString());
+    PluginStore.instance.installed[provider.id] = provider;
   });
   tearDown(() => directory.delete(recursive: true));
 
@@ -52,7 +56,24 @@ void main() {
       expect(await (await service.materialize(model)).readAsString(), source);
     }
     expect((await service.catalog()).length, 3);
-    expect(PluginStore.instance.installed, isEmpty);
+    expect(PluginStore.instance.installed.keys, ['player.ai-upscale']);
+  });
+
+  test('disabled or absent provider cannot resolve even a cached model or add URL models', () async {
+    final store = PluginStore.forTesting();
+    final service = UpscaleModels(store: store, directory: directory);
+    expect(await service.catalog(), isEmpty);
+    await expectLater(service.addUrl('https://example.com/model.glsl', 'Model'), throwsStateError);
+    final provider = OPlugin.parse(await File('plugins/player.ai-upscale.js').readAsString());
+    store.installed[provider.id] = provider;
+    final model = (await service.catalog()).first;
+    await service.materialize(model);
+    final pending = service.materialize(model);
+    store.disabled.add(provider.id);
+    await expectLater(pending, throwsStateError);
+    expect(await service.catalog(), isEmpty);
+    await expectLater(service.materialize(model), throwsStateError);
+    await expectLater(service.resolve(model.key), throwsStateError);
   });
 
   test('a new JS provider can return model weights without adding host-side model IDs', () async {
@@ -150,13 +171,20 @@ upscaleModel(){return {format:'mpv-glsl',shader:${jsonEncode(shader)}}}
     await Future.wait([scaler.apply('next.glsl'), scaler.apply(null)]);
     expect(entries, ['other.glsl']);
   });
-  testWidgets('model manager shows three offline defaults and URL entry without installing plugins', (t) async {
+  testWidgets('model manager requires an enabled extension and exposes URL entry after installation', (t) async {
     await AppSettings.instance.init();
+    final provider = PluginStore.instance.installed.remove('player.ai-upscale')!;
     await t.runAsync(() => UpscaleModels.instance.catalog());
     t.view.physicalSize = const Size(900, 1000);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
     await t.pumpWidget(const MaterialApp(home: UpscaleModelsPage()));
+    await t.pumpAndSettle();
+    expect(find.text('업스케일 모델 확장앱을 설치하고 켜 주세요'), findsOneWidget);
+    expect(find.text('Anime4K CNN S'), findsNothing);
+    expect(t.widget<IconButton>(find.widgetWithIcon(IconButton, Icons.add_link)).onPressed, isNull);
+    PluginStore.instance.installed[provider.id] = provider;
+    PluginStore.instance.notifyListeners();
     // The JS runtime owns a native receive port; allow real event dispatch as
     // well as fake-frame timers while its asynchronous catalog call completes.
     for (var i = 0; i < 30 && find.text('Anime4K CNN S').evaluate().isEmpty; i++) {
@@ -168,7 +196,7 @@ upscaleModel(){return {format:'mpv-glsl',shader:${jsonEncode(shader)}}}
     expect(find.text('Anime4K Denoise CNN S'), findsOneWidget);
     expect(find.text('FSRCNNX 8'), findsOneWidget);
     expect(AppSettings.instance.upscalingModel, 'lanczos');
-    expect(PluginStore.instance.installed, isEmpty);
+    expect(PluginStore.instance.installed.keys, ['player.ai-upscale']);
     await t.tap(find.byTooltip('모델 URL 추가'));
     await t.pumpAndSettle();
     expect(find.byType(TextField), findsNWidgets(2));

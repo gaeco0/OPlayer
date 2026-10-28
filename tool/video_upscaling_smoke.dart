@@ -12,7 +12,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
   final player = Player();
-  final video = VideoController(player);
+  final video = VideoController(player, configuration: const VideoControllerConfiguration(hwdec: 'auto-copy'));
   runApp(
     MaterialApp(
       home: Scaffold(
@@ -37,15 +37,31 @@ Future<void> main() async {
       write: native.setProperty,
       resize: (size) => video.setSize(width: size?.width.toInt(), height: size?.height.toInt()),
     );
-    final mixer = FrameInterpolation(read: native.getProperty, write: native.setProperty);
+    var interpolationWrites = 0;
+    final mixer = FrameInterpolation(
+      read: native.getProperty,
+      write: (key, value) async {
+        if (key == 'interpolation') interpolationWrites++;
+        await native.setProperty(key, value);
+      },
+    );
     final rate = WidgetsBinding.instance.platformDispatcher.views.first.display.refreshRate;
     await mixer.apply(true, rate);
-    await scaler.apply(true, const Size(640, 360));
+    final target = upscaleTarget(source, const Size(1720, 968), BoxFit.contain, resolution: 1080)!;
+    if (target != const Size(1920, 1080)) throw StateError('Incorrect 1080p target: $target');
+    await scaler.apply(true, target);
+    final writesBefore = interpolationWrites;
+    for (var i = 0; i < 20; i++) {
+      await mixer.apply(true, rate);
+      await scaler.apply(true, target);
+    }
+    if (interpolationWrites != writesBefore) throw StateError('Temporal queue was repeatedly reset');
     await Future<void>.delayed(const Duration(seconds: 2));
-    if (video.rect.value?.size != const Size(640, 360)) throw StateError('Output texture was not upscaled');
+    if (video.rect.value?.size != const Size(1920, 1080)) throw StateError('Output texture was not upscaled');
     if (await native.getProperty('display-sync-active') != 'yes') throw StateError('Frame mixing was disrupted');
     final result = {
       'source': source.toString(),
+      'repeatedModeWrites': interpolationWrites - writesBefore,
       'render': video.rect.value!.size.toString(),
       'scale': await native.getProperty('scale'),
       'cscale': await native.getProperty('cscale'),

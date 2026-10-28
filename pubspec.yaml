@@ -105,7 +105,6 @@ flutter:
     - plugins/cloud.s3.js
     - plugins/cloud.box.js
     - plugins/cloud.mybox.js
-    - plugins/player.ai-upscale.js
     - plugins/subtitle.opensubtitles.js
     - assets/branding/oplayer.png
     - assets/update/install-windows.ps1

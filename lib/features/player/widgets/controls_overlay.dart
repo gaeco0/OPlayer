@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart' show Track;
 
 import '../../../core/settings.dart';
+import '../../settings/upscale_models_page.dart';
+import '../../settings/interpolation_models_page.dart';
 
 import '../../../app/theme.dart';
 import '../player_controller.dart';
@@ -150,6 +152,8 @@ class _PlaybackToggles extends StatelessWidget {
       children: [
         _PlaybackToggle(
           label: '업스케일',
+          onLongPress: () =>
+              Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const UpscaleModelsPage())),
           icon: Icons.high_quality_outlined,
           active: AppSettings.instance.videoUpscaling,
           onTap: c.upscalingBusy || c.audioOnly
@@ -160,6 +164,8 @@ class _PlaybackToggles extends StatelessWidget {
           label: AppSettings.instance.interpolationMode == 'rife' && MediaQuery.sizeOf(context).width >= 680
               ? 'AI 보간'
               : '보간',
+          onLongPress: () =>
+              Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const InterpolationModelsPage())),
           icon: Icons.auto_awesome_motion_outlined,
           active: AppSettings.instance.frameInterpolation,
           onTap: (c.interpolationBusy && !AppSettings.instance.frameInterpolation) || c.audioOnly
@@ -185,17 +191,25 @@ class _PlaybackToggles extends StatelessWidget {
 }
 
 class _PlaybackToggle extends StatelessWidget {
-  const _PlaybackToggle({required this.label, required this.icon, required this.active, required this.onTap});
+  const _PlaybackToggle({
+    required this.label,
+    required this.icon,
+    required this.active,
+    required this.onTap,
+    this.onLongPress,
+  });
   final String label;
   final IconData icon;
   final bool active;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) => Semantics(
     selected: active,
     child: TextButton.icon(
       onPressed: onTap,
+      onLongPress: onLongPress,
       style: TextButton.styleFrom(
         backgroundColor: active ? Colors.white : Colors.transparent,
         foregroundColor: active ? Colors.black : Colors.white,

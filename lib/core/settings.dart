@@ -44,6 +44,8 @@ class AppSettings extends ChangeNotifier {
   bool hardwareDecoding = true;
   bool frameInterpolation = false;
   String interpolationMode = 'blend';
+  String interpolationModel = '';
+  int upscalingResolution = 0;
   bool interpolationNpu = true;
   bool videoUpscaling = false;
   String upscalingModel = 'lanczos';
@@ -124,6 +126,8 @@ class AppSettings extends ChangeNotifier {
     'hw': hardwareDecoding,
     'frameInterpolation': frameInterpolation,
     'interpolationMode': interpolationMode,
+    'interpolationModel': interpolationModel,
+    'upscalingResolution': upscalingResolution,
     'interpolationNpu': interpolationNpu,
     'videoUpscaling': videoUpscaling,
     'upscalingModel': upscalingModel,
@@ -177,6 +181,11 @@ class AppSettings extends ChangeNotifier {
     hardwareDecoding = v('hw', true);
     frameInterpolation = j['frameInterpolation'] == true;
     interpolationMode = j['interpolationMode'] == 'rife' ? 'rife' : 'blend';
+    interpolationModel = j['interpolationModel'] is String ? j['interpolationModel'] as String : '';
+    upscalingResolution =
+        j['upscalingResolution'] is int && const [720, 1080, 1440, 2160].contains(j['upscalingResolution'])
+        ? j['upscalingResolution'] as int
+        : 0;
     interpolationNpu = j['interpolationNpu'] != false;
     videoUpscaling = j['videoUpscaling'] == true;
     upscalingModel = j['upscalingModel'] is String ? j['upscalingModel'] as String : 'lanczos';

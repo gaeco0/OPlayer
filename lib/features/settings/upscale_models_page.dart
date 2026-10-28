@@ -4,6 +4,7 @@ import '../../core/plugins/plugin_store.dart';
 import '../../core/plugins/upscale_models.dart';
 import '../../core/settings.dart';
 import 'plugins_page.dart';
+import 'upscale_target_tile.dart';
 
 class UpscaleModelsPage extends StatefulWidget {
   const UpscaleModelsPage({super.key});
@@ -30,7 +31,11 @@ class _UpscaleModelsPageState extends State<UpscaleModelsPage> {
   }
 
   void _reload() {
-    if (mounted) setState(() => _models = UpscaleModels.instance.catalog());
+    if (mounted) {
+      setState(() {
+        _models = UpscaleModels.instance.catalog();
+      });
+    }
   }
 
   Future<void> _run(Future<void> Function() action) async {
@@ -71,7 +76,11 @@ class _UpscaleModelsPageState extends State<UpscaleModelsPage> {
         appBar: AppBar(
           title: const Text('업스케일 모델'),
           actions: [
-            IconButton(tooltip: '모델 URL 추가', onPressed: _busy ? null : _addUrl, icon: const Icon(Icons.add_link)),
+            IconButton(
+              tooltip: '모델 URL 추가',
+              onPressed: _busy || !UpscaleModels.instance.available ? null : _addUrl,
+              icon: const Icon(Icons.add_link),
+            ),
           ],
         ),
         body: Column(
@@ -82,9 +91,10 @@ class _UpscaleModelsPageState extends State<UpscaleModelsPage> {
               value: settings.videoUpscaling,
               onChanged: _busy ? null : (v) => settings.update((s) => s.videoUpscaling = v),
             ),
+            const UpscaleTargetTile(),
             const Padding(
               padding: EdgeInsets.all(16),
-              child: Text('AI 모델은 GPU를 사용합니다. 저사양 기기는 낮은 해상도부터 사용하세요. 기본 모델은 오프라인으로 제공하며 현재 재생 중인 영상에도 적용됩니다.'),
+              child: Text('AI 모델은 설치하고 켠 확장앱에서 제공합니다. 모델 선택은 현재 영상에 적용되며 켜기·끄기 상태는 유지합니다.'),
             ),
             if (_error != null) Padding(padding: const EdgeInsets.all(16), child: Text(_error!)),
             Expanded(
@@ -103,6 +113,7 @@ class _UpscaleModelsPageState extends State<UpscaleModelsPage> {
                       enabled: !_busy,
                       onTap: () => settings.update((s) => s.upscalingModel = 'lanczos'),
                     ),
+                    if (!UpscaleModels.instance.available) const ListTile(title: Text('업스케일 모델 확장앱을 설치하고 켜 주세요')),
                     if (snapshot.connectionState != ConnectionState.done) const LinearProgressIndicator(),
                     if (snapshot.hasError)
                       ListTile(
@@ -141,7 +152,7 @@ class _UpscaleModelsPageState extends State<UpscaleModelsPage> {
                     ListTile(
                       leading: const Icon(Icons.add_link),
                       title: const Text('URL로 모델 추가'),
-                      enabled: !_busy,
+                      enabled: !_busy && UpscaleModels.instance.available,
                       onTap: _addUrl,
                     ),
                     ListTile(

@@ -7,6 +7,25 @@ import 'package:oplayer/features/player/video_upscaling.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('target resolution and interpolation model persist; malformed target sizes fall back to automatic', () async {
+    SharedPreferences.setMockInitialValues({'settings_v1': '{}'});
+    final settings = AppSettings.instance;
+    await settings.init();
+    settings.update((s) {
+      s.upscalingResolution = 1080;
+      s.interpolationModel = 'player.ai-interpolation/rife-v4-6';
+    });
+    await settings.init();
+    expect(settings.upscalingResolution, 1080);
+    expect(settings.interpolationModel, 'player.ai-interpolation/rife-v4-6');
+    for (final value in [null, '1080', 1080.0, 100000, -1]) {
+      SharedPreferences.setMockInitialValues({
+        'settings_v1': jsonEncode({'upscalingResolution': value}),
+      });
+      await settings.init();
+      expect(settings.upscalingResolution, 0);
+    }
+  });
   test('viewport scaling preserves source aspect, cover/stretch, original size and allocation limits', () {
     const source = Size(640, 360);
     expect(upscaleTarget(source, const Size(1920, 1080), BoxFit.contain), const Size(1920, 1080));
@@ -25,6 +44,20 @@ void main() {
         expect(result.width * result.height, lessThanOrEqualTo(8294400));
       }
     }
+  });
+  test('selected target resolution ignores viewport size, preserves aspect and never downscales', () {
+    const source = Size(1280, 720);
+    expect(upscaleTarget(source, const Size(1720, 968), BoxFit.contain, resolution: 1080), const Size(1920, 1080));
+    expect(upscaleTarget(source, const Size(640, 360), BoxFit.contain, resolution: 1440), const Size(2560, 1440));
+    expect(upscaleTarget(source, const Size(640, 360), BoxFit.contain, resolution: 2160), const Size(3840, 2160));
+    expect(upscaleTarget(source, const Size(1720, 968), BoxFit.contain, resolution: 720), isNull);
+    expect(
+      upscaleTarget(const Size(720, 1280), const Size(900, 900), BoxFit.contain, resolution: 1080),
+      const Size(1080, 1920),
+    );
+    final wide = upscaleTarget(const Size(1920, 800), const Size(900, 900), BoxFit.contain, resolution: 2160)!;
+    expect(wide.longestSide, lessThanOrEqualTo(4096));
+    expect(wide.width * wide.height, lessThanOrEqualTo(8294400));
   });
   test(
     'GPU filters and texture size change together; rapid toggles restore both without touching interpolation',

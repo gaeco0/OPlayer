@@ -25,6 +25,9 @@ void main() {
       expect(values['video-sync'], 'display-resample');
       expect(values['tscale'], 'oversample');
       expect(double.parse(values[rateKey]!), 59.94);
+      final writesAfterEnable = writes.length;
+      await Future.wait(List.generate(20, (_) => mixer.apply(true, 59.94)));
+      expect(writes.length, writesAfterEnable, reason: 'Output callbacks must not repeatedly clear temporal frames');
       await Future.wait([mixer.apply(true, 90), mixer.apply(false, 90), mixer.apply(true, 120)]);
       expect(values['interpolation'], 'yes');
       expect(double.parse(values[rateKey]!), 120);

@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
-import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:path_provider/path_provider.dart';
@@ -90,7 +89,7 @@ class UpscaleModel {
   final String? id;
 }
 
-/// Bundled models and installed JS providers share one contract. User URL models
+/// Only installed, enabled JS providers expose AI models. User URL models
 /// are downloaded once; only verified text in our own cache reaches libmpv.
 class UpscaleModels {
   UpscaleModels({PluginStore? store, this.directory, http.Client Function()? clientFactory})
@@ -100,14 +99,13 @@ class UpscaleModels {
   final PluginStore store;
   final Directory? directory;
   final http.Client Function() _clientFactory;
-  Future<OPlugin>? _bundled;
   final errors = <String, String>{};
   final _pending = <String, Future<File>>{};
   Future<Directory> _directory() async =>
       directory ?? Directory('${(await getApplicationSupportDirectory()).path}/ai-upscale');
-  Future<OPlugin> _builtin() async {
-    final updated = store.enabled.where((p) => p.id == 'player.ai-upscale').firstOrNull;
-    return updated ?? await (_bundled ??= rootBundle.loadString('plugins/player.ai-upscale.js').then(OPlugin.parse));
+  bool get available => store.enabled.any((p) => p.supports('upscaling'));
+  void _requireProvider() {
+    if (!available) throw StateError('업스케일 모델 확장앱을 설치하고 켜 주세요');
   }
 
   Future<List<UpscaleModel>> fromPlugin(OPlugin provider) async {
@@ -147,10 +145,8 @@ class UpscaleModels {
   Future<List<UpscaleModel>> catalog() async {
     errors.clear();
     final result = <UpscaleModel>[];
-    final providers = [
-      await _builtin(),
-      ...store.enabled.where((p) => p.supports('upscaling') && p.id != 'player.ai-upscale'),
-    ];
+    if (!available) return result;
+    final providers = store.enabled.where((p) => p.supports('upscaling'));
     for (final provider in providers) {
       try {
         result.addAll(await fromPlugin(provider));
@@ -178,14 +174,17 @@ class UpscaleModels {
 
   Future<File> _file(String digest) async => File('${(await _directory()).path}/$digest.glsl');
   Future<File> materialize(UpscaleModel model) async {
-    if (model.provider != null && model.provider!.id != 'player.ai-upscale') store.require(model.provider!.id);
-    if (_pending.containsKey(model.digest)) return _pending[model.digest]!;
-    final job = _materialize(model);
+    _requireProvider();
+    if (model.provider != null) store.require(model.provider!.id);
+    final job = _pending[model.digest] ?? _materialize(model);
     _pending[model.digest] = job;
     try {
-      return await job;
+      final file = await job;
+      _requireProvider();
+      if (model.provider != null) store.require(model.provider!.id);
+      return file;
     } finally {
-      _pending.remove(model.digest);
+      if (_pending[model.digest] == job) _pending.remove(model.digest);
     }
   }
 
@@ -200,7 +199,7 @@ class UpscaleModels {
     }
     final provider = model.provider;
     if (provider == null) throw StateError('모델 파일이 없거나 손상됐습니다. URL로 다시 추가해 주세요');
-    if (provider.id != 'player.ai-upscale') store.require(provider.id);
+    store.require(provider.id);
     final result = await callPlugin(provider, 'upscaleModel', {'id': model.id}, config: store.publicSettings(provider));
     if (result is! Map || result['format'] != 'mpv-glsl' || result['shader'] is! String) {
       throw const FormatException('모델 응답은 mpv GLSL 셰이더여야 합니다');
@@ -221,6 +220,7 @@ class UpscaleModels {
   }
 
   Future<UpscaleModel> addUrl(String value, String name) async {
+    _requireProvider();
     final uri = repositoryUri(value);
     final fallback = (uri.pathSegments.lastOrNull ?? '사용자 모델').replaceFirst(
       RegExp(r'\.glsl$', caseSensitive: false),
@@ -261,6 +261,7 @@ class UpscaleModels {
     } finally {
       client.close();
     }
+    _requireProvider();
     final shader = utf8.decode(bytes);
     validateUpscaleShader(shader);
     final digest = sha256.convert(bytes).toString();

@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:oplayer/core/plugins/upscale_models.dart';
+import 'package:oplayer/core/plugins/plugin.dart';
+import 'package:oplayer/core/plugins/plugin_store.dart';
 import 'package:oplayer/features/player/video_upscaling.dart';
 
 Future<void> main(List<String> args) async {
@@ -50,7 +52,13 @@ Future<void> main(List<String> args) async {
       resize: (size) => video.setSize(width: size?.width.toInt(), height: size?.height.toInt()),
     );
     final shaders = UpscaleShader(native.command);
-    final models = await UpscaleModels.instance.catalog();
+    // This manual renderer test must not install extensions into the user profile.
+    // ignore: invalid_use_of_visible_for_testing_member
+    final store = PluginStore.forTesting();
+    final provider = OPlugin.parse(await File('plugins/player.ai-upscale.js').readAsString());
+    store.installed[provider.id] = provider;
+    final modelService = UpscaleModels(store: store);
+    final models = await modelService.catalog();
     final passes = <String, dynamic>{};
     await step('resize');
     await scaler.apply(true, const Size(640, 360));
@@ -62,7 +70,7 @@ Future<void> main(List<String> args) async {
       await step('model ${model.name}');
       messages.clear();
       errors.clear();
-      final file = await UpscaleModels.instance.materialize(model);
+      final file = await modelService.materialize(model);
       await step('shader prepared ${file.path}');
       await shaders.apply(file.absolute.path);
       await step('shader attached');

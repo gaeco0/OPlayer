@@ -21,6 +21,7 @@ class OPlugin {
       'subtitles': ['searchSubtitles', 'downloadSubtitle'],
       'videoFilter': ['videoFilter'],
       'upscaling': ['upscaleModels', 'upscaleModel'],
+      'interpolation': ['interpolationModels'],
     },
     'browser': {
       'page': ['page'],

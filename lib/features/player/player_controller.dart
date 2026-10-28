@@ -27,6 +27,7 @@ import '../../core/plugins/plugin_store.dart';
 import '../../core/plugins/subtitle_plugins.dart';
 import '../../core/plugins/player_plugins.dart';
 import '../../core/plugins/upscale_models.dart';
+import '../../core/plugins/interpolation_models.dart';
 import '../cast/cast_controller.dart';
 import 'frame_interpolation.dart';
 import 'ai_interpolation.dart';
@@ -186,6 +187,7 @@ class PlayerController extends ChangeNotifier {
   int _upscalingRequest = 0;
   bool _upscalingPreference = AppSettings.instance.videoUpscaling;
   String _upscalingModelPreference = AppSettings.instance.upscalingModel;
+  int _upscalingResolution = AppSettings.instance.upscalingResolution;
   String? _aiShaderError;
   late final _upscaleShader = UpscaleShader((args) async {
     if (_disposed || player.platform is! NativePlayer) throw UnsupportedError('현재 엔진은 AI 업스케일을 지원하지 않습니다');
@@ -193,7 +195,12 @@ class PlayerController extends ChangeNotifier {
   });
 
   void _onUpscalingProvidersChanged() {
+    _aiShaderError = null;
     if (AppSettings.instance.upscalingModel != 'lanczos') _queueUpscaling();
+    if (AppSettings.instance.interpolationMode == 'rife') {
+      aiInterpolation.issue = null;
+      unawaited(_refreshInterpolation());
+    }
   }
 
   late final _upscaler = VideoUpscaler(
@@ -230,7 +237,11 @@ class PlayerController extends ChangeNotifier {
   void _onUpscalingSettings() {
     final value = AppSettings.instance.videoUpscaling;
     final model = AppSettings.instance.upscalingModel;
-    if (_upscalingPreference == value && _upscalingModelPreference == model) return;
+    final resolution = AppSettings.instance.upscalingResolution;
+    if (_upscalingPreference == value && _upscalingModelPreference == model && _upscalingResolution == resolution) {
+      return;
+    }
+    _upscalingResolution = resolution;
     _upscalingPreference = value;
     _upscalingModelPreference = model;
     _aiShaderError = null;
@@ -248,13 +259,18 @@ class PlayerController extends ChangeNotifier {
     if (_disposed || preparing) return;
     final request = ++_upscalingRequest;
     final source = upscalingSource;
+    // Android VO rebind can briefly report no video dimensions. Restoring the
+    // source texture here would resize again and start another VO rebind.
+    if (AppSettings.instance.videoUpscaling && !audioOnly && (source.width <= 0 || source.height <= 0)) return;
     final enabled =
         AppSettings.instance.videoUpscaling &&
         !aiInterpolation.running &&
         !audioOnly &&
         source.width > 0 &&
         source.height > 0;
-    final target = enabled ? upscaleTarget(source, _upscalingViewport, _upscalingFit) : null;
+    final target = enabled
+        ? upscaleTarget(source, _upscalingViewport, _upscalingFit, resolution: AppSettings.instance.upscalingResolution)
+        : null;
     upscalingBusy = true;
     upscalingIssue = null;
     if (aiInterpolation.running && AppSettings.instance.videoUpscaling) {
@@ -263,6 +279,9 @@ class PlayerController extends ChangeNotifier {
     notifyListeners();
     try {
       final model = AppSettings.instance.upscalingModel;
+      if (enabled && model != 'lanczos' && !UpscaleModels.instance.available) {
+        throw StateError('업스케일 모델 확장앱을 설치하고 켜 주세요');
+      }
       String? shader;
       if (enabled &&
           target != null &&
@@ -283,7 +302,7 @@ class PlayerController extends ChangeNotifier {
       upscalingApplied = enabled;
       upscalingOutput = target;
       if (enabled && model != 'lanczos' && shader == null && _aiShaderError == null) {
-        upscalingIssue = '화면을 1.3배보다 크게 확대하면 AI 모델을 적용합니다. 현재는 Lanczos를 사용합니다';
+        upscalingIssue = '목표 출력이 원본의 1.3배를 넘을 때 AI 모델을 적용합니다. 현재는 Lanczos를 사용합니다';
       }
       if (_aiShaderError != null && model != 'lanczos') upscalingIssue = 'AI 적용 실패 · Lanczos로 재생합니다: $_aiShaderError';
     } catch (e) {
@@ -323,6 +342,7 @@ class PlayerController extends ChangeNotifier {
   Timer? _interpolationCheck;
   bool _interpolationPreference = AppSettings.instance.frameInterpolation;
   String _interpolationMode = AppSettings.instance.interpolationMode;
+  String _interpolationModel = AppSettings.instance.interpolationModel;
   bool _interpolationNpu = AppSettings.instance.interpolationNpu;
   Future<void> _interpolationTail = Future.value();
   bool _bitmapSubtitle = false;
@@ -373,7 +393,14 @@ class PlayerController extends ChangeNotifier {
     final value = AppSettings.instance.frameInterpolation;
     final mode = AppSettings.instance.interpolationMode;
     final npu = AppSettings.instance.interpolationNpu;
-    if (_interpolationPreference == value && _interpolationMode == mode && _interpolationNpu == npu) return;
+    final model = AppSettings.instance.interpolationModel;
+    if (_interpolationPreference == value &&
+        _interpolationMode == mode &&
+        _interpolationNpu == npu &&
+        _interpolationModel == model) {
+      return;
+    }
+    _interpolationModel = model;
     _interpolationNpu = npu;
     _interpolationPreference = value;
     _interpolationMode = mode;
@@ -398,6 +425,8 @@ class PlayerController extends ChangeNotifier {
   Future<void> _applyInterpolation(int request) async {
     if (request != _interpolationRequest) return;
     if (_disposed || preparing) return;
+    // Keep temporal state through transient zero-width callbacks during resize.
+    if (AppSettings.instance.frameInterpolation && !audioOnly && (player.state.width ?? 0) <= 0) return;
     final desired = AppSettings.instance.frameInterpolation && !audioOnly && (player.state.width ?? 0) > 0;
     final enabled = desired && _displayRate > 0;
     // The screen supplies its actual display, including when moving monitors.
@@ -417,6 +446,8 @@ class PlayerController extends ChangeNotifier {
           interpolationIssue = _bitmapSubtitle ? '비트맵 자막 재생 중에는 AI 보간을 중지합니다' : 'AI 보간은 화면에서 1배속으로 재생할 때 적용됩니다';
           return;
         }
+        await InterpolationModels.instance.resolve(AppSettings.instance.interpolationModel);
+        if (_disposed || request != _interpolationRequest) return;
         if (aiInterpolation.issue != null) {
           interpolationIssue = aiInterpolation.issue;
           interpolationApplied = false;
@@ -456,6 +487,11 @@ class PlayerController extends ChangeNotifier {
         _scheduleInterpolationCheck(request);
       }
     } catch (e) {
+      await aiInterpolation.stop();
+      if (!_disposed) {
+        await _applyAiTiming();
+        _queueUpscaling();
+      }
       if (!_disposed && request == _interpolationRequest) {
         interpolationApplied = false;
         interpolationIssue = '$e';

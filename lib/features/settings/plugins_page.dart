@@ -59,6 +59,10 @@ class _PluginsPageState extends State<PluginsPage> {
                 ? '클라우드 목록·재생 주소 조회 및 계정 인증'
                 : p.subtitle
                 ? '영상 제목으로 자막 검색, 선택한 자막 다운로드·적용'
+                : p.supports('upscaling')
+                ? 'AI 업스케일 모델 목록·가중치 셰이더 제공'
+                : p.supports('interpolation')
+                ? '내장 엔진에서 사용할 AI 보간 모델 목록 제공'
                 : p.kind == 'player'
                 ? '영상 색상·회전·반전 필터 적용'
                 : '지정한 사이트의 페이지와 요청 헤더·쿠키 접근, 다운로드 보완·광고 차단'}\n\n'

@@ -8,6 +8,8 @@ import '../../../core/plugins/plugin_store.dart';
 import '../../../core/settings.dart';
 import '../player_controller.dart';
 import '../../settings/upscale_models_page.dart';
+import '../../settings/upscale_target_tile.dart';
+import '../../settings/interpolation_models_page.dart';
 import 'controls_overlay.dart' show PanelKind;
 import 'online_subtitles_dialog.dart';
 
@@ -392,12 +394,13 @@ class _QualityControls extends StatelessWidget {
         ListTile(
           title: const Text('업스케일 모델', style: _white),
           subtitle: Text(
-            AppSettings.instance.upscalingModel == 'lanczos' ? 'Lanczos · AI 사용 안 함' : 'AI 모델 선택됨 · 변경·URL 추가',
+            AppSettings.instance.upscalingModel == 'lanczos' ? 'Lanczos · AI 모델은 확장앱 설치 필요' : 'AI 모델 선택됨 · 변경·URL 추가',
             style: _label,
           ),
           trailing: const Icon(Icons.chevron_right, color: Colors.white70),
           onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const UpscaleModelsPage())),
         ),
+        const UpscaleTargetTile(color: Colors.white),
         if (c.upscalingBusy) const LinearProgressIndicator(),
         if (c.upscalingIssue != null)
           Padding(
@@ -409,7 +412,7 @@ class _QualityControls extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             child: Text(
               c.upscalingOutput == null
-                  ? '확대되는 화면에서 적용됩니다'
+                  ? (AppSettings.instance.upscalingResolution == 0 ? '확대되는 화면에서 적용됩니다' : '선택한 목표가 원본 이하라 원본 해상도를 유지합니다')
                   : '${c.upscalingSource.width.toInt()}×${c.upscalingSource.height.toInt()} → ${c.upscalingOutput!.width.toInt()}×${c.upscalingOutput!.height.toInt()}',
               style: _label,
             ),
@@ -422,22 +425,8 @@ class _QualityControls extends StatelessWidget {
             style: _label,
           ),
           trailing: const Icon(Icons.chevron_right, color: Colors.white70),
-          onTap: () async {
-            final mode = await showDialog<String>(
-              context: context,
-              builder: (context) => SimpleDialog(
-                title: const Text('보간 방식'),
-                children: [
-                  SimpleDialogOption(onPressed: () => Navigator.pop(context, 'blend'), child: const Text('가벼운 프레임 혼합')),
-                  SimpleDialogOption(
-                    onPressed: () => Navigator.pop(context, 'rife'),
-                    child: const Text('AI · RIFE v4.6 (1배속 · 처리 부하 높음)'),
-                  ),
-                ],
-              ),
-            );
-            if (mode != null) AppSettings.instance.update((s) => s.interpolationMode = mode);
-          },
+          onTap: () =>
+              Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const InterpolationModelsPage())),
         ),
         SwitchListTile(
           title: const Text('프레임 보간', style: _white),

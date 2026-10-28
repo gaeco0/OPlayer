@@ -1,4 +1,6 @@
 import 'upscale_models_page.dart';
+import 'interpolation_models_page.dart';
+import 'upscale_target_tile.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'dart:io';
@@ -114,12 +116,12 @@ class SettingsPage extends StatelessWidget {
               value: s.frameInterpolation,
               onChanged: (v) => s.update((x) => x.frameInterpolation = v),
             ),
-            _choice<String>(
-              context,
-              title: '보간 방식',
-              value: s.interpolationMode,
-              options: const {'blend': '가벼운 프레임 혼합', 'rife': 'AI · RIFE v4.6 (실시간 · 1배속)'},
-              onChanged: (v) => s.update((x) => x.interpolationMode = v),
+            ListTile(
+              title: const Text('보간 방식'),
+              subtitle: Text(s.interpolationMode == 'rife' ? 'AI 모델 선택됨 · 확장앱 필요' : '가벼운 프레임 혼합 · AI 모델은 확장앱 설치 필요'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () =>
+                  Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const InterpolationModelsPage())),
             ),
             if (Platform.isAndroid && s.interpolationMode == 'rife')
               SwitchListTile(
@@ -136,12 +138,11 @@ class SettingsPage extends StatelessWidget {
             ),
             ListTile(
               title: const Text('업스케일 모델'),
-              subtitle: Text(
-                s.upscalingModel == 'lanczos' ? 'Lanczos · 기본 AI 모델 3개 · URL 추가' : 'AI 모델 선택됨 · 변경·URL 추가',
-              ),
+              subtitle: Text(s.upscalingModel == 'lanczos' ? 'Lanczos · AI 모델은 확장앱 설치 필요' : 'AI 모델 선택됨 · 변경·URL 추가'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const UpscaleModelsPage())),
             ),
+            const UpscaleTargetTile(),
             _choice<DefaultAspect>(
               context,
               title: '기본 화면 비율',

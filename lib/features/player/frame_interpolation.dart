@@ -5,6 +5,7 @@ class FrameInterpolation {
   final Future<void> Function(String, String) write;
   final _original = <String, String>{};
   Future<void> _tail = Future.value();
+  double? _appliedRate;
 
   /// Serializes rapid toggles/display changes so the last request wins.
   Future<void> apply(bool enabled, double refreshRate) {
@@ -40,11 +41,15 @@ class FrameInterpolation {
     }
     if (failure != null) throw StateError('원래 재생 설정을 복원하지 못했습니다: $failure');
     _original.clear();
+    _appliedRate = null;
   }
 
   Future<void> _apply(bool enabled, double rate) async {
     if (!enabled) return _restore();
     if (!rate.isFinite || rate < 20 || rate > 1000) throw UnsupportedError('화면 주사율을 확인할 수 없습니다');
+    // Resize/VO callbacks can request the same mode repeatedly. Re-toggling
+    // interpolation clears the temporal queue and flashes the Android surface.
+    if (_appliedRate != null && (rate - _appliedRate!).abs() < .001) return;
     if (_original.isEmpty) {
       // Older bundled mpv uses override-display-fps; newer releases renamed it.
       final rateKey = (await read('options/display-fps-override')).isNotEmpty
@@ -65,6 +70,7 @@ class FrameInterpolation {
       await _set('tscale', 'oversample');
       await _set('video-sync', 'display-resample');
       await _set('interpolation', 'yes');
+      _appliedRate = rate;
     } catch (error) {
       try {
         await _restore();

@@ -3,7 +3,7 @@ import 'package:flutter/painting.dart';
 
 /// Preserve the source aspect ratio; Flutter still owns contain/cover/stretch.
 /// Limit additional render targets to 4096 per edge and approximately 4K pixels.
-Size? upscaleTarget(Size source, Size viewport, BoxFit fit) {
+Size? upscaleTarget(Size source, Size viewport, BoxFit fit, {int resolution = 0}) {
   if (![source.width, source.height, viewport.width, viewport.height].every((v) => v.isFinite && v > 0)) return null;
   final x = viewport.width / source.width, y = viewport.height / source.height;
   var factor = switch (fit) {
@@ -13,6 +13,9 @@ Size? upscaleTarget(Size source, Size viewport, BoxFit fit) {
     BoxFit.fitWidth => x,
     BoxFit.fitHeight => y,
   };
+  if (const [720, 1080, 1440, 2160].contains(resolution)) {
+    factor = resolution / math.min(source.width, source.height);
+  }
   factor = math.min(
     factor,
     math.min(4096 / math.max(source.width, source.height), math.sqrt(8294400 / (source.width * source.height))),
