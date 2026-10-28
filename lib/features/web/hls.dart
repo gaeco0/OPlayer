@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:pointycastle/export.dart';
@@ -241,6 +242,24 @@ class Hls {
       '인증 오류 응답이거나 사이트 고유의 키 형식일 수 있습니다.',
     );
   }
+
+  // Keep network concurrency independent of CPU work: at most two decryptions
+  // across all downloads, leaving CPU time for playback and UI.
+  static final _decryptTails = [Future<void>.value(), Future<void>.value()];
+  static int _decryptLane = 0;
+  static Future<Uint8List> decryptAes128Async(Uint8List data, Uint8List key, Uint8List iv) {
+    final lane = _decryptLane++ % _decryptTails.length;
+    final result = _decryptTails[lane].then((_) {
+      final input = TransferableTypedData.fromList([data]);
+      return _decryptTransferred(input, key, iv);
+    });
+    _decryptTails[lane] = result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return result;
+  }
+
+  // Separate scope prevents the worker closure from retaining the source buffer.
+  static Future<Uint8List> _decryptTransferred(TransferableTypedData input, Uint8List key, Uint8List iv) =>
+      Isolate.run(() => decryptAes128(input.materialize().asUint8List(), key, iv), debugName: 'hls-aes128');
 
   /// AES-128-CBC + PKCS7
   static Uint8List decryptAes128(Uint8List data, Uint8List key, Uint8List iv) {

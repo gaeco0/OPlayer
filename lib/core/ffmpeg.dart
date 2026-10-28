@@ -178,7 +178,20 @@ class Ffmpeg {
     if (quality == OutputQuality.original) return remuxToMp4(video: video, audio: audio, output: output);
     final bin = await locate();
     if (bin == null) return (false, 'ffmpeg 없음');
-    final args = <String>['-y', '-hide_banner', '-loglevel', 'error', '-i', video];
+    // Leave CPU capacity for playback/UI during download output conversion.
+    final threads = '${(Platform.numberOfProcessors ~/ 2).clamp(1, 4)}';
+    final args = <String>[
+      '-y',
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-filter_threads',
+      '1',
+      '-threads',
+      threads,
+      '-i',
+      video,
+    ];
     if (audio != null) args.addAll(['-i', audio]);
     if (quality == OutputQuality.audio) {
       args.addAll(['-map', audio == null ? '0:a:0' : '1:a:0', '-vn', '-c:a', 'aac', '-b:a', '192k']);
@@ -212,7 +225,7 @@ class Ffmpeg {
         quality == OutputQuality.low ? '96k' : '192k',
       ]);
     }
-    args.addAll(['-movflags', '+faststart', output]);
+    args.addAll(['-threads', threads, '-movflags', '+faststart', output]);
     try {
       final (code, error) = await _execute(bin, args);
       final f = File(output);

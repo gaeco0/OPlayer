@@ -217,6 +217,7 @@ class DownloadManager extends ChangeNotifier {
 
   late SharedPreferences _prefs;
   Timer? _notifyTimer;
+  Timer? _persistTimer;
   DownloadForeground? _foreground;
   VoidCallback? onOpenDownloads;
   bool _openPending = false;
@@ -382,14 +383,14 @@ class DownloadManager extends ChangeNotifier {
       _clients.remove(t.id)?.close();
     }
     t.status = DownloadStatus.paused;
-    _changed();
+    _changed(immediate: true);
   }
 
   void resume(DownloadTask t) {
     if (t.status == DownloadStatus.running || t.status == DownloadStatus.done) return;
     t.status = DownloadStatus.queued;
     t.error = null;
-    _changed();
+    _changed(immediate: true);
     _schedule();
   }
 
@@ -908,19 +909,21 @@ class DownloadManager extends ChangeNotifier {
     }
 
     try {
-      await for (final chunk in rest()) {
-        _check(t);
-        sink.add(chunk);
-        t.received += chunk.length;
-        window += chunk.length;
-        final el = DateTime.now().difference(windowStart).inMilliseconds;
-        if (el > 1000) {
-          t.speed = window * 1000 / el;
-          window = 0;
-          windowStart = DateTime.now();
-        }
-        _changed();
-      }
+      await sink.addStream(
+        rest().map((chunk) {
+          _check(t);
+          t.received += chunk.length;
+          window += chunk.length;
+          final el = DateTime.now().difference(windowStart).inMilliseconds;
+          if (el > 1000) {
+            t.speed = window * 1000 / el;
+            window = 0;
+            windowStart = DateTime.now();
+          }
+          _changed();
+          return chunk;
+        }),
+      );
     } finally {
       await sink.close();
       await iter.cancel();
@@ -1213,7 +1216,7 @@ class DownloadManager extends ChangeNotifier {
         var data = await _get(client, s.uri, t.headers, range: s.byteRange);
         if (s.key != null) {
           final k = await keyFor(s.key!.uri!);
-          data = Hls.decryptAes128(data, k, s.key!.iv ?? Hls.ivForSequence(s.sequence));
+          data = await Hls.decryptAes128Async(data, k, s.key!.iv ?? Hls.ivForSequence(s.sequence));
         }
         _check(t);
         await File('${f.path}.tmp').writeAsBytes(data, flush: false);
@@ -1247,7 +1250,13 @@ class DownloadManager extends ChangeNotifier {
       try {
         if (pl.initSegment != null) sink.add(await _get(client, pl.initSegment!, t.headers));
         for (var i = 0; i < pl.segments.length; i++) {
-          sink.add(await File(segPath(names[k], i)).readAsBytes());
+          _check(t);
+          await sink.addStream(
+            File(segPath(names[k], i)).openRead().map((chunk) {
+              _check(t);
+              return chunk;
+            }),
+          );
         }
       } finally {
         await sink.close();
@@ -1376,22 +1385,27 @@ class DownloadManager extends ChangeNotifier {
   }
 
   void _changed({bool immediate = false}) {
-    _foreground?.schedule(downloadNotificationState(tasks));
     if (immediate) {
       _notifyTimer?.cancel();
       _notifyTimer = null;
+      _foreground?.schedule(downloadNotificationState(tasks));
       notifyListeners();
       _persist();
       return;
     }
     _notifyTimer ??= Timer(const Duration(milliseconds: 300), () {
       _notifyTimer = null;
+      _foreground?.schedule(downloadNotificationState(tasks));
       notifyListeners();
-      _persist();
+      _persistTimer ??= Timer(const Duration(seconds: 3), _persist);
     });
   }
 
-  void _persist() => _prefs.setStringList(_k, tasks.map((t) => jsonEncode(t.toJson())).toList());
+  void _persist() {
+    _persistTimer?.cancel();
+    _persistTimer = null;
+    _prefs.setStringList(_k, tasks.map((t) => jsonEncode(t.toJson())).toList());
+  }
 }
 
 String resourceDownloadName(String name) {

@@ -91,6 +91,13 @@ void main() {
       );
     }
     expect(executions.first, containsAllInOrder(['-c', 'copy']));
+    expect(executions.first, isNot(contains('-threads')));
+    for (final args in executions.skip(1)) {
+      expect(args, containsAllInOrder(['-filter_threads', '1', '-threads']));
+      final threads = int.parse(args[args.indexOf('-threads') + 1]);
+      expect(threads, inInclusiveRange(1, 4));
+      expect(args.lastIndexOf('-threads'), greaterThan(args.indexOf('-i')));
+    }
     expect(executions[1], contains("scale=-2:'trunc(min(1080,ih)/2)*2'"));
     expect(executions[2], contains("scale=-2:'trunc(min(720,ih)/2)*2'"));
     expect(executions[3], contains("scale=-2:'trunc(min(480,ih)/2)*2'"));
