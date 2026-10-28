@@ -70,6 +70,8 @@ public class VideoOutput: NSObject {
     worker.enqueue {
       self.width = width
       self.height = height
+      // Resize and redraw a paused frame without waiting for playback.
+      if !self.disposed { self._updateCallback() }
     }
   }
 

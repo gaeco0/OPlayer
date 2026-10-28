@@ -22,6 +22,7 @@ import '../../core/plugins/plugin.dart';
 import '../../core/plugins/plugin_store.dart';
 import '../../core/plugins/subtitle_plugins.dart';
 import '../../core/plugins/player_plugins.dart';
+import '../../core/plugins/upscale_models.dart';
 import '../cast/cast_controller.dart';
 import 'frame_interpolation.dart';
 import 'video_upscaling.dart';
@@ -105,7 +106,18 @@ class PlayerController extends ChangeNotifier {
     ResourceLocks.instance.addListener(_enforceResourceLock);
     AppSettings.instance.addListener(_onInterpolationSettings);
     AppSettings.instance.addListener(_onUpscalingSettings);
+    PluginStore.instance.addListener(_onUpscalingProvidersChanged);
     _subs.addAll([
+      player.stream.log.listen((event) {
+        if (_aiShaderError == null &&
+            AppSettings.instance.videoUpscaling &&
+            AppSettings.instance.upscalingModel != 'lanczos' &&
+            const {'error', 'fatal'}.contains(event.level) &&
+            RegExp(r'shader|glsl', caseSensitive: false).hasMatch(event.text)) {
+          _aiShaderError = event.text.trim();
+          _queueUpscaling();
+        }
+      }),
       player.stream.playing.listen((playing) {
         if (playing) _enforceResourceLock();
         if (playing && !preparing && AppSettings.instance.frameInterpolation) unawaited(_refreshInterpolation());
@@ -168,6 +180,17 @@ class PlayerController extends ChangeNotifier {
   Timer? _upscalingTimer;
   int _upscalingRequest = 0;
   bool _upscalingPreference = AppSettings.instance.videoUpscaling;
+  String _upscalingModelPreference = AppSettings.instance.upscalingModel;
+  String? _aiShaderError;
+  late final _upscaleShader = UpscaleShader((args) async {
+    if (_disposed || player.platform is! NativePlayer) throw UnsupportedError('현재 엔진은 AI 업스케일을 지원하지 않습니다');
+    await (player.platform as NativePlayer).command(args);
+  });
+
+  void _onUpscalingProvidersChanged() {
+    if (AppSettings.instance.upscalingModel != 'lanczos') _queueUpscaling();
+  }
+
   late final _upscaler = VideoUpscaler(
     read: (key) async {
       if (_disposed) throw StateError('플레이어가 종료됐습니다');
@@ -201,8 +224,11 @@ class PlayerController extends ChangeNotifier {
 
   void _onUpscalingSettings() {
     final value = AppSettings.instance.videoUpscaling;
-    if (_upscalingPreference == value) return;
+    final model = AppSettings.instance.upscalingModel;
+    if (_upscalingPreference == value && _upscalingModelPreference == model) return;
     _upscalingPreference = value;
+    _upscalingModelPreference = model;
+    _aiShaderError = null;
     _upscalingTimer?.cancel();
     unawaited(_refreshUpscaling());
   }
@@ -223,15 +249,48 @@ class PlayerController extends ChangeNotifier {
     upscalingIssue = null;
     notifyListeners();
     try {
+      final model = AppSettings.instance.upscalingModel;
+      String? shader;
+      if (enabled &&
+          target != null &&
+          target.width / source.width > 1.3 &&
+          target.height / source.height > 1.3 &&
+          model != 'lanczos' &&
+          _aiShaderError == null) {
+        if (source.longestSide > 1920 || source.width * source.height > 2073600) {
+          throw UnsupportedError('저사양용 AI 모델은 1080p 이하 입력만 지원합니다');
+        }
+        shader = await UpscaleModels.instance.resolve(model);
+        if (_disposed || request != _upscalingRequest) return;
+      }
+      await _upscaleShader.apply(shader);
+      if (_disposed || request != _upscalingRequest) return;
       await _upscaler.apply(enabled, target);
       if (_disposed || request != _upscalingRequest) return;
       upscalingApplied = enabled;
       upscalingOutput = target;
+      if (enabled && model != 'lanczos' && shader == null && _aiShaderError == null) {
+        upscalingIssue = '화면을 1.3배보다 크게 확대하면 AI 모델을 적용합니다. 현재는 Lanczos를 사용합니다';
+      }
+      if (_aiShaderError != null && model != 'lanczos') upscalingIssue = 'AI 적용 실패 · Lanczos로 재생합니다: $_aiShaderError';
     } catch (e) {
       if (!_disposed && request == _upscalingRequest) {
         upscalingApplied = false;
         upscalingOutput = null;
         upscalingIssue = '$e';
+        try {
+          await _upscaleShader.apply(null);
+          await _upscaler.apply(enabled, target);
+          if (!_disposed && request == _upscalingRequest) {
+            upscalingApplied = enabled;
+            upscalingOutput = target;
+            if (enabled && AppSettings.instance.upscalingModel != 'lanczos') {
+              upscalingIssue = 'AI 적용 실패 · Lanczos로 재생합니다: $e';
+            }
+          }
+        } catch (_) {
+          // Existing renderer rollback errors stay visible; never claim AI success.
+        }
       }
     } finally {
       if (!_disposed && request == _upscalingRequest) {
@@ -1256,6 +1315,7 @@ class PlayerController extends ChangeNotifier {
     ResourceLocks.instance.removeListener(_enforceResourceLock);
     AppSettings.instance.removeListener(_onInterpolationSettings);
     AppSettings.instance.removeListener(_onUpscalingSettings);
+    PluginStore.instance.removeListener(_onUpscalingProvidersChanged);
     _upscalingRequest++;
     _upscalingTimer?.cancel();
     if (_hasVideoController) video.rect.removeListener(_queueUpscaling);

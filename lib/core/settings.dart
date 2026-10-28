@@ -44,6 +44,7 @@ class AppSettings extends ChangeNotifier {
   bool hardwareDecoding = true;
   bool frameInterpolation = false;
   bool videoUpscaling = false;
+  String upscalingModel = 'lanczos';
   double defaultSpeed = 1.0;
   DefaultAspect defaultAspect = DefaultAspect.fit;
   PlaybackOrientation playbackOrientation = PlaybackOrientation.landscape;
@@ -121,6 +122,7 @@ class AppSettings extends ChangeNotifier {
     'hw': hardwareDecoding,
     'frameInterpolation': frameInterpolation,
     'videoUpscaling': videoUpscaling,
+    'upscalingModel': upscalingModel,
     'speed': defaultSpeed,
     'aspect': defaultAspect.index,
     'playbackOrientation': playbackOrientation.name,
@@ -171,6 +173,7 @@ class AppSettings extends ChangeNotifier {
     hardwareDecoding = v('hw', true);
     frameInterpolation = j['frameInterpolation'] == true;
     videoUpscaling = j['videoUpscaling'] == true;
+    upscalingModel = j['upscalingModel'] is String ? j['upscalingModel'] as String : 'lanczos';
     defaultSpeed = (j['speed'] as num?)?.toDouble() ?? 1.0;
     defaultAspect = DefaultAspect.values[v('aspect', 0)];
     playbackOrientation = PlaybackOrientation.values.firstWhere(

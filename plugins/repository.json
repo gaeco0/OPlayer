@@ -223,6 +223,23 @@
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/subtitle.opensubtitles.js",
       "sha256": "76dcd0f69fc377b4083c0e903a30469e6d815be086f78facddd696a00fb83e7f",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+    },
+    {
+      "id": "player.ai-upscale",
+      "name": "경량 AI 업스케일 모델",
+      "version": "1.0.0",
+      "kind": "player",
+      "pluginApi": 4,
+      "author": "OPlayer",
+      "features": [
+        "AI 업스케일 모델 3개",
+        "GPU 추론",
+        "기본 모델 업데이트"
+      ],
+      "description": "업스케일 SDK 필요 · Anime4K CNN S·Denoise S·FSRCNNX 8",
+      "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/player.ai-upscale.js",
+      "sha256": "e8604e1dd30510286f33b94edd476b277884875acfa69e747c90b7f49ef09cd4",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
     }
   ]
 }

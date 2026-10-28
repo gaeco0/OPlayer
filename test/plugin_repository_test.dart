@@ -95,7 +95,11 @@ void main() {
       expect(sha256.convert(await File('plugins/$fileName').readAsBytes()).toString(), item['sha256']);
       expect(['player', 'browser', 'resource'], contains(item['kind']));
       expect(item['pluginApi'], 4);
-      expect(item['capabilities'], isNotEmpty);
+      // New capabilities may be omitted from catalog hints for old-reader compatibility.
+      expect(
+        item['capabilities'] ?? OPlugin.parse(await File('plugins/$fileName').readAsString()).capabilities,
+        isNotEmpty,
+      );
       expect(item['features'], isNotEmpty);
     }
   });

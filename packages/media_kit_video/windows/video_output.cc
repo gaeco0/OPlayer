@@ -236,6 +236,9 @@ void VideoOutput::SetSize(std::optional<int64_t> width,
       height_ = std::nullopt;
     }
   });
+  // A paused video emits no next frame. Resize and redraw after the queued
+  // dimensions update so changing an upscale model also updates a still frame.
+  NotifyRender();
 }
 
 void VideoOutput::CheckAndResize() {

@@ -2,3 +2,6 @@
 plugins/*.js text eol=lf
 plugins/**/*.js text eol=lf
 plugins/*.json text eol=lf
+
+# Preserve upstream shader bytes and model digests on Windows checkouts.
+third_party/ai-upscale/*.glsl text eol=lf

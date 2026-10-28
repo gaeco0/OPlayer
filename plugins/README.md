@@ -519,3 +519,56 @@ flutter test --no-pub
 
 Linux/macOS는 `cmake -S ... -B ...`에서 `-A x64`를 빼고 같은 위치에 빌드합니다.
 `LIBQUICKJSC_TEST_PATH`로 DLL/공유 라이브러리 경로를 직접 지정할 수도 있습니다.
+
+
+## AI 업스케일 모델 API (플레이어 확장앱)
+
+AI 업스케일 SDK가 포함된 앱에서 `kind: "player"`, `api: 4`, `capabilities: ["upscaling"]`을 선언합니다.
+JS는 모델 목록과 가중치가 포함된 **mpv GLSL 텍스트**를 반환하고, 앱의 기존 mpv GPU가 추론합니다.
+QuickJS에서 픽셀을 계산하거나 WebView로 프레임을 복사하지 않습니다. ONNX·NCNN·RIFE 런타임은 포함하지 않습니다.
+호스트 SDK가 없는 이전 버전은 이 기능을 사용할 수 없습니다. SDK를 포함한 앱으로 한 번 업데이트한 이후에는
+같은 계약을 사용하는 모델을 JS만 교체·설치하여 추가할 수 있습니다.
+
+```javascript
+// @oplayer {"api":4,"id":"player.my-models","name":"My models","version":"1.0.0","kind":"player","capabilities":["upscaling"],"hosts":[]}
+globalThis.plugin = {
+  upscaleModels() {
+    return [{id:"my-cnn", name:"My CNN", description:"2x model", format:"mpv-glsl", scale:2,
+      sha256:"<UTF-8 shader bytes SHA-256, 64 lowercase hex characters>",
+      license:"MIT", source:"https://example.com/model-source"}];
+  },
+  upscaleModel({id}) {
+    if (id !== "my-cnn") throw new Error("Unknown model");
+    return {format:"mpv-glsl", shader:MODEL_GLSL_TEXT};
+  }
+};
+```
+
+`upscaleModels`는 최대 30개이며 모델 ID는 `^[a-z][a-z0-9_-]{0,63}$`입니다. 이름·설명·라이선스·출처는
+각각 512자 이하 문자열이고 출처는 HTTPS입니다. 호스트는 UTF-8 SHA-256을 확인한 뒤 전용 캐시에 저장합니다.
+모델 파일명·원시 mpv 옵션·네이티브 명령·사용자 파일 경로는 JS에 제공하지 않습니다.
+서로 다른 공급자에 같은 모델 ID가 있어도 `공급자ID/모델ID`로 구분됩니다. 꺼진 공급자의 모델은 적용하지 않습니다.
+
+지원 모델은 512KB 이하의 fragment GLSL입니다. `HOOK`, `BIND`, `SAVE`, `WIDTH`, `HEIGHT`, `COMPONENTS`,
+`WHEN`, `DESC` 지시어만 허용하며 하나의 LUMA·MAIN·RGB 입력과 최대 32개 패스를 사용합니다.
+전체 중간 출력은 입력의 2배 이내여야 하고 외부 텍스처·파일 include·compute buffer·반복문은 지원하지 않습니다.
+공식 저장소의 새 모델 항목은 구형 앱에서도 저장소 전체를 읽을 수 있도록 선택 정보인 `capabilities` 힌트를 생략합니다.
+실행 기능은 해시로 검증한 JS 매니페스트가 선언하며 SDK가 없는 앱은 해당 모델만 설치할 수 없습니다.
+기본 GPU/드라이버가 셰이더를 지원해야 하며, 오류 시 AI 성공으로 표시하지 않고 Lanczos로 복귀합니다.
+화면 확대율이 1.3배를 넘을 때 AI를 적용하고 작은 확대에서는 Lanczos를 사용합니다.
+저사양용 경로의 입력은 최대 1080p, 2x 중간 출력은 최대 약 4K입니다. 해상도·GPU에 따라 실시간 성능이 다릅니다.
+
+기본 제공 모델은 `player.ai-upscale.js`의 **Anime4K CNN S**, **Anime4K Denoise CNN S**, **FSRCNNX 8**입니다.
+가중치는 오프라인으로 앱에 포함하지만 PluginStore에 확장앱을 자동 설치하지 않습니다. 동일 ID의 업데이트된 공급자를
+사용자가 설치하면 번들 공급자 대신 사용하고, 끄거나 삭제하면 기본 번들로 복귀합니다. 그 외 설치된 모델 공급자도
+모델 목록에 합쳐집니다. 원본 셰이더·출처·해시는 `third_party/ai-upscale/NOTICE.md`, 라이선스 전문은
+`assets/licenses/ai-upscale.txt`를 참고하세요. FSRCNNX는 일반 영상용 후보이며 S 두 종보다 연산량이 큽니다.
+
+### URL로 사용자 모델 추가
+
+설정 → 재생 → 업스케일 모델 또는 플레이어 화면·화질/더보기 → 업스케일 모델 → URL 추가에서
+모델 이름과 HTTPS GLSL 주소를 입력합니다. 리디렉션도 HTTPS만 허용하며 앱 로그인 토큰·브라우저 쿠키를 보내지 않습니다.
+다운로드 전체 시간·파일 크기·형식을 제한하고 내용 해시로 중복을 제거합니다. 등록 정보와 파일은 재시작 후 유지되어
+다음 재생에는 네트워크 없이 사용합니다. URL 모델은 최대 30개이고 목록에서 개별 삭제할 수 있습니다.
+현재 재생 중인 파일과의 충돌을 막기 위해 삭제 시 선택을 Lanczos로 바꾸고 내용별 캐시는 보관합니다.
+URL 모델은 사용자가 원본 라이선스와 신뢰할 수 있는 배포처를 확인해야 합니다. 임의 ONNX·NCNN URL은 지원하지 않습니다.

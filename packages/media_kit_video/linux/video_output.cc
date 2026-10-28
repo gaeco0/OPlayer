@@ -346,6 +346,11 @@ void video_output_set_size(VideoOutput* self, gint64 width, gint64 height) {
     self->width = CLAMP(width, 0, SW_RENDERING_MAX_WIDTH);
     self->height = CLAMP(height, 0, SW_RENDERING_MAX_HEIGHT);
   }
+  if (!self->destroyed && self->texture_gl) {
+    // Request populate/resize even while mpv is paused.
+    fl_texture_registrar_mark_texture_frame_available(
+        self->texture_registrar, FL_TEXTURE(self->texture_gl));
+  }
 }
 
 mpv_render_context* video_output_get_render_context(VideoOutput* self) {

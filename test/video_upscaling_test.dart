@@ -138,10 +138,16 @@ void main() {
     final settings = AppSettings.instance;
     await settings.init();
     expect(settings.videoUpscaling, false);
-    settings.update((s) => s.videoUpscaling = true);
+    expect(settings.upscalingModel, 'lanczos');
+    settings.update((s) {
+      s.videoUpscaling = true;
+      s.upscalingModel = 'player.ai-upscale/anime4k-s';
+    });
     await Future<void>.delayed(Duration.zero);
     settings.videoUpscaling = false;
+    settings.upscalingModel = 'lanczos';
     await settings.init();
     expect(settings.videoUpscaling, true);
+    expect(settings.upscalingModel, 'player.ai-upscale/anime4k-s');
   });
 }

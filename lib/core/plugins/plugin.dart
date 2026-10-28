@@ -20,6 +20,7 @@ class OPlugin {
     'player': {
       'subtitles': ['searchSubtitles', 'downloadSubtitle'],
       'videoFilter': ['videoFilter'],
+      'upscaling': ['upscaleModels', 'upscaleModel'],
     },
     'browser': {
       'page': ['page'],

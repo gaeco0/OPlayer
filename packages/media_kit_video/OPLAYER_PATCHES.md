@@ -11,7 +11,12 @@ Resizing is serialized with the existing controller lock and skips identical siz
 to avoid repeated surface recreation/seeks. Resize waits for the native callback
 and times out if the Surface producer never confirms the requested size, allowing
 the caller to restore the original output. The video widget documentation reflects
-this Android GPU output support. Other platform implementations are unchanged.
+this Android GPU output support.
+
+Desktop output-size changes also request a redraw while paused: Windows queues
+CheckAndResize/Render after SetSize, Linux schedules the GL texture callback,
+and Darwin invokes its existing update callback on the video worker. This lets
+upscale changes update a still frame without a seek or briefly resuming audio.
 
 Keep this change when updating the upstream package, or remove the local package
 when upstream provides equivalent Android setSize behavior.

@@ -110,3 +110,34 @@ class VideoUpscaler {
     }
   }
 }
+
+/// Own only our shader entry; never clear shaders installed by another feature.
+class UpscaleShader {
+  UpscaleShader(this.command);
+  final Future<void> Function(List<String>) command;
+  Future<void> _tail = Future.value();
+  String? _active;
+
+  Future<void> apply(String? path) {
+    final result = _tail.then((_) => _apply(path));
+    _tail = result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return result;
+  }
+
+  Future<void> _apply(String? path) async {
+    if (_active == path) return;
+    final previous = _active;
+    if (previous != null) await command(['change-list', 'glsl-shaders', 'remove', previous]);
+    _active = null;
+    try {
+      _active = path;
+      if (path != null) await command(['change-list', 'glsl-shaders', 'append', path]);
+    } catch (_) {
+      // An append can mutate the list before a native error is returned.
+      if (path != null) await command(['change-list', 'glsl-shaders', 'remove', path]);
+      _active = previous;
+      if (previous != null) await command(['change-list', 'glsl-shaders', 'append', previous]);
+      rethrow;
+    }
+  }
+}

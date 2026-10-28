@@ -1,3 +1,4 @@
+import 'upscale_models_page.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'dart:io';
@@ -118,6 +119,14 @@ class SettingsPage extends StatelessWidget {
               subtitle: const Text('낮은 해상도 영상을 화면 크기로 선명하게 확대 · GPU 사용'),
               value: s.videoUpscaling,
               onChanged: (v) => s.update((x) => x.videoUpscaling = v),
+            ),
+            ListTile(
+              title: const Text('업스케일 모델'),
+              subtitle: Text(
+                s.upscalingModel == 'lanczos' ? 'Lanczos · 기본 AI 모델 3개 · URL 추가' : 'AI 모델 선택됨 · 변경·URL 추가',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const UpscaleModelsPage())),
             ),
             _choice<DefaultAspect>(
               context,

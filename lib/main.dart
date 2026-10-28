@@ -30,6 +30,10 @@ Future<void> main(List<String> args) async {
       'quickjs_engine',
     ], await rootBundle.loadString('assets/licenses/quickjs.txt'));
     yield LicenseEntryWithLineBreaks(const ['ByeDPI'], await rootBundle.loadString('assets/licenses/byedpi.txt'));
+    yield LicenseEntryWithLineBreaks(const [
+      'Anime4K',
+      'FSRCNNX',
+    ], await rootBundle.loadString('assets/licenses/ai-upscale.txt'));
     yield LicenseEntryWithLineBreaks(const ['libmpv'], await rootBundle.loadString('assets/licenses/libmpv.txt'));
     yield LicenseEntryWithLineBreaks(
       const ['FFmpeg', 'FFmpegKit'],

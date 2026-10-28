@@ -6,6 +6,7 @@ import '../../../app/theme.dart';
 import '../../../core/plugins/plugin_store.dart';
 import '../../../core/settings.dart';
 import '../player_controller.dart';
+import '../../settings/upscale_models_page.dart';
 import 'controls_overlay.dart' show PanelKind;
 import 'online_subtitles_dialog.dart';
 
@@ -386,6 +387,15 @@ class _QualityControls extends StatelessWidget {
           onChanged: c.upscalingBusy || c.audioOnly
               ? null
               : (v) => AppSettings.instance.update((s) => s.videoUpscaling = v),
+        ),
+        ListTile(
+          title: const Text('업스케일 모델', style: _white),
+          subtitle: Text(
+            AppSettings.instance.upscalingModel == 'lanczos' ? 'Lanczos · AI 사용 안 함' : 'AI 모델 선택됨 · 변경·URL 추가',
+            style: _label,
+          ),
+          trailing: const Icon(Icons.chevron_right, color: Colors.white70),
+          onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const UpscaleModelsPage())),
         ),
         if (c.upscalingBusy) const LinearProgressIndicator(),
         if (c.upscalingIssue != null)
