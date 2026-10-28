@@ -4,6 +4,10 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
+// media_kit exposes the player handle publicly, but not its resolved DLL path.
+// Reuse its exact loaded engine; never open a second mpv implementation.
+// ignore: implementation_imports
+import 'package:media_kit/src/player/native/core/native_library.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -25,6 +29,7 @@ import '../../core/plugins/player_plugins.dart';
 import '../../core/plugins/upscale_models.dart';
 import '../cast/cast_controller.dart';
 import 'frame_interpolation.dart';
+import 'ai_interpolation.dart';
 import 'video_upscaling.dart';
 import 'package:flutter/painting.dart';
 
@@ -243,10 +248,18 @@ class PlayerController extends ChangeNotifier {
     if (_disposed || preparing) return;
     final request = ++_upscalingRequest;
     final source = upscalingSource;
-    final enabled = AppSettings.instance.videoUpscaling && !audioOnly && source.width > 0 && source.height > 0;
+    final enabled =
+        AppSettings.instance.videoUpscaling &&
+        !aiInterpolation.running &&
+        !audioOnly &&
+        source.width > 0 &&
+        source.height > 0;
     final target = enabled ? upscaleTarget(source, _upscalingViewport, _upscalingFit) : null;
     upscalingBusy = true;
     upscalingIssue = null;
+    if (aiInterpolation.running && AppSettings.instance.videoUpscaling) {
+      upscalingIssue = 'AI 보간 중에는 업스케일을 잠시 중지합니다';
+    }
     notifyListeners();
     try {
       final model = AppSettings.instance.upscalingModel;
@@ -309,6 +322,39 @@ class PlayerController extends ChangeNotifier {
   int _interpolationRequest = 0;
   Timer? _interpolationCheck;
   bool _interpolationPreference = AppSettings.instance.frameInterpolation;
+  String _interpolationMode = AppSettings.instance.interpolationMode;
+  Future<void> _interpolationTail = Future.value();
+  bool _bitmapSubtitle = false;
+  bool _aiVisible = true;
+  late final aiInterpolation = AiInterpolation(changed: _aiChanged);
+
+  void _aiChanged() {
+    if (_disposed) return;
+    interpolationBusy = aiInterpolation.busy;
+    interpolationApplied = aiInterpolation.applied;
+    interpolationIssue = aiInterpolation.issue;
+    unawaited(_applyAiTiming());
+    _queueUpscaling();
+    notifyListeners();
+  }
+
+  double get _aiDelay => aiInterpolation.applied ? AiInterpolation.delay.inMilliseconds / 1000 : 0;
+  Future<void> _timingTail = Future.value();
+  Future<void> _applyAiTiming() {
+    final result = _timingTail.then((_) async {
+      await _nativeProperty('audio-delay', '${audioDelay.inMilliseconds / 1000 + _aiDelay}');
+      await _nativeProperty('sub-delay', '${subtitleDelay.inMilliseconds / 1000 + _aiDelay}');
+    });
+    _timingTail = result.catchError((Object _) {});
+    return result;
+  }
+
+  void setAiVisible(bool visible) {
+    if (_aiVisible == visible || _disposed) return;
+    _aiVisible = visible;
+    unawaited(_refreshInterpolation());
+  }
+
   late final _frameInterpolation = FrameInterpolation(
     read: (key) async {
       if (_disposed) throw StateError('플레이어가 종료됐습니다');
@@ -324,8 +370,11 @@ class PlayerController extends ChangeNotifier {
 
   void _onInterpolationSettings() {
     final value = AppSettings.instance.frameInterpolation;
-    if (_interpolationPreference == value) return;
+    final mode = AppSettings.instance.interpolationMode;
+    if (_interpolationPreference == value && _interpolationMode == mode) return;
     _interpolationPreference = value;
+    _interpolationMode = mode;
+    aiInterpolation.issue = null;
     unawaited(_refreshInterpolation());
   }
 
@@ -336,17 +385,58 @@ class PlayerController extends ChangeNotifier {
     if (!preparing) unawaited(_refreshInterpolation());
   }
 
-  Future<void> _refreshInterpolation() async {
+  Future<void> _refreshInterpolation() {
+    final request = ++_interpolationRequest;
+    final result = _interpolationTail.then((_) => _applyInterpolation(request));
+    _interpolationTail = result.catchError((Object _) {});
+    return result;
+  }
+
+  Future<void> _applyInterpolation(int request) async {
+    if (request != _interpolationRequest) return;
     if (_disposed || preparing) return;
     final desired = AppSettings.instance.frameInterpolation && !audioOnly && (player.state.width ?? 0) > 0;
     final enabled = desired && _displayRate > 0;
     // The screen supplies its actual display, including when moving monitors.
-    final request = ++_interpolationRequest;
     _interpolationCheck?.cancel();
     interpolationBusy = true;
     interpolationIssue = null;
     notifyListeners();
     try {
+      if (AppSettings.instance.interpolationMode == 'rife' && desired) {
+        await _frameInterpolation.apply(false, _displayRate);
+        if (_disposed || request != _interpolationRequest) return;
+        if (!_aiVisible || _bitmapSubtitle || baseRate != 1 || fastForwarding || CastController.instance.active) {
+          await aiInterpolation.stop();
+          await _applyAiTiming();
+          _queueUpscaling();
+          interpolationApplied = false;
+          interpolationIssue = _bitmapSubtitle ? '비트맵 자막 재생 중에는 AI 보간을 중지합니다' : 'AI 보간은 화면에서 1배속으로 재생할 때 적용됩니다';
+          return;
+        }
+        if (aiInterpolation.issue != null) {
+          interpolationIssue = aiInterpolation.issue;
+          interpolationApplied = false;
+          return;
+        }
+        if (!aiInterpolation.running) {
+          final gamma = await (player.platform as NativePlayer).getProperty('video-params/gamma');
+          if (_disposed || request != _interpolationRequest) return;
+          if (gamma == 'pq' || gamma == 'hlg') {
+            throw UnsupportedError('HDR 영상은 원본 화질로 재생합니다. AI 보간은 SDR 영상에서 사용할 수 있습니다');
+          }
+          await aiInterpolation.start(handle: await player.handle, mpvLibrary: NativeLibrary.path);
+          await _applyAiTiming();
+          _queueUpscaling();
+        }
+        interpolationApplied = aiInterpolation.applied;
+        interpolationIssue = aiInterpolation.issue;
+        return;
+      }
+      await aiInterpolation.stop();
+      if (_disposed || request != _interpolationRequest) return;
+      await _applyAiTiming();
+      _queueUpscaling();
       await _frameInterpolation.apply(enabled, _displayRate);
       if (_disposed || request != _interpolationRequest) return;
       interpolationApplied = enabled;
@@ -361,7 +451,7 @@ class PlayerController extends ChangeNotifier {
       }
     } finally {
       if (!_disposed && request == _interpolationRequest) {
-        interpolationBusy = false;
+        interpolationBusy = aiInterpolation.busy;
         notifyListeners();
       }
     }
@@ -516,6 +606,10 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> open({bool askResume = true}) async {
+    preparing = true;
+    await aiInterpolation.stop();
+    if (_disposed) return;
+    aiInterpolation.issue = null;
     _subtitleLoad++;
     preparing = true;
     _positionReady = false;
@@ -817,6 +911,10 @@ class PlayerController extends ChangeNotifier {
           t['selected'] == true &&
           bitmapSubtitle(SubtitleTrack('${t['id']}', null, null, codec: t['codec'] as String?)),
     );
+    if (_bitmapSubtitle != bitmap) {
+      _bitmapSubtitle = bitmap;
+      unawaited(_refreshInterpolation());
+    }
     await _nativeProperty('sub-visibility', bitmap ? 'yes' : 'no');
     await _nativeProperty('sub-scale', '$subtitleScale');
     await _nativeProperty('sub-pos', '${((1 - subtitleBottom) * 100).round()}');
@@ -943,6 +1041,9 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> _onCompleted() async {
+    final completedGeneration = _openGeneration;
+    if (aiInterpolation.running) await Future<void>.delayed(AiInterpolation.delay);
+    if (!isCurrentOpen(completedGeneration) || !player.state.completed) return;
     if (!_canSavePosition) return;
     final generation = _openGeneration;
     await ResumeStore.instance.save(
@@ -1065,13 +1166,17 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> setRate(double r) async {
+    aiInterpolation.issue = null;
     baseRate = double.parse(r.clamp(0.25, 4.0).toStringAsFixed(2));
     await player.setRate(baseRate);
+    unawaited(_refreshInterpolation());
     notifyListeners();
   }
 
   Future<void> startFastForward() async {
     fastForwarding = true;
+    await aiInterpolation.stop();
+    await _applyAiTiming();
     await player.setRate(baseRate * 2);
     notifyListeners();
   }
@@ -1079,7 +1184,9 @@ class PlayerController extends ChangeNotifier {
   Future<void> stopFastForward() async {
     if (!fastForwarding) return;
     fastForwarding = false;
+    aiInterpolation.issue = null;
     await player.setRate(baseRate);
+    unawaited(_refreshInterpolation());
     notifyListeners();
   }
 
@@ -1110,10 +1217,7 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> setSubtitleDelay(Duration d) async {
     subtitleDelay = d;
-    final p = player.platform;
-    if (p is NativePlayer) {
-      await p.setProperty('sub-delay', (d.inMilliseconds / 1000).toStringAsFixed(2));
-    }
+    await _applyAiTiming();
     notifyListeners();
     await _savePlaybackSettings();
   }
@@ -1174,7 +1278,7 @@ class PlayerController extends ChangeNotifier {
 
   Future<void> setAudioDelay(Duration value) async {
     audioDelay = Duration(milliseconds: value.inMilliseconds.clamp(-10000, 10000));
-    await _nativeProperty('audio-delay', '${audioDelay.inMilliseconds / 1000}');
+    await _applyAiTiming();
     await _savePlaybackSettings();
     notifyListeners();
   }
@@ -1292,8 +1396,7 @@ class PlayerController extends ChangeNotifier {
     onlineSubtitleError = null;
     _clearOnlineSubtitleFiles();
     await _applyAudioFilters();
-    await _nativeProperty('audio-delay', '${audioDelay.inMilliseconds / 1000}');
-    await _nativeProperty('sub-delay', '${subtitleDelay.inMilliseconds / 1000}');
+    await _applyAiTiming();
     await _refreshSubtitleRendering();
     await _nativeProperty('video-rotate', '$videoRotation');
     await _nativeProperty('vf', [if (flipHorizontal) 'hflip', if (flipVertical) 'vflip'].join(','));
@@ -1327,7 +1430,7 @@ class PlayerController extends ChangeNotifier {
     for (final s in _subs) {
       s.cancel();
     }
-    unawaited(player.dispose().whenComplete(_clearOnlineSubtitleFiles));
+    unawaited(aiInterpolation.dispose().then((_) => player.dispose()).whenComplete(_clearOnlineSubtitleFiles));
     super.dispose();
   }
 }

@@ -1,0 +1,10 @@
+name: ai_frame_engine
+description: Bounded real-time RIFE frame interpolation for OPlayer.
+publish_to: none
+version: 0.1.0
+environment:
+  sdk: '>=3.10.0 <4.0.0'
+dependencies:
+  ffi: ^2.1.4
+  hooks: ^2.0.2
+  code_assets: ^1.2.1

@@ -109,10 +109,17 @@ class SettingsPage extends StatelessWidget {
               onChanged: (v) => s.update((x) => x.defaultSpeed = v),
             ),
             SwitchListTile(
-              title: const Text('가벼운 프레임 보간'),
-              subtitle: const Text('화면 주사율에 맞춰 프레임을 혼합해 끊김 완화 · 기본 꺼짐'),
+              title: const Text('프레임 보간'),
+              subtitle: const Text('재생 중 보간 적용 · 기본 꺼짐'),
               value: s.frameInterpolation,
               onChanged: (v) => s.update((x) => x.frameInterpolation = v),
+            ),
+            _choice<String>(
+              context,
+              title: '보간 방식',
+              value: s.interpolationMode,
+              options: const {'blend': '가벼운 프레임 혼합', 'rife': 'AI · RIFE v4.6 (실시간 · 1배속)'},
+              onChanged: (v) => s.update((x) => x.interpolationMode = v),
             ),
             SwitchListTile(
               title: const Text('고화질 업스케일'),

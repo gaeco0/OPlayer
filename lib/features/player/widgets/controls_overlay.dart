@@ -157,10 +157,12 @@ class _PlaybackToggles extends StatelessWidget {
               : () => AppSettings.instance.update((s) => s.videoUpscaling = !s.videoUpscaling),
         ),
         _PlaybackToggle(
-          label: '보간',
+          label: AppSettings.instance.interpolationMode == 'rife' && MediaQuery.sizeOf(context).width >= 680
+              ? 'AI 보간'
+              : '보간',
           icon: Icons.auto_awesome_motion_outlined,
           active: AppSettings.instance.frameInterpolation,
-          onTap: c.interpolationBusy || c.audioOnly
+          onTap: (c.interpolationBusy && !AppSettings.instance.frameInterpolation) || c.audioOnly
               ? null
               : () => AppSettings.instance.update((s) => s.frameInterpolation = !s.frameInterpolation),
         ),

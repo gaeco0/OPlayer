@@ -35,6 +35,11 @@ Future<void> main(List<String> args) async {
       'FSRCNNX',
     ], await rootBundle.loadString('assets/licenses/ai-upscale.txt'));
     yield LicenseEntryWithLineBreaks(const ['libmpv'], await rootBundle.loadString('assets/licenses/libmpv.txt'));
+    yield LicenseEntryWithLineBreaks(const [
+      'RIFE',
+      'ncnn',
+      'glslang',
+    ], await rootBundle.loadString('assets/licenses/ai-interpolation.txt'));
     yield LicenseEntryWithLineBreaks(
       const ['FFmpeg', 'FFmpegKit'],
       'Android: ffmpeg-kit-main-min-16kb 6.1.4 (LGPL-3.0).\n'

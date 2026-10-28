@@ -206,10 +206,12 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (_session.controller != c || _session.minimized) return;
     if (state == AppLifecycleState.resumed) {
+      c.setAiVisible(true);
       _backgrounded = false;
       if (!_pip.active) _applyOrientation();
       _syncMediaSession();
-    } else if (state == AppLifecycleState.paused && !_pip.active) {
+    } else if ((state == AppLifecycleState.paused || state == AppLifecycleState.hidden) && !_pip.active) {
+      c.setAiVisible(false);
       _backgrounded = true;
       if (!c.allowsBackgroundPlayback && !_cast.active) {
         c.player.pause();
@@ -220,6 +222,7 @@ class _PlayerScreenState extends State<PlayerScreen> with WidgetsBindingObserver
 
   bool get _castingCurrent => _cast.active && _cast.mediaKey == c.current.key;
   void _onCastChanged() {
+    c.setAiVisible(!_castingCurrent && !_backgrounded);
     if (mounted) {
       if (_castingCurrent) {
         WakelockPlus.disable();

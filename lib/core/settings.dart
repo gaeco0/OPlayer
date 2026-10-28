@@ -43,6 +43,7 @@ class AppSettings extends ChangeNotifier {
   bool autoPlayNext = true;
   bool hardwareDecoding = true;
   bool frameInterpolation = false;
+  String interpolationMode = 'blend';
   bool videoUpscaling = false;
   String upscalingModel = 'lanczos';
   double defaultSpeed = 1.0;
@@ -121,6 +122,7 @@ class AppSettings extends ChangeNotifier {
     'autoPlayNext': autoPlayNext,
     'hw': hardwareDecoding,
     'frameInterpolation': frameInterpolation,
+    'interpolationMode': interpolationMode,
     'videoUpscaling': videoUpscaling,
     'upscalingModel': upscalingModel,
     'speed': defaultSpeed,
@@ -172,6 +174,7 @@ class AppSettings extends ChangeNotifier {
     autoPlayNext = v('autoPlayNext', true);
     hardwareDecoding = v('hw', true);
     frameInterpolation = j['frameInterpolation'] == true;
+    interpolationMode = j['interpolationMode'] == 'rife' ? 'rife' : 'blend';
     videoUpscaling = j['videoUpscaling'] == true;
     upscalingModel = j['upscalingModel'] is String ? j['upscalingModel'] as String : 'lanczos';
     defaultSpeed = (j['speed'] as num?)?.toDouble() ?? 1.0;

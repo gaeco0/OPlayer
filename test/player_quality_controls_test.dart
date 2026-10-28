@@ -18,8 +18,63 @@ class _Engine extends PlatformPlayer {
 }
 
 void main() {
+  testWidgets('AI overlay toggle stays visible at compact width and moves to more in portrait', (t) async {
+    SharedPreferences.setMockInitialValues({'settings_v1': '{}'});
+    await AppSettings.instance.init();
+    final controller = PlayerController(
+      playlist: const [MediaItem(key: 'ai-test', uri: 'https://example.com/video.mp4', title: 'Video')],
+      startIndex: 0,
+      playbackEngine: Player(platformPlayer: _Engine()),
+    );
+    t.view.physicalSize = const Size(800, 450);
+    t.view.devicePixelRatio = 1;
+    addTearDown(() {
+      controller.dispose();
+      t.view.reset();
+    });
+    await t.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ControlsOverlay(
+            c: controller,
+            onBack: () {},
+            onToast: (_) {},
+            onRotate: null,
+            orientationIcon: Icons.screen_rotation,
+            onPanel: (_) {},
+          ),
+        ),
+      ),
+    );
+    AppSettings.instance.update((s) {
+      s.interpolationMode = 'rife';
+      s.frameInterpolation = true;
+    });
+    await t.pumpAndSettle();
+    final button = find.widgetWithText(TextButton, 'AI 보간');
+    expect(button.hitTestable(), findsOneWidget);
+    expect(t.widget<TextButton>(button).style!.backgroundColor!.resolve({}), Colors.white);
+    expect(t.takeException(), isNull);
+    t.view.physicalSize = const Size(600, 360);
+    await t.pumpAndSettle();
+    final compactButton = find.widgetWithText(TextButton, '보간');
+    expect(compactButton.hitTestable(), findsOneWidget);
+    expect(t.takeException(), isNull);
+    await t.tap(compactButton);
+    await t.pumpAndSettle();
+    expect(AppSettings.instance.frameInterpolation, false);
+    expect(AppSettings.instance.interpolationMode, 'rife');
+    t.view.physicalSize = const Size(360, 800);
+    await t.pumpAndSettle();
+    expect(button, findsNothing);
+    expect(compactButton, findsNothing);
+    expect(find.byTooltip('재생 설정'), findsOneWidget);
+    expect(t.takeException(), isNull);
+    await t.pumpWidget(const SizedBox());
+  });
+
   testWidgets('player screen button opens quality controls and both switches change playback settings', (t) async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'settings_v1': '{}'});
     await AppSettings.instance.init();
     final engine = _Engine();
     final controller = PlayerController(

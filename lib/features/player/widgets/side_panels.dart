@@ -414,11 +414,42 @@ class _QualityControls extends StatelessWidget {
             ),
           ),
         const _Section('프레임 보간'),
+        ListTile(
+          title: const Text('보간 방식', style: _white),
+          subtitle: Text(
+            AppSettings.instance.interpolationMode == 'rife' ? 'AI · RIFE v4.6 · 중간 프레임 생성' : '가벼운 프레임 혼합',
+            style: _label,
+          ),
+          trailing: const Icon(Icons.chevron_right, color: Colors.white70),
+          onTap: () async {
+            final mode = await showDialog<String>(
+              context: context,
+              builder: (context) => SimpleDialog(
+                title: const Text('보간 방식'),
+                children: [
+                  SimpleDialogOption(onPressed: () => Navigator.pop(context, 'blend'), child: const Text('가벼운 프레임 혼합')),
+                  SimpleDialogOption(
+                    onPressed: () => Navigator.pop(context, 'rife'),
+                    child: const Text('AI · RIFE v4.6 (1배속 · 처리 부하 높음)'),
+                  ),
+                ],
+              ),
+            );
+            if (mode != null) AppSettings.instance.update((s) => s.interpolationMode = mode);
+          },
+        ),
         SwitchListTile(
           title: const Text('프레임 보간', style: _white),
-          subtitle: Text(c.audioOnly ? '오디오 전용 재생에는 적용하지 않습니다' : '가벼운 프레임 혼합으로 끊김 완화 · 설정 자동 저장', style: _label),
+          subtitle: Text(
+            c.audioOnly
+                ? '오디오 전용 재생에는 적용하지 않습니다'
+                : AppSettings.instance.interpolationMode == 'rife'
+                ? '최대 긴 변 320px로 실시간 처리 · 250ms 지연 · 속도 부족 시 원본 복귀 · 업스케일과 동시 적용 안 됨'
+                : '가벼운 프레임 혼합으로 끊김 완화 · 설정 자동 저장',
+            style: _label,
+          ),
           value: AppSettings.instance.frameInterpolation,
-          onChanged: c.interpolationBusy || c.audioOnly
+          onChanged: (c.interpolationBusy && !AppSettings.instance.frameInterpolation) || c.audioOnly
               ? null
               : (v) => AppSettings.instance.update((s) => s.frameInterpolation = v),
         ),
@@ -429,9 +460,14 @@ class _QualityControls extends StatelessWidget {
             child: Text(c.interpolationIssue!, style: _label),
           )
         else if (c.interpolationApplied)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            child: Text('프레임 혼합 설정 적용됨', style: _label),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Text(
+              AppSettings.instance.interpolationMode == 'rife'
+                  ? 'RIFE 실시간 보간 적용됨 · ${c.aiInterpolation.inferenceMs.toStringAsFixed(1)}ms/프레임'
+                  : '프레임 혼합 설정 적용됨',
+              style: _label,
+            ),
           ),
       ],
     ),

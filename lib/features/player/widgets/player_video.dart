@@ -24,13 +24,35 @@ class PlayerVideo extends StatelessWidget {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted) controller.setUpscalingViewport(size, fit);
       });
-      return Video(
-        controller: controller.video,
-        controls: NoVideoControls,
-        fit: fit,
-        fill: Colors.black,
-        pauseUponEnteringBackgroundMode: false,
-        subtitleViewConfiguration: subtitleViewConfiguration,
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Video(
+            controller: controller.video,
+            controls: NoVideoControls,
+            fit: fit,
+            fill: Colors.black,
+            pauseUponEnteringBackgroundMode: false,
+            subtitleViewConfiguration: const SubtitleViewConfiguration(visible: false),
+          ),
+          ValueListenableBuilder(
+            valueListenable: controller.aiInterpolation.frame,
+            builder: (context, image, _) => image == null
+                ? const SizedBox.shrink()
+                : ColoredBox(
+                    color: Colors.black,
+                    child: RawImage(image: image, fit: fit, filterQuality: FilterQuality.medium),
+                  ),
+          ),
+          if (subtitleViewConfiguration.visible)
+            IgnorePointer(
+              child: SubtitleView(
+                key: ValueKey((controller.video, subtitleViewConfiguration.padding)),
+                controller: controller.video,
+                configuration: subtitleViewConfiguration,
+              ),
+            ),
+        ],
       );
     },
   );

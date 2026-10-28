@@ -525,7 +525,8 @@ Linux/macOS는 `cmake -S ... -B ...`에서 `-A x64`를 빼고 같은 위치에 �
 
 AI 업스케일 SDK가 포함된 앱에서 `kind: "player"`, `api: 4`, `capabilities: ["upscaling"]`을 선언합니다.
 JS는 모델 목록과 가중치가 포함된 **mpv GLSL 텍스트**를 반환하고, 앱의 기존 mpv GPU가 추론합니다.
-QuickJS에서 픽셀을 계산하거나 WebView로 프레임을 복사하지 않습니다. ONNX·NCNN·RIFE 런타임은 포함하지 않습니다.
+QuickJS에서 픽셀을 계산하거나 WebView로 프레임을 복사하지 않습니다. 이 업스케일 API에는 ONNX·NCNN 파일을 전달할 수 없습니다.
+앱의 실시간 AI 보간은 별도 내장 RIFE/ncnn 엔진을 사용하며, 업스케일 JS 공급자 API와 분리되어 있습니다.
 호스트 SDK가 없는 이전 버전은 이 기능을 사용할 수 없습니다. SDK를 포함한 앱으로 한 번 업데이트한 이후에는
 같은 계약을 사용하는 모델을 JS만 교체·설치하여 추가할 수 있습니다.
 
