@@ -323,6 +323,7 @@ class PlayerController extends ChangeNotifier {
   Timer? _interpolationCheck;
   bool _interpolationPreference = AppSettings.instance.frameInterpolation;
   String _interpolationMode = AppSettings.instance.interpolationMode;
+  bool _interpolationNpu = AppSettings.instance.interpolationNpu;
   Future<void> _interpolationTail = Future.value();
   bool _bitmapSubtitle = false;
   bool _aiVisible = true;
@@ -371,7 +372,9 @@ class PlayerController extends ChangeNotifier {
   void _onInterpolationSettings() {
     final value = AppSettings.instance.frameInterpolation;
     final mode = AppSettings.instance.interpolationMode;
-    if (_interpolationPreference == value && _interpolationMode == mode) return;
+    final npu = AppSettings.instance.interpolationNpu;
+    if (_interpolationPreference == value && _interpolationMode == mode && _interpolationNpu == npu) return;
+    _interpolationNpu = npu;
     _interpolationPreference = value;
     _interpolationMode = mode;
     aiInterpolation.issue = null;
@@ -419,13 +422,21 @@ class PlayerController extends ChangeNotifier {
           interpolationApplied = false;
           return;
         }
+        if (aiInterpolation.running && aiInterpolation.preferNpu != AppSettings.instance.interpolationNpu) {
+          await aiInterpolation.stop();
+          if (_disposed || request != _interpolationRequest) return;
+        }
         if (!aiInterpolation.running) {
           final gamma = await (player.platform as NativePlayer).getProperty('video-params/gamma');
           if (_disposed || request != _interpolationRequest) return;
           if (gamma == 'pq' || gamma == 'hlg') {
             throw UnsupportedError('HDR 영상은 원본 화질로 재생합니다. AI 보간은 SDR 영상에서 사용할 수 있습니다');
           }
-          await aiInterpolation.start(handle: await player.handle, mpvLibrary: NativeLibrary.path);
+          await aiInterpolation.start(
+            handle: await player.handle,
+            mpvLibrary: NativeLibrary.path,
+            preferNpu: AppSettings.instance.interpolationNpu,
+          );
           await _applyAiTiming();
           _queueUpscaling();
         }

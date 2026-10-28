@@ -7,6 +7,7 @@
 
 // ncnn
 #include "net.h"
+struct NpuContext;
 
 class RIFE
 {
@@ -15,9 +16,9 @@ public:
     ~RIFE();
 
 #if _WIN32
-    int load(const std::wstring& modeldir);
+    int load(const std::wstring& modeldir, NpuContext* npu = nullptr);
 #else
-    int load(const std::string& modeldir);
+    int load(const std::string& modeldir, NpuContext* npu = nullptr);
 #endif
 
     int process(const ncnn::Mat& in0image, const ncnn::Mat& in1image, float timestep, ncnn::Mat& outimage) const;

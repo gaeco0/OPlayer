@@ -19,14 +19,24 @@ void main(List<String> args) {
       }
     }
     final clock = Stopwatch()..start();
-    final result = rife.probe(path.cast(), a, b, out, w, h, args.contains('--cpu') ? 0 : 1);
+    final result = rife.probe(
+      path.cast(),
+      a,
+      b,
+      out,
+      w,
+      h,
+      (args.contains('--cpu') ? 0 : 1) | (args.contains('--fused') ? 2 : 0),
+    );
     if (result != 0) throw StateError('RIFE inference failed: $result');
     var differs = 0;
     for (var i = 0; i < length; i += 4) {
       if ((out[i] - (a[i] + b[i]) / 2).abs() > 15) differs++;
     }
     if (differs < 200) throw StateError('Output resembles frame blending: $differs');
-    File('.dart_tool/rife-midframe.bgra').writeAsBytesSync(out.asTypedList(length));
+    File(
+      args.contains('--fused') ? '.dart_tool/rife-midframe-fused.bgra' : '.dart_tool/rife-midframe.bgra',
+    ).writeAsBytesSync(out.asTypedList(length));
     stdout.writeln('RIFE generated midpoint: ${clock.elapsedMilliseconds} ms; $differs pixels differ from blending.');
   } finally {
     calloc.free(path);

@@ -29,6 +29,11 @@ class AiInterpolation {
   bool busy = false;
   String? issue;
   double inferenceMs = 0;
+  int _npuState = 0;
+  bool _gpu = false;
+  bool preferNpu = true;
+  String get backend => _npuState == 2 ? (_gpu ? 'NPU + GPU' : 'NPU + CPU') : (_gpu ? 'GPU' : 'CPU');
+  bool get npuFallback => _npuState == 3;
   double _lastPts = -1;
   final _startup = Stopwatch();
   final _stale = Stopwatch();
@@ -40,6 +45,7 @@ class AiInterpolation {
     await dir.create(recursive: true);
     const hashes = {
       'flownet.param': '724569596bcd1e7b9fa50455c604777ebed99746d2ef40aa86e31b5725f1053c',
+      'flownet-npu.param': '517561e5affe42e39c6c8328675139104228cc8454c2dfd54d06a6f6bf74106c',
       'flownet.bin': 'f334ed2260149ce0188a6dcf049844e8b0cdd912e01cbcfb63553157d2508958',
     };
     for (final entry in hashes.entries) {
@@ -53,10 +59,13 @@ class AiInterpolation {
     return dir.path;
   }
 
-  Future<void> start({required int handle, required String mpvLibrary}) async {
+  Future<void> start({required int handle, required String mpvLibrary, bool preferNpu = true}) async {
     await stop();
     final generation = ++_generation;
     busy = true;
+    this.preferNpu = preferNpu;
+    _npuState = 0;
+    _gpu = false;
     issue = null;
     changed();
     try {
@@ -74,13 +83,14 @@ class AiInterpolation {
           library.lookup<Void>('mpv_get_property'),
           library.lookup<Void>('mpv_command_ret'),
           library.lookup<Void>('mpv_free_node_contents'),
+          Platform.isAndroid && preferNpu ? 1 : 0,
         );
       } finally {
         calloc.free(modelPath);
       }
       if (_engine == nullptr) throw StateError('AI 보간 엔진 시작 실패');
       _pixels = calloc<Uint8>(320 * 320 * 4);
-      _info = calloc<Int>(6);
+      _info = calloc<Int>(9);
       _timing = calloc<Double>(2);
       _lastPts = -1;
       _startup
@@ -101,6 +111,13 @@ class AiInterpolation {
   void _poll() {
     if (_engine == nullptr || _decoding) return;
     final result = rife.poll(_engine, _pixels, _info, _timing);
+    final npuState = _info[6] == 2 && _info[7] == 0 ? 1 : _info[6];
+    final gpu = _info[8] != 0;
+    if (_npuState != npuState || _gpu != gpu) {
+      _npuState = npuState;
+      _gpu = gpu;
+      changed();
+    }
     if (_info[5] != 0) {
       _stale.reset();
       _startup.reset();

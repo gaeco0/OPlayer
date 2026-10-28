@@ -62,7 +62,7 @@ Android의 기존 출력 크기 API를 보완하기 위해 같은 media_kit_vide
 `flutter run -d windows --debug -t tool/video_upscaling_smoke.dart`로 실행합니다.
 Windows 실제 재생에서 160×90→640×360 GPU 출력과 Lanczos, 프레임 보간 동시 동작 및 해제 후 복원을 확인했습니다. Android·TV·Linux·macOS 실기기 화질·성능 확인은 별도 필요합니다.
 
-## AI 업스케일 (개발 중 · 다음 배포)
+## AI 업스케일 (v0.1.8 nightly)
 
 기존 Lanczos를 기본값으로 유지하고 **업스케일 모델**에서 AI 모델을 선택합니다. 기본 모델 3개(Anime4K CNN S,
 Anime4K Denoise CNN S, FSRCNNX 8)는 오프라인으로 제공하며 JS가 모델을 정의하고 플레이어 GPU가 추론합니다.
@@ -70,7 +70,7 @@ Anime4K Denoise CNN S, FSRCNNX 8)는 오프라인으로 제공하며 JS가 모�
 **URL로 모델 추가**에서 호환 mpv GLSL 모델을 등록·저장·삭제할 수 있고 JS 확장앱으로 모델을 확장할 수 있습니다.
 업스케일 URL은 mpv GLSL 형식만 지원합니다. 형식·제한·공급자 개발법은 [모델 API 안내](plugins/README.md#ai-업스케일-모델-api-플레이어-확장앱)를 참고하세요.
 
-## 실시간 AI 프레임 보간 (개발 중 · 다음 배포)
+## 실시간 AI 프레임 보간 (v0.1.8 nightly)
 
 **설정 → 재생 → 보간 방식**, 또는 플레이어 **화면·화질 → 보간 방식**에서 **AI · RIFE v4.6**을 선택하고
 영상 위 **AI 보간** 버튼(좁은 가로 화면에서는 **보간**)으로 켜고 끕니다. 작은 세로 화면에서는 더보기로 이동합니다. 기존 가벼운 프레임 혼합과
@@ -83,6 +83,13 @@ Anime4K Denoise CNN S, FSRCNNX 8)는 오프라인으로 제공하며 JS가 모�
   업스케일과 동시에 적용하지 않으며 AI 보간을 끄면 저장된 업스케일 설정을 다시 사용합니다.
 - 모델 파일을 SHA-256으로 확인하고 손상된 캐시를 복구합니다. 처음 켤 때 엔진 준비 시간이 필요합니다.
   모든 기기의 실시간 성능을 보장하지 않습니다. 모델·엔진 라이선스는 앱의 오픈소스 라이선스에서 확인할 수 있습니다.
+
+Android에서는 **AI 보간 NPU 가속**을 켜면 Snapdragon·Exynos SoC와 일치하는 전용 NNAPI 가속기만 선택합니다.
+RIFE의 CNN 블록은 NPU, 나머지 연산은 기존 Vulkan GPU(미지원 기기는 CPU)에서 처리합니다.
+드라이버·모델 연산 미지원, 오류 또는 지속적인 처리 지연 시 기존 GPU 경로로 복귀합니다.
+실제 NPU 호출 성공 뒤에만 재생 중 화질 메뉴에 `NPU + GPU` 또는 `NPU + CPU`를 표시합니다.
+Android 10 이상이어도 제조사 펌웨어가 호환 NPU 드라이버를 제공해야 하며, 모든 Snapdragon·Exynos의 지원을 보장하지 않습니다.
+NPU 선택은 RIFE 보간에만 적용됩니다. GLSL 기반 AI 업스케일은 계속 GPU를 사용합니다.
 
 검증 방법과 네이티브 빌드 정보는 [AI 프레임 엔진](packages/ai_frame_engine/README.md)에 정리합니다.
 Windows x64의 Radeon 890M에서 24fps 입력 → 약 48fps 표시, 일시정지·탐색·해제·배속 복귀를 확인했습니다.

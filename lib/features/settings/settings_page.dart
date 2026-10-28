@@ -121,6 +121,13 @@ class SettingsPage extends StatelessWidget {
               options: const {'blend': '가벼운 프레임 혼합', 'rife': 'AI · RIFE v4.6 (실시간 · 1배속)'},
               onChanged: (v) => s.update((x) => x.interpolationMode = v),
             ),
+            if (Platform.isAndroid && s.interpolationMode == 'rife')
+              SwitchListTile(
+                title: const Text('AI 보간 NPU 가속'),
+                subtitle: const Text('Snapdragon·Exynos의 지원 NPU만 사용 · 지원되지 않거나 느리면 GPU로 복귀'),
+                value: s.interpolationNpu,
+                onChanged: (v) => s.update((x) => x.interpolationNpu = v),
+              ),
             SwitchListTile(
               title: const Text('고화질 업스케일'),
               subtitle: const Text('낮은 해상도 영상을 화면 크기로 선명하게 확대 · GPU 사용'),

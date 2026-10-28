@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:file_picker/file_picker.dart';
@@ -453,6 +454,13 @@ class _QualityControls extends StatelessWidget {
               ? null
               : (v) => AppSettings.instance.update((s) => s.frameInterpolation = v),
         ),
+        if (Platform.isAndroid && AppSettings.instance.interpolationMode == 'rife')
+          SwitchListTile(
+            title: const Text('AI 보간 NPU 가속', style: _white),
+            subtitle: const Text('Snapdragon·Exynos 지원 NPU · 미지원·속도 부족 시 GPU 복귀', style: _label),
+            value: AppSettings.instance.interpolationNpu,
+            onChanged: (v) => AppSettings.instance.update((s) => s.interpolationNpu = v),
+          ),
         if (c.interpolationBusy) const LinearProgressIndicator(),
         if (c.interpolationIssue != null)
           Padding(
@@ -464,7 +472,7 @@ class _QualityControls extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             child: Text(
               AppSettings.instance.interpolationMode == 'rife'
-                  ? 'RIFE 실시간 보간 적용됨 · ${c.aiInterpolation.inferenceMs.toStringAsFixed(1)}ms/프레임'
+                  ? 'RIFE · ${c.aiInterpolation.backend} · ${c.aiInterpolation.inferenceMs.toStringAsFixed(1)}ms/프레임${c.aiInterpolation.npuFallback ? ' · NPU 미지원/속도 부족' : ''}'
                   : '프레임 혼합 설정 적용됨',
               style: _label,
             ),

@@ -2,7 +2,7 @@ import 'dart:ffi';
 
 const _asset = 'package:ai_frame_engine/engine.dart';
 
-@Native<Pointer<Void> Function(Pointer<Char>, Pointer<Void>, Pointer<Void>, Pointer<Void>, Pointer<Void>)>(
+@Native<Pointer<Void> Function(Pointer<Char>, Pointer<Void>, Pointer<Void>, Pointer<Void>, Pointer<Void>, Int)>(
   assetId: _asset,
   symbol: 'oplayer_rife_start',
 )
@@ -12,6 +12,7 @@ external Pointer<Void> start(
   Pointer<Void> get,
   Pointer<Void> command,
   Pointer<Void> freeNode,
+  int preferNpu,
 );
 
 @Native<Int Function(Pointer<Void>, Pointer<Uint8>, Pointer<Int>, Pointer<Double>)>(
@@ -34,3 +35,12 @@ external void destroy(Pointer<Void> engine);
   symbol: 'oplayer_rife_probe',
 )
 external int probe(Pointer<Char> path, Pointer<Uint8> a, Pointer<Uint8> b, Pointer<Uint8> out, int w, int h, int gpu);
+
+@Native<Int Function(Pointer<Char>, Pointer<Char>, Pointer<Char>, Pointer<Char>)>(
+  assetId: _asset,
+  symbol: 'oplayer_npu_vendor',
+)
+external int npuVendor(Pointer<Char> maker, Pointer<Char> soc, Pointer<Char> hardware, Pointer<Char> board);
+
+@Native<Int Function(Int, Pointer<Char>, Int)>(assetId: _asset, symbol: 'oplayer_npu_driver_allowed')
+external int npuDriverAllowed(int vendor, Pointer<Char> name, int type);

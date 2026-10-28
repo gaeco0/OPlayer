@@ -22,7 +22,9 @@ uses the SDK-provided NDK toolchain and Ninja. Release workflows remain tag-trig
 Changes to upstream: Unicode-safe model paths, load-error propagation and avoiding
 a null Vulkan device setter in CPU mode in `rife.cpp`; disable the removed ncnn
 Vulkan pack8 option in `warp.cpp`.
-The wrapper and build configuration are OPlayer code.
+The wrapper and build configuration are OPlayer code. The RIFE loader also
+registers an optional custom CNN block layer and loads a generated NPU graph;
+original weights, deconvolution, warping and resizing remain unchanged.
 
 ## Playback contract
 
@@ -68,3 +70,37 @@ fallback passed. CPU neural midpoint and model-error tests passed. Windows must
 explicitly load the system Vulkan runtime: the old loader bundled with ANGLE
 crashes with current AMD drivers. Android ARM64 cross-build passed with NDK
 28.2.13676358; Android playback has not been measured on a device.
+
+## Android NPU (Snapdragon / Exynos only)
+
+The Android-only preference defaults to on, while interpolation itself remains
+off by default. SoC properties must identify Snapdragon/Qualcomm or Exynos;
+Samsung device branding alone does not qualify, and Tensor is excluded.
+Only matching NNAPI `DEVICE_ACCELERATOR` drivers are accepted. CPU, GPU, OTHER
+and unknown drivers are rejected. `createForDevices` explicitly targets one
+allowed accelerator, with every operation checked first; NNAPI CPU fallback is
+never presented as NPU inference.
+
+Four CNN blocks (convolution, leaky ReLU, residual addition) use NNAPI; ncnn
+Vulkan retains the surrounding operations. `tool/generate_rife_npu.py --check`
+verifies generated graph/metadata against the pinned original graph. The weight
+stream is unchanged. CPU fused-graph inference is compared numerically with the
+original network. This verifies graph rewriting, not vendor NPU accuracy.
+
+NNAPI symbols are resolved via dlsym at runtime (Android 10+), preserving older
+Android loading. NNAPI is deprecated and some firmware no longer exposes a
+compatible accelerator. No Qualcomm/Samsung SDK binaries are bundled. Unsupported
+operations, compilation/execution failure, or sustained slow inference switch
+the entire engine back to its original GPU path (CPU if Vulkan is unavailable).
+The fallback reference computation produces a valid tensor for the failing
+invocation before the network is replaced. Device/version/model/shape-specific
+compilation caches are kept in app-private model storage. When available, NNAPI
+compilation/execution timeout hints are set; drivers remain responsible for
+honoring them. UI status reports NPU only after a successful real invocation.
+
+Verification: the test suite covers SoC/driver policy and CPU graph equivalence;
+`dart run tool/ai_interpolation_probe.dart --fused [--cpu]` exercises the rewritten
+network with reference CNN blocks, including Vulkan/CPU tensor transfers without
+requiring an NPU. Android ARM64 cross-compilation and ELF checks are separate.
+Physical Snapdragon/Exynos playback, driver support and performance remain
+unverified. GLSL upscaling is GPU-only; this option applies only to RIFE.

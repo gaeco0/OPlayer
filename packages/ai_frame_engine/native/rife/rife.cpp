@@ -1,6 +1,7 @@
 // rife implemented with ncnn library
 
 #include "rife.h"
+#include "../npu.h"
 
 #include <algorithm>
 #include <vector>
@@ -79,9 +80,9 @@ RIFE::~RIFE()
 
 #if _WIN32
 // OPlayer: use unbounded Unicode paths and propagate load failures.
-static int load_param_model(ncnn::Net& net, const std::wstring& modeldir, const wchar_t* name)
+static int load_param_model(ncnn::Net& net, const std::wstring& modeldir, const wchar_t* name, bool npu = false)
 {
-    const auto param = modeldir + L"/" + name + L".param";
+    const auto param = modeldir + L"/" + name + (npu ? L"-npu.param" : L".param");
     const auto weights = modeldir + L"/" + name + L".bin";
     FILE* fp = _wfopen(param.c_str(), L"rb");
     if (!fp) return -1;
@@ -95,9 +96,9 @@ static int load_param_model(ncnn::Net& net, const std::wstring& modeldir, const 
     return result;
 }
 #else
-static int load_param_model(ncnn::Net& net, const std::string& modeldir, const char* name)
+static int load_param_model(ncnn::Net& net, const std::string& modeldir, const char* name, bool npu = false)
 {
-    const auto param = modeldir + "/" + name + ".param";
+    const auto param = modeldir + "/" + name + (npu ? "-npu.param" : ".param");
     const auto weights = modeldir + "/" + name + ".bin";
     if (net.load_param(param.c_str()) != 0) return -1;
     return net.load_model(weights.c_str());
@@ -105,9 +106,9 @@ static int load_param_model(ncnn::Net& net, const std::string& modeldir, const c
 #endif
 
 #if _WIN32
-int RIFE::load(const std::wstring& modeldir)
+int RIFE::load(const std::wstring& modeldir, NpuContext* npu)
 #else
-int RIFE::load(const std::string& modeldir)
+int RIFE::load(const std::string& modeldir, NpuContext* npu)
 #endif
 {
     ncnn::Option opt;
@@ -133,16 +134,17 @@ int RIFE::load(const std::string& modeldir)
     flownet.register_custom_layer("rife.Warp", Warp_layer_creator);
     contextnet.register_custom_layer("rife.Warp", Warp_layer_creator);
     fusionnet.register_custom_layer("rife.Warp", Warp_layer_creator);
+    if (npu) register_npu(flownet, npu);
 
 #if _WIN32
-    if (load_param_model(flownet, modeldir, L"flownet") != 0) return -1;
+    if (load_param_model(flownet, modeldir, L"flownet", npu != nullptr) != 0) return -1;
     if (!rife_v4)
     {
         load_param_model(contextnet, modeldir, L"contextnet");
         load_param_model(fusionnet, modeldir, L"fusionnet");
     }
 #else
-    if (load_param_model(flownet, modeldir, "flownet") != 0) return -1;
+    if (load_param_model(flownet, modeldir, "flownet", npu != nullptr) != 0) return -1;
     if (!rife_v4)
     {
         load_param_model(contextnet, modeldir, "contextnet");

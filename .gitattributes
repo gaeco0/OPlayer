@@ -6,3 +6,6 @@ plugins/*.json text eol=lf
 # Preserve upstream shader bytes and model digests on Windows checkouts.
 third_party/ai-upscale/*.glsl text eol=lf
 assets/models/** -text
+
+# Generated NPU metadata is checked byte-for-byte by the generator.
+packages/ai_frame_engine/native/rife_npu_blocks.h text eol=lf

@@ -1,4 +1,5 @@
 #include "rife.h"
+#include "npu.h"
 #include "mpv/client.h"
 #include <atomic>
 #include <algorithm>
@@ -34,6 +35,9 @@ struct Engine {
   std::atomic<int> state{0}, error{0}, generated{0};
   std::atomic<double> milliseconds{0};
   std::atomic<bool> pausedFlag{false};
+  std::atomic<bool> gpu{false};
+  bool prefer_npu=true;
+  std::shared_ptr<NpuContext> npu;
   std::mutex mutex;
   std::deque<Frame> frames;
   std::thread thread;
@@ -43,7 +47,7 @@ struct Engine {
   bool paused = false;
   Clock::time_point captured = Clock::now();
 };
-static std::unique_ptr<RIFE> model(const char* path, int gpu) {
+static std::unique_ptr<RIFE> model(const char* path, int gpu, NpuContext* npu=nullptr, bool* used_gpu=nullptr) {
   bool available=false;
   if (gpu) {
     static const bool initialized = [] {
@@ -63,11 +67,12 @@ static std::unique_ptr<RIFE> model(const char* path, int gpu) {
     available=initialized && ncnn::get_gpu_count()>0;
   }
   const int device = available ? ncnn::get_default_gpu_index() : -1;
+  if(used_gpu) *used_gpu=available;
   auto net = std::make_unique<RIFE>(device, false, false, false, 2, false, true);
 #ifdef _WIN32
-  if (net->load(std::filesystem::u8path(path).wstring()) != 0) return {};
+  if (net->load(std::filesystem::u8path(path).wstring(),npu) != 0) return {};
 #else
-  if (net->load(std::string(path)) != 0) return {};
+  if (net->load(std::string(path),npu) != 0) return {};
 #endif
   return net;
 }
@@ -147,7 +152,11 @@ static void run(Engine& e, std::string path) {
   try {
     std::unique_lock<std::mutex> inference(inferenceMutex,std::try_to_lock);
     if (!inference.owns_lock()) { e.error=6; e.state=2; return; }
-    auto net=model(path.c_str(),1);
+    auto context=e.prefer_npu ? discover_npu(path) : nullptr;
+    {std::lock_guard<std::mutex> lock(e.mutex);e.npu=context;}
+    bool using_npu=context && context->state==1,used_gpu=false;
+    auto net=model(path.c_str(),1,using_npu ? context.get() : nullptr,&used_gpu);
+    e.gpu=used_gpu;
     if (!net) { e.error=1; e.state=2; return; }
     Frame previous{}; int slow=0, failures=0; double last=-1, fps=24;
     e.get(e.mpv,"container-fps",MPV_FORMAT_DOUBLE,&fps);
@@ -182,12 +191,25 @@ static void run(Engine& e, std::string path) {
       } else {
         Frame middle{};
         auto before=Clock::now();
-        if (!interpolate(*net,previous,current,middle)) {e.error=3; break;}
+        const bool valid=interpolate(*net,previous,current,middle);
+        if(using_npu && (!valid || context->state==3)) {
+          context->state=3;using_npu=false;net.reset();net=model(path.c_str(),1,nullptr,&used_gpu);e.gpu=used_gpu;
+          if(!net) {e.error=3;break;}
+          previous=Frame{};last=-1;slow=0;e.state=0;continue;
+        }
+        if(!valid) {e.error=3;break;}
         const double ms=std::chrono::duration<double,std::milli>(Clock::now()-before).count();
         e.milliseconds=ms; ++e.generated;
         // Allow shader warm-up, then require sustained throughput with headroom.
         if (e.generated>6 && ms>900./fps) ++slow; else slow=std::max(0,slow-1);
-        if (slow>=8) { e.error=5; break; }
+        if (slow>=8) {
+          if(using_npu) {
+            context->state=3;using_npu=false;net.reset();net=model(path.c_str(),1,nullptr,&used_gpu);e.gpu=used_gpu;
+            if(!net) {e.error=3;break;}
+            previous=Frame{};last=-1;slow=0;e.generated=0;e.state=0;continue;
+          }
+          e.error=5;break;
+        }
         std::lock_guard<std::mutex> lock(e.mutex);
         e.frames.push_back(std::move(middle)); e.frames.push_back(current);
         while (e.frames.size()>32) e.frames.pop_front();
@@ -199,16 +221,19 @@ static void run(Engine& e, std::string path) {
   } catch (...) { e.error=3; }
   e.state=e.error ? 2 : 3;
 }
-API Engine* oplayer_rife_start(const char* path, void* mpv, void* get, void* command, void* freeNode) {
+API Engine* oplayer_rife_start(const char* path, void* mpv, void* get, void* command, void* freeNode, int prefer_npu) {
   if (!path || !mpv || !get || !command || !freeNode) return nullptr;
   try {
     auto e=std::make_unique<Engine>(); e->mpv=(mpv_handle*)mpv; e->get=(Get)get; e->command=(Command)command; e->freeNode=(Free)freeNode;
+    e->prefer_npu=prefer_npu!=0;
     e->thread=std::thread(run,std::ref(*e),std::string(path)); return e.release();
   } catch (...) { return nullptr; }
 }
 // The caller owns a 320*320*4 buffer. No shared pixel pointer escapes the lock.
 API int oplayer_rife_poll(Engine* e, unsigned char* pixels, int* info, double* timing) {
   info[0]=e->state; info[1]=e->error; info[2]=e->generated; info[5]=e->pausedFlag ? 1 : 0;
+  {std::lock_guard<std::mutex> lock(e->mutex);
+    info[6]=e->npu ? (int)e->npu->state : 0;info[7]=e->npu ? (int)e->npu->executions : 0;info[8]=e->gpu ? 1 : 0;}
   timing[0]=e->milliseconds;
   if (e->state!=1) return 0;
   std::lock_guard<std::mutex> lock(e->mutex);
@@ -229,8 +254,15 @@ API int oplayer_rife_probe(const char* path, const unsigned char* a, const unsig
   unsigned char* out, int w, int h, int gpu) {
   if(w<2 || h<2 || w>320 || h>320) return -1;
   std::lock_guard<std::mutex> lock(inferenceMutex);
-  auto net=model(path,gpu); if(!net) return -2;
+  NpuContext reference;reference.reference_only=true;
+  auto net=model(path,gpu&1,gpu&2 ? &reference : nullptr); if(!net) return -2;
   Frame fa{0,w,h,std::vector<unsigned char>(a,a+w*h*4)},fb{1,w,h,std::vector<unsigned char>(b,b+w*h*4)},mid{};
   if(!interpolate(*net,fa,fb,mid)) return -3;
   std::memcpy(out,mid.pixels.data(),mid.pixels.size()); return 0;
+}
+API int oplayer_npu_vendor(const char* maker,const char* soc,const char* hardware,const char* board) {
+  return npu_vendor(maker?maker:"",soc?soc:"",hardware?hardware:"",board?board:"");
+}
+API int oplayer_npu_driver_allowed(int vendor,const char* name,int type) {
+  return npu_driver_allowed(vendor,name?name:"",type) ? 1 : 0;
 }
