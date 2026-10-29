@@ -119,11 +119,15 @@ class ResumeStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> remove(String path) async {
-    _entries.remove(path);
-    _entries.remove(SyncReferences.instance.portable(path));
-    final resolved = SyncReferences.instance.resolve(path);
-    if (resolved != null) _entries.remove(resolved);
+  Future<void> remove(String path) => removeAll([path]);
+
+  Future<void> removeAll(Iterable<String> paths) async {
+    for (final path in paths.toList()) {
+      _entries.remove(path);
+      _entries.remove(SyncReferences.instance.portable(path));
+      final resolved = SyncReferences.instance.resolve(path);
+      if (resolved != null) _entries.remove(resolved);
+    }
     await _prefs.setString(_kResume, jsonEncode(_entries.map((k, v) => MapEntry(k, v.toJson()))));
     notifyListeners();
   }
