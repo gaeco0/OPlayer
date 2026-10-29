@@ -130,7 +130,7 @@ class AppRelease {
 }
 
 AppRelease? latestRelease(Iterable<AppRelease> releases, UpdateChannel channel) {
-  final matching = releases.where((r) => r.version.channel == channel).toList()
+  final matching = releases.where((r) => r.version.channel.index <= channel.index).toList()
     ..sort((a, b) => b.version.compareTo(a.version));
   return matching.firstOrNull;
 }

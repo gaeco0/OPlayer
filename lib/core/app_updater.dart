@@ -185,8 +185,11 @@ class AppUpdater extends ChangeNotifier {
         if (response.statusCode != 200) throw HttpException('업데이트 확인 실패 (HTTP ${response.statusCode})');
         final json = jsonDecode(utf8.decode(await _read(response, 8 * 1024 * 1024)));
         final values = json is List ? json : [json];
-        found = latestRelease(values.whereType<Map>().map(AppRelease.parse).whereType<AppRelease>(), requestedChannel);
-        if (found != null || values.length < 30 || requestedChannel == UpdateChannel.stable) break;
+        found = latestRelease([
+          if (found != null) found,
+          ...values.whereType<Map>().map(AppRelease.parse).whereType<AppRelease>(),
+        ], requestedChannel);
+        if (values.length < 30 || requestedChannel == UpdateChannel.stable) break;
       }
       if (generation != _generation) return;
       release = found;

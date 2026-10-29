@@ -32,7 +32,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  test('release versions order stage promotions and numeric identifiers and isolate channels', () {
+  test('release versions order stage promotions and include more stable channels', () {
     final beta2 = AppVersion.parse('v0.1.7-beta.2+2')!;
     expect(beta2.compareTo(AppVersion.parse('0.1.7-beta.10')!), lessThan(0));
     expect(beta2.compareTo(AppVersion.parse('0.1.7')!), lessThan(0));
@@ -46,9 +46,35 @@ void main() {
       '0.1.7-beta.10',
       '0.1.7-beta.2',
     ].map((v) => AppRelease.parse(releaseJson(v))!).toList();
-    expect(latestRelease(releases, UpdateChannel.beta)!.version.name, '0.1.7-beta.10');
+    expect(latestRelease(releases, UpdateChannel.beta)!.version.name, '0.1.7');
     expect(latestRelease(releases, UpdateChannel.stable)!.version.name, '0.1.7');
+    expect(latestRelease(releases, UpdateChannel.nightly)!.version.name, '0.1.8-nightly.1');
   });
+
+  for (final channel in [UpdateChannel.beta, UpdateChannel.nightly]) {
+    for (final promoted in ['0.1.8-beta.2', '0.1.8']) {
+      test('$channel finds $promoted beyond a full page of older releases', () async {
+        var requests = 0;
+        final updater = AppUpdater(
+          installedVersion: '0.1.8-nightly.20261029.1',
+          clientFactory: () => MockClient((request) async {
+            requests++;
+            final page = request.url.queryParameters['page'];
+            return http.Response(
+              jsonEncode(page == '1' ? List.generate(30, (_) => releaseJson('0.1.7')) : [releaseJson(promoted)]),
+              200,
+            );
+          }),
+        );
+        await updater.setChannel(channel);
+        expect(requests, 2);
+        expect(updater.release!.version.name, promoted);
+        expect(updater.available, isTrue);
+        expect(updater.channel, channel);
+        updater.dispose();
+      });
+    }
+  }
 
   test('release parser rejects drafts and foreign assets; selects ABI and TV separately', () {
     final data = releaseJson('0.1.7');
