@@ -103,6 +103,8 @@ class AppSettings extends ChangeNotifier {
   String? downloadServerDir;
   int maxConcurrentDownloads = 2;
   int hlsParallelSegments = 4;
+  int hlsDecryptionWorkers = 2; // 0: no additional CPU concurrency limit.
+  int downloadConversionThreads = -1; // -1: balanced, 0: FFmpeg automatic.
   String? ffmpegPath; // null이면 자동 탐색
 
   Future<void> init() async {
@@ -173,6 +175,8 @@ class AppSettings extends ChangeNotifier {
     'dlSrvDir': downloadServerDir,
     'dlMax': maxConcurrentDownloads,
     'hlsPar': hlsParallelSegments,
+    'hlsDecryptionWorkers': hlsDecryptionWorkers,
+    'downloadConversionThreads': downloadConversionThreads,
     'ffmpeg': ffmpegPath,
   };
 
@@ -249,6 +253,14 @@ class AppSettings extends ChangeNotifier {
     downloadServerDir = j['dlSrvDir'] as String?;
     maxConcurrentDownloads = v('dlMax', 2);
     hlsParallelSegments = v('hlsPar', 4);
+    hlsDecryptionWorkers =
+        j['hlsDecryptionWorkers'] is int && const [0, 1, 2, 4, 8, 16].contains(j['hlsDecryptionWorkers'])
+        ? j['hlsDecryptionWorkers'] as int
+        : 2;
+    downloadConversionThreads =
+        j['downloadConversionThreads'] is int && const [-1, 0, 1, 2, 4, 8, 16].contains(j['downloadConversionThreads'])
+        ? j['downloadConversionThreads'] as int
+        : -1;
     ffmpegPath = j['ffmpeg'] as String?;
   }
 }

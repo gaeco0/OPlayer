@@ -103,5 +103,27 @@ void main() {
     expect(executions[3], contains("scale=-2:'trunc(min(480,ih)/2)*2'"));
     expect(executions.last, containsAllInOrder(['-map', '1:a:0', '-vn', '-c:a', 'aac']));
     expect(input.readAsBytesSync(), [1, 2, 3]);
+    try {
+      for (final limit in [1, 8, 0]) {
+        AppSettings.instance.downloadConversionThreads = limit;
+        final result = await Ffmpeg.createMp4(
+          video: input.path,
+          output: '${dir.path}/limit-$limit.mp4',
+          quality: OutputQuality.medium,
+        );
+        expect(result.$1, true);
+        final args = executions.last;
+        if (limit == 0) {
+          expect(args, isNot(contains('-threads')));
+          expect(args, isNot(contains('-filter_threads')));
+        } else {
+          expect(args[args.indexOf('-threads') + 1], '$limit');
+          expect(args[args.lastIndexOf('-threads') + 1], '$limit');
+          expect(args[args.indexOf('-filter_threads') + 1], '$limit');
+        }
+      }
+    } finally {
+      AppSettings.instance.downloadConversionThreads = -1;
+    }
   });
 }

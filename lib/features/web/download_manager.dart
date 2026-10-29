@@ -1216,7 +1216,12 @@ class DownloadManager extends ChangeNotifier {
         var data = await _get(client, s.uri, t.headers, range: s.byteRange);
         if (s.key != null) {
           final k = await keyFor(s.key!.uri!);
-          data = await Hls.decryptAes128Async(data, k, s.key!.iv ?? Hls.ivForSequence(s.sequence));
+          data = await Hls.decryptAes128Async(
+            data,
+            k,
+            s.key!.iv ?? Hls.ivForSequence(s.sequence),
+            parallelism: AppSettings.instance.hlsDecryptionWorkers,
+          );
         }
         _check(t);
         await File('${f.path}.tmp').writeAsBytes(data, flush: false);

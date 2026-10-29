@@ -179,16 +179,14 @@ class Ffmpeg {
     final bin = await locate();
     if (bin == null) return (false, 'ffmpeg 없음');
     // Leave CPU capacity for playback/UI during download output conversion.
-    final threads = '${(Platform.numberOfProcessors ~/ 2).clamp(1, 4)}';
+    final setting = AppSettings.instance.downloadConversionThreads;
+    final threads = '${setting < 0 ? (Platform.numberOfProcessors ~/ 2).clamp(1, 4) : setting.clamp(0, 16)}';
     final args = <String>[
       '-y',
       '-hide_banner',
       '-loglevel',
       'error',
-      '-filter_threads',
-      '1',
-      '-threads',
-      threads,
+      if (setting != 0) ...['-filter_threads', setting < 0 ? '1' : threads, '-threads', threads],
       '-i',
       video,
     ];
@@ -225,7 +223,12 @@ class Ffmpeg {
         quality == OutputQuality.low ? '96k' : '192k',
       ]);
     }
-    args.addAll(['-threads', threads, '-movflags', '+faststart', output]);
+    args.addAll([
+      if (setting != 0) ...['-threads', threads],
+      '-movflags',
+      '+faststart',
+      output,
+    ]);
     try {
       final (code, error) = await _execute(bin, args);
       final f = File(output);

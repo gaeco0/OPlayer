@@ -20,5 +20,8 @@ void main() {
     for (final bytes in next) {
       expect(bytes, plain);
     }
+    for (final parallelism in [0, 1, 4, 16]) {
+      expect(await Hls.decryptAes128Async(encrypted, key, iv, parallelism: parallelism), plain);
+    }
   });
 }

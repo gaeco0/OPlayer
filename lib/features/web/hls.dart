@@ -243,12 +243,12 @@ class Hls {
     );
   }
 
-  // Keep network concurrency independent of CPU work: at most two decryptions
-  // across all downloads, leaving CPU time for playback and UI.
-  static final _decryptTails = [Future<void>.value(), Future<void>.value()];
+  // Shared CPU lanes across downloads; HTTP concurrency is independent.
+  static final _decryptTails = List.generate(16, (_) => Future<void>.value());
   static int _decryptLane = 0;
-  static Future<Uint8List> decryptAes128Async(Uint8List data, Uint8List key, Uint8List iv) {
-    final lane = _decryptLane++ % _decryptTails.length;
+  static Future<Uint8List> decryptAes128Async(Uint8List data, Uint8List key, Uint8List iv, {int parallelism = 2}) {
+    if (parallelism == 0) return _decryptTransferred(TransferableTypedData.fromList([data]), key, iv);
+    final lane = _decryptLane++ % parallelism.clamp(1, _decryptTails.length);
     final result = _decryptTails[lane].then((_) {
       final input = TransferableTypedData.fromList([data]);
       return _decryptTransferred(input, key, iv);
