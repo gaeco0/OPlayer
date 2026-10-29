@@ -15,6 +15,8 @@ nPlayer의 UI/UX를 기준으로, 로컬·네트워크·클라우드 재생과 �
 - 공식 저장소에서 **disable-devtool 차단** 브라우저 확장앱을 선택 설치할 수 있습니다. 1.1.0부터 모든 웹사이트와 교차 도메인 iframe에 적용되며 켠 뒤 새로고침합니다. 콘솔 억제 설정·변형 대응 제한은 [확장앱 안내](plugins/README.md#disable-devtool-차단)를 참고하세요. 앱 v0.1.6부터 전체 사이트 권한을 지원하며 이후에는 확장앱만 업데이트합니다.
 - Windows `Alt+Enter` 전체화면과 온라인 자막 검색·적용을 지원합니다. [변경 내역](CHANGELOG.md)과 [v0.1.7 정식 배포 파일](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.7)을 참고하세요. API 4를 지원하지 않는 v0.1.4 앱은 한 번 업데이트해야 합니다.
 
+- 현재 공개 베타: [0.1.8-beta.1](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.8-beta.1). 0.1.8 nightly의 기능을 베타로 전환했다. 앱의 업데이트 채널을 **beta**로 선택하면 확인할 수 있다. 정식 Latest·업데이트 확인 기본값은 stable v0.1.7로 유지한다.
+- 플랫폼별 실기기 검증을 모두 마친 베타는 아니다. 전체 플랫폼 빌드·자동 검증은 유지하며, 다양한 기기의 성능·호환성 문제는 사용자 제보를 모아 재현 후 수정한다. 설정 → **진단 정보 보내기**로 GitHub Issues에 신고할 수 있다.
 - 현재 nightly: [0.1.8-nightly.20261029.1](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.8-nightly.20261029.1). AI 모델 확장앱 필수화·목표 해상도 선택·오버레이 롱터치 모델 선택을 제공한다. NPU 업스케일·Windows 깜빡임 및 종료 충돌 수정·다운로드 응답성 개선과 CPU 제한 설정을 포함한다. 정식 Latest·업데이트 확인 기본값은 stable v0.1.7이다.
 
 ## 파일·재생목록 관리 (v0.1.7)
