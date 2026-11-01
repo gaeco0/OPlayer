@@ -17,7 +17,7 @@ nPlayer의 UI/UX를 기준으로, 로컬·네트워크·클라우드 재생과 �
 
 - 현재 공개 베타: [0.1.8-beta.2](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.8-beta.2). 최근 재생 다중 선택을 포함한다. 앱의 업데이트 채널을 **beta**로 선택하면 확인할 수 있다. 정식 Latest·업데이트 확인 기본값은 stable v0.1.7로 유지한다.
 - 플랫폼별 실기기 검증을 모두 마친 베타는 아니다. 전체 플랫폼 빌드·자동 검증은 유지하며, 다양한 기기의 성능·호환성 문제는 사용자 제보를 모아 재현 후 수정한다. 설정 → **진단 정보 보내기**로 GitHub Issues에 신고할 수 있다.
-- 현재 nightly: [0.1.8-nightly.20261029.1](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.8-nightly.20261029.1). AI 모델 확장앱 필수화·목표 해상도 선택·오버레이 롱터치 모델 선택을 제공한다. NPU 업스케일·Windows 깜빡임 및 종료 충돌 수정·다운로드 응답성 개선과 CPU 제한 설정을 포함한다. 정식 Latest·업데이트 확인 기본값은 stable v0.1.7이다.
+- 현재 nightly: [0.1.9-nightly.20261101.1](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.9-nightly.20261101.1). 0.1.8-beta.2의 최근 재생 다중 선택을 포함하며 브라우저 탭·탭별 탐색 기록 비우기·딥링크 및 magnet 외부 앱 연결을 추가했다. 업데이트 채널은 beta에 정식, nightly에 베타·정식을 포함하도록 수정했다. 탭 전환 시 저장된 주소를 다시 불러온다. 정식 Latest·업데이트 확인 기본값은 stable v0.1.7이다.
 
 ## 파일·재생목록 관리 (v0.1.7)
 
