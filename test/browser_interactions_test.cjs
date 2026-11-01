@@ -30,3 +30,30 @@ assert(!scroll({target: {...nested, closest: () => ({})}}).defaultPrevented);
 scroll({deltaMode: 1, deltaY: 3, target: root});
 assert.equal(root.scrollTop, 71.2);
 console.log('browser wheel scaling and nested scrolling passed');
+
+const linkScript = fs.readFileSync(path.join(__dirname, '../lib/features/web/browser_interactions.dart'), 'utf8')
+  .match(/const browserLinkMenuScript = r'''([\s\S]*?)''';/)[1];
+let menu;
+const calls = [];
+const linkWindow = {
+  flutter_inappwebview: {callHandler: (...args) => calls.push(args)},
+  addEventListener: (name, fn) => { assert.equal(name, 'contextmenu'); menu = fn; },
+};
+vm.runInNewContext(linkScript, {window: linkWindow});
+function contextMenu(href, raw = href) {
+  const event = {
+    target: {closest: () => href == null ? null : {href, getAttribute: () => raw, textContent: 'Link'}},
+    preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; },
+  };
+  menu(event);
+  return event;
+}
+assert(contextMenu('https://example.com/relative', '/relative').prevented);
+assert.deepEqual(calls[0], ['oplayerLinkMenu', 'https://example.com/relative']);
+assert(contextMenu('https://example.com/image-link').stopped);
+assert(!contextMenu(null).prevented);
+assert(!contextMenu('javascript:alert(1)').prevented);
+assert(!contextMenu('magnet:?xt=urn:btih:123').prevented);
+delete linkWindow.flutter_inappwebview;
+assert(!contextMenu('https://example.com/no-bridge').prevented);
+console.log('browser link context menu preserves relative links and non-link gestures');

@@ -1,3 +1,10 @@
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+
+// WebView creation and navigation callbacks can wrap the same platform view in
+// different Dart controllers. Wrapper identity must not block normal navigation.
+bool isSameBrowserView(InAppWebViewController first, InAppWebViewController? second) =>
+    second != null && identical(first.platform, second.platform);
+
 /// Scale mouse wheels inside the web page, preserving nested scrolling and zoom.
 const browserInteractionScript = r'''
 (function(){
@@ -27,5 +34,21 @@ const browserInteractionScript = r'''
       }
     }
   }, {passive: false, capture: true});
+})();
+''';
+
+const browserLinkMenuScript = r'''
+(function(){
+  if (window.__oplayerLinkMenu) return;
+  window.__oplayerLinkMenu = true;
+  window.addEventListener('contextmenu', function(e){
+    var node = e.target && e.target.closest ? e.target.closest('a[href]') : null;
+    var bridge = window.flutter_inappwebview;
+    if (!node || !bridge || typeof bridge.callHandler !== 'function') return;
+    if (!/^https?:\/\//i.test(node.href)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    bridge.callHandler('oplayerLinkMenu', node.href);
+  }, true);
 })();
 ''';

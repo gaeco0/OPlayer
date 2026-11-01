@@ -435,7 +435,43 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     }
   }
 
-  bool _isCurrentWeb(InAppWebViewController web) => mounted && web == _web;
+  bool _isCurrentWeb(InAppWebViewController web) => mounted && isSameBrowserView(web, _web);
+
+  bool _linkMenuOpen = false;
+
+  Future<void> _showLinkMenu(InAppWebViewController web, String url) async {
+    final uri = Uri.tryParse(url);
+    if (!_isCurrentWeb(web) || _linkMenuOpen || uri == null || !['http', 'https'].contains(uri.scheme)) return;
+    _linkMenuOpen = true;
+    try {
+      final action = await showModalBottomSheet<String>(
+        context: context,
+        builder: (sheet) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(title: Text(url, maxLines: 2, overflow: TextOverflow.ellipsis)),
+              ListTile(
+                leading: const Icon(Icons.open_in_new),
+                title: const Text('새 탭에서 열기'),
+                onTap: () => Navigator.pop(sheet, 'newTab'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.copy),
+                title: const Text('링크 복사'),
+                onTap: () => Navigator.pop(sheet, 'copy'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (!_isCurrentWeb(web)) return;
+      if (action == 'newTab') _newTab(url);
+      if (action == 'copy') await Clipboard.setData(ClipboardData(text: url));
+    } finally {
+      _linkMenuOpen = false;
+    }
+  }
 
   void _recreateTabView() {
     _historyRead++;
@@ -596,7 +632,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     _historyMoving = true;
     try {
       final native = await web.getCopyBackForwardList();
-      if (!mounted || web != _web) return;
+      if (!_isCurrentWeb(web)) return;
       final nativeTarget = _history.move(steps);
       _historyRead++; // Discard a history query issued before this navigation.
       _saveHistory();
@@ -614,7 +650,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('페이지 이동 실패: $error')));
     } finally {
-      if (web == _web) _historyMoving = false;
+      if (_isCurrentWeb(web)) _historyMoving = false;
     }
   }
 
@@ -627,7 +663,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     } catch (_) {
       return; // The platform view may have been disposed during a menu change.
     }
-    if (!mounted || web != _web || read != _historyRead) return;
+    if (!_isCurrentWeb(web) || read != _historyRead) return;
     final index = native?.currentIndex;
     final entries = native?.list;
     if (index == null || entries == null || index < 0 || index >= entries.length) return;
@@ -1177,7 +1213,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     } catch (_) {
       // Missing handlers and platform launch errors share the same fallback.
     }
-    if (!mounted || web != _web) return;
+    if (!mounted || (web != null && !_isCurrentWeb(web))) return;
     final fallback = intentBrowserFallback(uri);
     if (fallback != null) {
       await _web?.loadUrl(urlRequest: URLRequest(url: WebUri(fallback.toString())));
@@ -1543,6 +1579,11 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                       forMainFrameOnly: false,
                     ),
                     UserScript(
+                      source: browserLinkMenuScript,
+                      injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+                      forMainFrameOnly: false,
+                    ),
+                    UserScript(
                       source: _snifferJs,
                       injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
                       forMainFrameOnly: false, // iframe 안 플레이어까지
@@ -1552,6 +1593,15 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     if (!mounted || generation != _viewGeneration) return;
                     _web = c;
                     _attachNetworkMonitor(c);
+                    c.addJavaScriptHandler(
+                      handlerName: 'oplayerLinkMenu',
+                      callback: (args) {
+                        if (_isCurrentWeb(c) && args.isNotEmpty && args[0] is String) {
+                          unawaited(_showLinkMenu(c, args[0] as String));
+                        }
+                        return null;
+                      },
+                    );
                     c.addJavaScriptHandler(
                       handlerName: 'oplayerHlsPlaylist',
                       callback: (args) {
@@ -1621,6 +1671,15 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     if (action.isForMainFrame || action.hasGesture == true) await _openExternalLink(uri);
                     return NavigationActionPolicy.CANCEL;
                   },
+                  onLongPressHitTestResult: (c, hit) async {
+                    if (!_isCurrentWeb(c)) return;
+                    String? url;
+                    if (hit.type == InAppWebViewHitTestResultType.SRC_ANCHOR_TYPE) url = hit.extra;
+                    if (Platform.isAndroid && hit.type == InAppWebViewHitTestResultType.SRC_IMAGE_ANCHOR_TYPE) {
+                      url = (await c.requestFocusNodeHref())?.url?.toString();
+                    }
+                    if (url != null) await _showLinkMenu(c, url);
+                  },
                   onCreateWindow: (c, action) async {
                     if (!_isCurrentWeb(c)) return false;
                     final uri = Uri.tryParse(action.request.url?.toString() ?? '');
@@ -1672,6 +1731,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     // 페이지에 따라 document_start 주입이 안 되는 경우 대비
                     await c.evaluateJavascript(source: _snifferJs);
                     await c.evaluateJavascript(source: browserInteractionScript);
+                    await c.evaluateJavascript(source: browserLinkMenuScript);
                     await _syncHistory(c);
                   },
                   onUpdateVisitedHistory: (c, url, reload) async {
