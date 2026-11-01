@@ -60,6 +60,7 @@ class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         AppUpdateBridge(this, flutterEngine.dartExecutor.binaryMessenger)
+        ExternalLinksBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         externalFilesBridge = ExternalFilesBridge(this, flutterEngine.dartExecutor.binaryMessenger)
         externalFilesBridge?.accept(intent)
         networkTrustBridge = NetworkTrustBridge(flutterEngine.dartExecutor.binaryMessenger)

@@ -26,6 +26,7 @@ import 'downloads_page.dart';
 import 'hls.dart';
 import 'request_headers.dart';
 import 'browser_environment.dart';
+import 'external_links.dart';
 import 'browser_playback_proxy.dart';
 
 enum MediaKind { file, hls, dash }
@@ -1015,6 +1016,12 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
   void _go(String input) {
     var s = input.trim();
     if (s.isEmpty) return;
+    final uri = Uri.tryParse(s);
+    if (uri != null && isExternalBrowserLink(uri) && !RegExp(r'^[^/]+:\d+(?:/|$)').hasMatch(s)) {
+      _addressFocus.unfocus();
+      unawaited(_openExternalLink(uri));
+      return;
+    }
     if (!s.contains('://')) {
       s = (s.contains('.') && !s.contains(' '))
           ? 'https://$s'
@@ -1022,6 +1029,23 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     }
     _addressFocus.unfocus();
     _web?.loadUrl(urlRequest: URLRequest(url: WebUri(s)));
+  }
+
+  Future<void> _openExternalLink(Uri uri) async {
+    try {
+      if (await openExternalBrowserLink(uri)) return;
+    } catch (_) {
+      // Missing handlers and platform launch errors share the same fallback.
+    }
+    if (!mounted) return;
+    final fallback = intentBrowserFallback(uri);
+    if (fallback != null) {
+      await _web?.loadUrl(urlRequest: URLRequest(url: WebUri(fallback.toString())));
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('${uri.scheme}: 링크를 열 수 있는 외부 앱이 없거나 실행하지 못했습니다.')));
   }
 
   Future<void> _toggleBookmark() async {
@@ -1336,6 +1360,8 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                   initialUrlRequest: URLRequest(url: WebUri(_history.current ?? _home)),
                   initialSettings: InAppWebViewSettings(
                     javaScriptEnabled: true,
+                    useShouldOverrideUrlLoading: true,
+                    supportMultipleWindows: true,
                     useOnLoadResource: true,
                     useShouldInterceptRequest: Platform.isAndroid,
                     useHybridComposition: true,
@@ -1423,6 +1449,21 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                         return null;
                       },
                     );
+                  },
+                  shouldOverrideUrlLoading: (c, action) async {
+                    final uri = Uri.tryParse(action.request.url?.toString() ?? '');
+                    if (uri == null || !isExternalBrowserLink(uri)) return NavigationActionPolicy.ALLOW;
+                    if (action.isForMainFrame || action.hasGesture == true) await _openExternalLink(uri);
+                    return NavigationActionPolicy.CANCEL;
+                  },
+                  onCreateWindow: (c, action) async {
+                    final uri = Uri.tryParse(action.request.url?.toString() ?? '');
+                    if (uri != null && isExternalBrowserLink(uri)) {
+                      await _openExternalLink(uri);
+                    } else if (uri != null && action.hasGesture == true && ['http', 'https'].contains(uri.scheme)) {
+                      await c.loadUrl(urlRequest: action.request);
+                    }
+                    return false;
                   },
                   shouldInterceptRequest: (c, request) async {
                     _capturedHeaders.capture(request.url.toString(), request.headers);
