@@ -36,6 +36,14 @@ class BrowserHistory {
 
   String encode() => jsonEncode({'urls': _urls, 'index': _index});
 
+  void clearNavigation() {
+    final url = current;
+    _urls.clear();
+    if (url != null) _urls.add(url);
+    _index = url == null ? -1 : 0;
+    prepareReload();
+  }
+
   void prepareReload() {
     _native.clear();
     _bindCurrent = true;

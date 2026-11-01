@@ -22,6 +22,7 @@ import '../player/player_screen.dart';
 import 'download_manager.dart';
 import 'browser_interactions.dart';
 import 'browser_history.dart';
+import 'browser_tabs.dart';
 import 'downloads_page.dart';
 import 'hls.dart';
 import 'request_headers.dart';
@@ -363,7 +364,9 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
   double _progress = 0;
   bool _canBack = false;
   bool _canForward = false;
-  BrowserHistory _history = BrowserHistory();
+  BrowserTabs _tabs = BrowserTabs(BrowserHistory());
+  BrowserHistory get _history => _tabs.active.history;
+  int _viewGeneration = 0;
   bool _historyReady = false;
   bool _historyMoving = false;
   int _historyRead = 0;
@@ -375,37 +378,25 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     PluginStore.instance.addListener(_pluginsChanged);
     MouseNav.addForwardHandler(_forward);
     HardwareKeyboard.instance.addHandler(_onKey);
-    BrowserHistoryStore.load()
+    BrowserTabsStore.load()
         .catchError((Object error) {
           debugPrint('Browser history restore failed: $error');
-          return BrowserHistory();
+          return BrowserTabs(BrowserHistory());
         })
-        .then((history) {
+        .then((tabs) {
           if (!mounted) return;
           setState(() {
-            _history = history;
+            _tabs = tabs;
             _historyReady = true;
-            _canBack = history.canBack;
-            _canForward = history.canForward;
-            _url = history.current ?? _home;
+            _canBack = _history.canBack;
+            _canForward = _history.canForward;
+            _title = _tabs.active.title;
+            _url = _history.current ?? _home;
             _address.text = _url;
           });
         });
     if (Platform.isAndroid || Platform.isIOS) {
-      _pullToRefresh = PullToRefreshController(
-        settings: PullToRefreshSettings(color: Color(AppSettings.instance.primaryColor)),
-        onRefresh: () async {
-          try {
-            if (_web == null) {
-              await _pullToRefresh?.endRefreshing();
-            } else {
-              await _web!.reload();
-            }
-          } catch (_) {
-            await _pullToRefresh?.endRefreshing();
-          }
-        },
-      );
+      _createPullToRefresh();
     }
     if (Platform.isWindows) {
       _windowsEnv().then((env) {
@@ -423,6 +414,145 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
         _bookmarks = p.getStringList(_kBookmarks) ?? [];
       });
     });
+  }
+
+  void _createPullToRefresh() {
+    if (Platform.isAndroid || Platform.isIOS) {
+      _pullToRefresh = PullToRefreshController(
+        settings: PullToRefreshSettings(color: Color(AppSettings.instance.primaryColor)),
+        onRefresh: () async {
+          try {
+            if (_web == null) {
+              await _pullToRefresh?.endRefreshing();
+            } else {
+              await _web!.reload();
+            }
+          } catch (_) {
+            await _pullToRefresh?.endRefreshing();
+          }
+        },
+      );
+    }
+  }
+
+  bool _isCurrentWeb(InAppWebViewController web) => mounted && web == _web;
+
+  void _recreateTabView() {
+    _historyRead++;
+    setState(() {
+      _web = null;
+      _viewGeneration++;
+      _historyMoving = false;
+      _history.prepareReload();
+      _url = _history.current ?? _home;
+      _title = _tabs.active.title;
+      _address.text = _url;
+      _addressFocus.unfocus();
+      _canBack = _history.canBack;
+      _canForward = _history.canForward;
+      _progress = 0;
+      _found.clear();
+      _mse = false;
+      _netLog.clear();
+      _pendingBodies.clear();
+      _capturedHeaders.clear();
+      _hlsKeys.clear();
+      _hlsPlaylists.clear();
+      _createPullToRefresh();
+    });
+    _saveHistory();
+  }
+
+  void _newTab([String? url]) {
+    if (!_historyReady) return;
+    if (!_tabs.add(url ?? _home)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('탭은 최대 32개까지 열 수 있습니다.')));
+      return;
+    }
+    _recreateTabView();
+  }
+
+  void _selectTab(int index) {
+    if (!_historyReady) return;
+    if (_tabs.selected == index) return;
+    _tabs.selected = index;
+    _recreateTabView();
+  }
+
+  void _closeTab(int index) {
+    if (!_historyReady) return;
+    final active = _tabs.active;
+    _tabs.close(index);
+    if (active != _tabs.active) {
+      _recreateTabView();
+    } else {
+      setState(() {});
+      _saveHistory();
+    }
+  }
+
+  void _clearNavigation() {
+    if (!_historyReady) return;
+    _history.clearNavigation();
+    _recreateTabView();
+  }
+
+  Future<void> _showTabs() async {
+    final index = await showModalBottomSheet<int>(
+      context: context,
+      builder: (sheet) => StatefulBuilder(
+        builder: (sheet, updateSheet) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: Text('탭 ${_tabs.tabs.length}개'),
+                subtitle: const Text('탭을 전환하면 저장된 주소를 다시 불러옵니다.'),
+                trailing: IconButton(
+                  tooltip: '새 탭',
+                  icon: const Icon(Icons.add),
+                  onPressed: () => Navigator.pop(sheet, -1),
+                ),
+              ),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _tabs.tabs.length,
+                  itemBuilder: (_, i) {
+                    final tab = _tabs.tabs[i];
+                    return ListTile(
+                      selected: i == _tabs.selected,
+                      leading: Icon(i == _tabs.selected ? Icons.radio_button_checked : Icons.tab),
+                      title: Text(
+                        tab.title.isEmpty ? (tab.history.current ?? _home) : tab.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(tab.history.current ?? _home, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      onTap: () => Navigator.pop(sheet, i),
+                      trailing: IconButton(
+                        tooltip: '탭 닫기',
+                        icon: const Icon(Icons.close),
+                        onPressed: () {
+                          _closeTab(i);
+                          updateSheet(() {});
+                        },
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || index == null) return;
+    if (index == -1) {
+      _newTab();
+    } else {
+      _selectTab(index);
+    }
   }
 
   Future<DetectedMedia> _resolvePluginMedia(DetectedMedia m) async {
@@ -454,7 +584,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
 
   void _saveHistory() {
     unawaited(
-      BrowserHistoryStore.save(_history).catchError((Object error) {
+      BrowserTabsStore.save(_tabs).catchError((Object error) {
         debugPrint('Browser history save failed: $error');
       }),
     );
@@ -466,7 +596,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     _historyMoving = true;
     try {
       final native = await web.getCopyBackForwardList();
-      if (!mounted) return;
+      if (!mounted || web != _web) return;
       final nativeTarget = _history.move(steps);
       _historyRead++; // Discard a history query issued before this navigation.
       _saveHistory();
@@ -484,11 +614,12 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('페이지 이동 실패: $error')));
     } finally {
-      _historyMoving = false;
+      if (web == _web) _historyMoving = false;
     }
   }
 
   Future<void> _syncHistory(InAppWebViewController web, {bool reload = false}) async {
+    if (!_isCurrentWeb(web)) return;
     final read = ++_historyRead;
     WebHistory? native;
     try {
@@ -496,7 +627,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     } catch (_) {
       return; // The platform view may have been disposed during a menu change.
     }
-    if (!mounted || read != _historyRead) return;
+    if (!mounted || web != _web || read != _historyRead) return;
     final index = native?.currentIndex;
     final entries = native?.list;
     if (index == null || entries == null || index < 0 || index >= entries.length) return;
@@ -578,6 +709,14 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
       _address.selection = TextSelection(baseOffset: 0, extentOffset: _address.text.length);
       return true;
     }
+    if (ctrl && k == LogicalKeyboardKey.keyT) {
+      _newTab();
+      return true;
+    }
+    if (ctrl && k == LogicalKeyboardKey.keyW) {
+      _closeTab(_tabs.selected);
+      return true;
+    }
     return false;
   }
 
@@ -637,7 +776,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
       await c.addDevToolsProtocolEventListener(
         eventName: 'Network.requestWillBeSent',
         callback: (data) {
-          if (data is! Map) return;
+          if (!_isCurrentWeb(c) || data is! Map) return;
           final req = data['request'];
           if (req is! Map) return;
           final id = '${data['requestId'] ?? ''}';
@@ -650,14 +789,14 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
       await c.addDevToolsProtocolEventListener(
         eventName: 'Network.requestWillBeSentExtraInfo',
         callback: (data) {
-          if (data is! Map) return;
+          if (!_isCurrentWeb(c) || data is! Map) return;
           _capturedHeaders.extra('${data['requestId'] ?? ''}', data['headers'] as Map?);
         },
       );
       await c.addDevToolsProtocolEventListener(
         eventName: 'Network.responseReceived',
         callback: (data) {
-          if (data is! Map) return;
+          if (!_isCurrentWeb(c) || data is! Map) return;
           final res = data['response'];
           if (res is! Map) return;
           final url = '${res['url'] ?? ''}';
@@ -706,7 +845,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
       await c.addDevToolsProtocolEventListener(
         eventName: 'Network.loadingFinished',
         callback: (data) async {
-          if (data is! Map) return;
+          if (!_isCurrentWeb(c) || data is! Map) return;
           final id = '${data['requestId'] ?? ''}';
           final url = _pendingBodies.remove(id);
           if (url == null) return;
@@ -715,7 +854,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
               methodName: 'Network.getResponseBody',
               parameters: {'requestId': id},
             );
-            if (body is! Map) return;
+            if (!_isCurrentWeb(c) || body is! Map) return;
             var text = '${body['body'] ?? ''}';
             if (body['base64Encoded'] == true) {
               final raw = base64.decode(text);
@@ -1032,12 +1171,13 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
   }
 
   Future<void> _openExternalLink(Uri uri) async {
+    final web = _web;
     try {
       if (await openExternalBrowserLink(uri)) return;
     } catch (_) {
       // Missing handlers and platform launch errors share the same fallback.
     }
-    if (!mounted) return;
+    if (!mounted || web != _web) return;
     final fallback = intentBrowserFallback(uri);
     if (fallback != null) {
       await _web?.loadUrl(urlRequest: URLRequest(url: WebUri(fallback.toString())));
@@ -1295,6 +1435,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
   @override
   Widget build(BuildContext context) {
     final bookmarked = _bookmarks.contains(_url);
+    final generation = _viewGeneration;
     return TooltipVisibility(
       visible: false,
       child: PopScope(
@@ -1337,12 +1478,29 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
               ),
             ),
             actions: [
+              IconButton(
+                tooltip: '탭',
+                onPressed: _historyReady ? _showTabs : null,
+                icon: Badge(label: Text('${_tabs.tabs.length}'), child: const Icon(Icons.tab_outlined)),
+              ),
               IconButton(icon: const Icon(Icons.bookmarks_outlined), tooltip: '북마크', onPressed: _showBookmarks),
               IconButton(
                 icon: const Icon(Icons.download_outlined),
                 tooltip: '다운로드 목록',
                 onPressed: () =>
                     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const DownloadsPage())),
+              ),
+              PopupMenuButton<String>(
+                tooltip: '브라우저 메뉴',
+                enabled: _historyReady,
+                onSelected: (value) {
+                  if (value == 'newTab') _newTab();
+                  if (value == 'clearHistory') _clearNavigation();
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'newTab', child: Text('새 탭')),
+                  PopupMenuItem(value: 'clearHistory', child: Text('현재 탭 탐색 기록 비우기')),
+                ],
               ),
             ],
             bottom: PreferredSize(
@@ -1355,6 +1513,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
           body: !_envReady || !_historyReady
               ? const SizedBox.shrink()
               : InAppWebView(
+                  key: ValueKey(_viewGeneration),
                   webViewEnvironment: _env,
                   pullToRefreshController: _pullToRefresh,
                   initialUrlRequest: URLRequest(url: WebUri(_history.current ?? _home)),
@@ -1390,11 +1549,13 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     ),
                   ]),
                   onWebViewCreated: (c) {
+                    if (!mounted || generation != _viewGeneration) return;
                     _web = c;
                     _attachNetworkMonitor(c);
                     c.addJavaScriptHandler(
                       handlerName: 'oplayerHlsPlaylist',
                       callback: (args) {
+                        if (!_isCurrentWeb(c)) return null;
                         if (args.length >= 2 && args[0] is String && args[1] is String) {
                           _recordPlaylist(args[0] as String, args[1] as String);
                         }
@@ -1404,6 +1565,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     c.addJavaScriptHandler(
                       handlerName: 'oplayerHlsKey',
                       callback: (args) {
+                        if (!_isCurrentWeb(c)) return null;
                         if (args.length < 2 || args[0] is! String || args[1] is! List) {
                           return null;
                         }
@@ -1425,6 +1587,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     c.addJavaScriptHandler(
                       handlerName: 'oplayerHlsPrepareError',
                       callback: (args) {
+                        if (!_isCurrentWeb(c)) return null;
                         if (args.length >= 2 && args[0] == _preparingUrl) {
                           _keyPreparationError = '${args[1]}';
                         }
@@ -1434,6 +1597,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     c.addJavaScriptHandler(
                       handlerName: 'oplayerMedia',
                       callback: (args) {
+                        if (!_isCurrentWeb(c)) return null;
                         if (args.isNotEmpty) {
                           if (args.length > 5 && args[5] is Map) {
                             _capturedHeaders.capture('${args[0]}', args[5] as Map, fallback: true);
@@ -1451,21 +1615,24 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     );
                   },
                   shouldOverrideUrlLoading: (c, action) async {
+                    if (!_isCurrentWeb(c)) return NavigationActionPolicy.CANCEL;
                     final uri = Uri.tryParse(action.request.url?.toString() ?? '');
                     if (uri == null || !isExternalBrowserLink(uri)) return NavigationActionPolicy.ALLOW;
                     if (action.isForMainFrame || action.hasGesture == true) await _openExternalLink(uri);
                     return NavigationActionPolicy.CANCEL;
                   },
                   onCreateWindow: (c, action) async {
+                    if (!_isCurrentWeb(c)) return false;
                     final uri = Uri.tryParse(action.request.url?.toString() ?? '');
                     if (uri != null && isExternalBrowserLink(uri)) {
                       await _openExternalLink(uri);
                     } else if (uri != null && action.hasGesture == true && ['http', 'https'].contains(uri.scheme)) {
-                      await c.loadUrl(urlRequest: action.request);
+                      _newTab(uri.toString());
                     }
                     return false;
                   },
                   shouldInterceptRequest: (c, request) async {
+                    if (!_isCurrentWeb(c)) return null;
                     _capturedHeaders.capture(request.url.toString(), request.headers);
                     if (blockedBySitePlugin(_url, request.url.toString())) {
                       return WebResourceResponse(
@@ -1478,6 +1645,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     return null;
                   },
                   onLoadResource: (c, r) {
+                    if (!_isCurrentWeb(c)) return;
                     final u = r.url?.toString();
                     if (u != null &&
                         RegExp(r'\.(m3u8|mpd|mp4|webm|mkv|mov|m4v)(\?|#|$)', caseSensitive: false).hasMatch(u)) {
@@ -1485,6 +1653,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     }
                   },
                   onLoadStart: (c, url) {
+                    if (!_isCurrentWeb(c)) return;
                     setState(() {
                       _url = url?.toString() ?? '';
                       if (!_addressFocus.hasFocus) _address.text = _url;
@@ -1498,6 +1667,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     });
                   },
                   onLoadStop: (c, url) async {
+                    if (!_isCurrentWeb(c)) return;
                     await _pullToRefresh?.endRefreshing();
                     // 페이지에 따라 document_start 주입이 안 되는 경우 대비
                     await c.evaluateJavascript(source: _snifferJs);
@@ -1507,8 +1677,16 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                   onUpdateVisitedHistory: (c, url, reload) async {
                     await _syncHistory(c, reload: reload ?? false);
                   },
-                  onTitleChanged: (c, t) => setState(() => _title = t ?? ''),
+                  onTitleChanged: (c, t) {
+                    if (!_isCurrentWeb(c)) return;
+                    setState(() {
+                      _title = t ?? '';
+                      _tabs.active.title = _title;
+                    });
+                    _saveHistory();
+                  },
                   onReceivedError: (c, request, error) {
+                    if (!_isCurrentWeb(c)) return;
                     _logNet(
                       _NetEntry(request.url.toString(), error.description, '로드 실패 · ${error.type}', 0, failed: true),
                     );
@@ -1517,6 +1695,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     }
                   },
                   onReceivedHttpError: (c, request, response) {
+                    if (!_isCurrentWeb(c)) return;
                     _logNet(
                       _NetEntry(
                         request.url.toString(),
@@ -1531,6 +1710,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     }
                   },
                   onProgressChanged: (c, p) {
+                    if (!_isCurrentWeb(c)) return;
                     if (p == 100) _pullToRefresh?.endRefreshing();
                     if (mounted) setState(() => _progress = p / 100);
                   },
