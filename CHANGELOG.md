@@ -5,7 +5,17 @@
 
 ## [Unreleased]
 
+## [0.1.9-nightly.20261102.2]
+
+Google Drive 권한을 파일 단위로 축소한 개발 빌드입니다. 내부 빌드 번호 `+2`와 기존 Android 서명을 유지합니다.
+
 - Google Drive 확장앱 1.4.0의 권한을 전체 `drive`에서 파일 단위 `drive.file`로 축소했습니다. 동기화 `drive.appdata`는 별도 유지합니다. 전체 Drive 탐색 대신 허용된 OPlayer 파일을 조회·재생·업로드하며 현재 Google Picker UI는 없습니다. 기존 전체 접근 토큰 재사용을 차단하고 Google 계정의 기존 OPlayer 연결 삭제 후 재연결을 안내합니다. Android 기본 요청·허용 범위와 실제 승인 범위 검증도 맞췄습니다.
+
+- **업데이트 후 연결 절차:** 앱과 공식 Google Drive 확장앱을 함께 업데이트하고, Google 계정의 서드 파티 연결에서 기존 OPlayer 권한을 삭제한 뒤 앱에서도 계정을 해제·재연결하세요. 루트는 **OPlayer 파일**로 표시합니다. 현재 Picker가 없어 기존 임의 파일을 새로 승인할 수는 없으며, 주로 앱이 업로드한 파일을 조회·재생합니다. 업로드·덮어쓰기도 허용된 파일과 선택한 폴더 범위로 제한합니다.
+- 운영자는 Cloud Console 데이터 액세스에서 `drive`·`drive.readonly`를 제거하고 파일용 `drive.file`, 동기화용 `drive.appdata`를 등록해야 합니다. 실제 응답에 이전 전체 권한이 남아 있으면 다시 연결하도록 안내합니다. 공식 사이트는 `https://oplayer.gaeco.kr/`로 전환했습니다.
+- 권한 축소·기존 토큰 차단·연결 캐시 교체·OAuth 갱신·업로드 대상 확인·동기화·확장앱 저장소 무결성 관련 테스트 30개, 전체 정적 분석과 Android Kotlin 컴파일을 통과했습니다. 실제 Google 계정과 다양한 기기의 동작은 사용자 제보를 받아 보완합니다.
+- MKV 원본화질 출력·HLS 직접 병합과 기존 브라우저 수정을 포함합니다. Windows·Linux x64/ARM64, macOS ARM64, Android·Android TV 각 3개 ABI와 체크섬을 제공합니다. 나이틀리 최신 3개 유지, 정식 Latest v0.1.7, 업데이트 확인 기본값 stable 정책은 같습니다.
+
 ## [0.1.9-nightly.20261102.1]
 
 MKV 출력과 HLS 병합·출력 통합을 포함한 개발 빌드입니다. 내부 빌드 번호 `+2`와 기존 Android 서명을 유지합니다.
