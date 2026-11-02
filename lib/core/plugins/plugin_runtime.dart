@@ -73,6 +73,9 @@ Future<Object?> callPlugin(
           throw StateError('선언된 유형·기능에 맞는 함수와 규칙만 제공하세요');
         }
       }
+      if (plugin.manifest['uploadRoot'] != null && !methods.contains('uploadRoot')) {
+        throw StateError('고정 업로드 폴더 확장앱에는 uploadRoot 함수가 필요합니다');
+      }
       if (plugin.manifest['canDelete'] == true && !methods.contains('delete')) {
         throw StateError('삭제를 지원하는 확장앱에는 delete 함수가 필요합니다');
       }

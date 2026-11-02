@@ -13,18 +13,16 @@ import '../../core/secure_store.dart';
 import 'cloud_config.dart';
 
 const googleDriveFileScope = 'https://www.googleapis.com/auth/drive.file';
+const googleDriveReadonlyScope = 'https://www.googleapis.com/auth/drive.readonly';
 
 void validateGoogleFileGrant(List<String> requested, Iterable<String> granted) {
-  if (requested.contains(googleDriveFileScope) && !granted.contains(googleDriveFileScope)) {
-    throw 'OPlayer 파일 접근 권한을 승인해 주세요.';
+  for (final scope in [googleDriveFileScope, googleDriveReadonlyScope]) {
+    if (requested.contains(scope) && !granted.contains(scope)) {
+      throw '요청한 Google Drive 읽기·업로드 권한을 모두 승인해 주세요.';
+    }
   }
-  if (requested.contains(googleDriveFileScope) &&
-      granted.any(
-        (scope) => const [
-          'https://www.googleapis.com/auth/drive',
-          'https://www.googleapis.com/auth/drive.readonly',
-        ].contains(scope),
-      )) {
+  if (granted.contains('https://www.googleapis.com/auth/drive') ||
+      !requested.contains(googleDriveReadonlyScope) && granted.contains(googleDriveReadonlyScope)) {
     throw '기존 전체 Drive 권한이 남아 있습니다. Google 계정의 서드 파티 연결에서 OPlayer 연결을 삭제한 뒤 다시 연결해 주세요.';
   }
 }
@@ -278,12 +276,12 @@ class GoogleAndroidOAuthClient extends OAuthClient {
     });
     final access = result?['accessToken'];
     if (access is! String || access.isEmpty) throw 'Google Drive 인증 응답이 비어 있습니다';
-    if (scopes.contains(googleDriveFileScope)) {
+    if (scopes.contains(googleDriveFileScope) || scopes.contains(googleDriveReadonlyScope)) {
       final granted = result?['grantedScopes'];
       if (granted is! List) throw 'Google 권한 확인을 지원하는 앱 버전으로 업데이트한 뒤 다시 연결해 주세요.';
       final oldGrant =
           granted.contains('https://www.googleapis.com/auth/drive') ||
-          granted.contains('https://www.googleapis.com/auth/drive.readonly');
+          !scopes.contains(googleDriveReadonlyScope) && granted.contains(googleDriveReadonlyScope);
       // Play Services may still return a cached token after web revocation.
       // Refresh that token once; never bypass scope validation or loop consent.
       if (interactive && invalidateToken == null && oldGrant) return _authorizeNative(true, access);
@@ -329,9 +327,12 @@ class TokenHolder {
       final raw = await SecureStore.instance.read(storageKey);
       if (raw == null) throw '다시 로그인이 필요합니다';
       final saved = jsonDecode(raw) as Map<String, dynamic>;
-      if (client.scopes.contains(googleDriveFileScope)) {
+      if (client.scopes.contains(googleDriveFileScope) || client.scopes.contains(googleDriveReadonlyScope)) {
         final scopes = saved['requestedScopes'];
         if (scopes is! List || scopes.length != client.scopes.length || !client.scopes.every(scopes.contains)) {
+          if (client.scopes.contains(googleDriveReadonlyScope)) {
+            throw 'Google Drive 읽기·업로드 권한 구성이 변경되었습니다. 앱에서 계정을 다시 연결해 주세요.';
+          }
           throw 'Drive 권한이 축소되었습니다. Google 계정에서 기존 OPlayer 연결을 삭제한 뒤 앱의 계정을 다시 연결해 주세요.';
         }
       }

@@ -59,7 +59,7 @@ void main() {
       );
       final source = cloudSourceFor(account);
       addTearDown(source.close);
-      expect(source.tokens.client.scopes, ['https://www.googleapis.com/auth/drive.file']);
+      expect(source.tokens.client.scopes, [googleDriveReadonlyScope, googleDriveFileScope]);
       await source.tokens.save(
         OAuthTokens(
           accessToken: 'old-drive-token',
@@ -99,7 +99,7 @@ void main() {
             return http.Response('{"user":{"emailAddress":"drive@example.com"}}', 200);
           }
           lists++;
-          expect(request.url.queryParameters['q'], 'trashed=false');
+          expect(request.url.queryParameters['q'], "'root' in parents and trashed=false");
           if (lists == 1) {
             expect(request.headers['Authorization'], 'Bearer old-drive-token');
             return http.Response('{"error":"expired"}', 401);
@@ -128,8 +128,7 @@ void main() {
     final oauth = metadata['oauth'] as Map;
     oauth['scopes'] = ['https://www.googleapis.com/auth/drive'];
     (oauth['extraAuthParams'] as Map).remove('trigger_onepick');
-    metadata.remove('requiresHost');
-    metadata['api'] = 4;
+    // Keep the current upload-root SDK declaration; only the stored grant is legacy.
     await store.load('// @oplayer ${jsonEncode(metadata)}\n${script.substring(script.indexOf('\n') + 1)}');
     final source = cloudSourceFor(
       CloudAccount(
@@ -144,8 +143,8 @@ void main() {
     await old.save(OAuthTokens(accessToken: 'old-full-token', expiry: DateTime.now().add(const Duration(hours: 1))));
     await store.load(script);
     expect(identical(source.tokens, old), isFalse);
-    expect(source.tokens.client.scopes, [googleDriveFileScope]);
-    await expectLater(source.tokens.accessToken(), throwsA(contains('권한이 축소')));
+    expect(source.tokens.client.scopes, [googleDriveReadonlyScope, googleDriveFileScope]);
+    await expectLater(source.tokens.accessToken(), throwsA(contains('권한 구성이 변경')));
   });
 
   test('official Google Drive search filters the current folder, escapes input and paginates', () async {

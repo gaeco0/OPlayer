@@ -61,6 +61,7 @@ class OPlugin {
       if (manifest['canRename'] == true) 'rename',
       if (manifest['canSearch'] == true) 'search',
       if (manifest['canUpload'] == true) ...['upload', 'uploadComplete'],
+      if (manifest['uploadRoot'] != null) 'uploadRoot',
     ],
   };
   List<String> get hosts => (manifest['hosts'] as List).cast<String>();
@@ -152,6 +153,19 @@ class OPlugin {
     }
     if (meta['canUpload'] != null && meta['canUpload'] is! bool) {
       throw const FormatException('잘못된 업로드 지원 선언');
+    }
+    if (meta['uploadRoot'] != null) {
+      final root = meta['uploadRoot'];
+      if (!plugin.cloud ||
+          meta['api'] != 5 ||
+          meta['canUpload'] != true ||
+          root is! Map ||
+          root['title'] is! String ||
+          (root['title'] as String).isEmpty ||
+          (root['title'] as String).length > 100 ||
+          !((meta['requiresHost'] as List?)?.contains('fixedUploadRoot') ?? false)) {
+        throw const FormatException('고정 업로드 폴더에는 API 5·fixedUploadRoot·폴더 제목 선언이 필요합니다');
+      }
     }
     final requirements = meta['requiresHost'];
     if (requirements != null &&

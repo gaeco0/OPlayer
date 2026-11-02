@@ -58,7 +58,7 @@
     {
       "id": "cloud.gdrive",
       "name": "Google Drive",
-      "version": "1.5.0",
+      "version": "1.6.0",
       "kind": "resource",
       "capabilities": [
         "storage"
@@ -66,14 +66,14 @@
       "pluginApi": 5,
       "author": "OPlayer",
       "features": [
-        "파일 단위 접근",
-        "허용된 파일 탐색·검색",
-        "미디어 재생",
-        "업로드·승인한 파일 덮어쓰기"
+        "폴더 탐색·검색",
+        "미디어·자막 읽기",
+        "OPlayer 전용 폴더 자동 생성",
+        "업로드·권한 있는 파일 덮어쓰기"
       ],
-      "description": "drive.file 최소 권한으로 OPlayer 파일 탐색·재생·업로드",
+      "description": "기존 Drive 읽기 전용 탐색·재생과 OPlayer 전용 폴더 업로드",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.gdrive.js",
-      "sha256": "eea88dba2ada602b715dc72cf094c58eacac1708cecf8a5963828c304ed04702",
+      "sha256": "c14bc8eefe0ec752abb857046390062ae67db7d43744cf2c5aca1ff47dccf40b",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
       "platforms": [
         "android",
@@ -82,7 +82,8 @@
         "macos"
       ],
       "requiresHost": [
-        "googlePicker"
+        "googleDriveReadUpload",
+        "fixedUploadRoot"
       ]
     },
     {

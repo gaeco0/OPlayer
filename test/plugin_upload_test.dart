@@ -149,6 +149,14 @@ void main() {
               'upload',
               {'path': 'folder', 'name': 'movie.mp4', 'size': 7},
               request: (url, opts) async {
+                if (Uri.parse(url).path == '/drive/v3/files/folder') {
+                  return {
+                    'id': 'folder',
+                    'mimeType': 'application/vnd.google-apps.folder',
+                    'isAppAuthorized': true,
+                    'appProperties': {'oplayerUploadFolder': 'v1'},
+                  };
+                }
                 if (opts['response'] == 'headers') {
                   starts++;
                   expect(opts['method'], 'POST');
@@ -172,7 +180,19 @@ void main() {
         {'path': 'root', 'name': 'movie.mp4', 'size': 7, 'overwritePath': 'old-child-file'},
         request: (url, opts) async {
           expect(opts['response'], isNot('headers'));
-          expect(Uri.parse(url).queryParameters['q'], "'root' in parents and trashed=false");
+          if (Uri.parse(url).queryParameters['q']!.contains('appProperties')) {
+            return {
+              'files': [
+                {
+                  'id': 'folder',
+                  'mimeType': 'application/vnd.google-apps.folder',
+                  'isAppAuthorized': true,
+                  'appProperties': {'oplayerUploadFolder': 'v1'},
+                },
+              ],
+            };
+          }
+          expect(Uri.parse(url).queryParameters['q'], "'folder' in parents and trashed=false");
           return {'files': []};
         },
       ),
@@ -183,6 +203,14 @@ void main() {
       'upload',
       {'path': 'folder', 'name': 'movie.mp4', 'size': 7, 'overwritePath': grant},
       request: (url, opts) async {
+        if (Uri.parse(url).path == '/drive/v3/files/folder') {
+          return {
+            'id': 'folder',
+            'mimeType': 'application/vnd.google-apps.folder',
+            'isAppAuthorized': true,
+            'appProperties': {'oplayerUploadFolder': 'v1'},
+          };
+        }
         if (opts['response'] == 'headers') {
           expect(opts['method'], 'PATCH');
           expect(Uri.parse(url).path, endsWith('/existing'));
@@ -191,7 +219,7 @@ void main() {
         }
         return {
           'files': [
-            {'id': 'existing', 'name': 'movie.mp4', 'mimeType': 'video/mp4'},
+            {'id': 'existing', 'name': 'movie.mp4', 'mimeType': 'video/mp4', 'isAppAuthorized': true},
           ],
         };
       },
@@ -259,6 +287,17 @@ void main() {
         },
         () => MockClient((r) async {
           expect(r.headers['Authorization'], 'Bearer test-token');
+          if (r.url.path == '/drive/v3/files/folder') {
+            return http.Response(
+              jsonEncode({
+                'id': 'folder',
+                'mimeType': 'application/vnd.google-apps.folder',
+                'isAppAuthorized': true,
+                'appProperties': {'oplayerUploadFolder': 'v1'},
+              }),
+              200,
+            );
+          }
           if (r.url.path == '/upload/session') {
             puts++;
             expect(r.method, 'PUT');
@@ -284,6 +323,17 @@ void main() {
           expect(await file.readAsString(), 'keep-local');
         },
         () => MockClient((r) async {
+          if (r.url.path == '/drive/v3/files/folder') {
+            return http.Response(
+              jsonEncode({
+                'id': 'folder',
+                'mimeType': 'application/vnd.google-apps.folder',
+                'isAppAuthorized': true,
+                'appProperties': {'oplayerUploadFolder': 'v1'},
+              }),
+              200,
+            );
+          }
           if (r.url.path.startsWith('/upload/drive/')) {
             return http.Response('', 200, headers: {'location': 'https://evil.example/upload'});
           }

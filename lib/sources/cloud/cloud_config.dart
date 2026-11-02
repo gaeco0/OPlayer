@@ -7,7 +7,7 @@ import '../../core/settings.dart';
 /// (빈 값이면 앱에서 "클라우드 설정 필요" 안내가 뜬다)
 ///
 /// ■ Google Drive  — https://console.cloud.google.com/apis/credentials
-///   · Drive API 사용 설정, OAuth 동의 화면 → 범위 drive.file
+///   · Drive API 사용 설정, OAuth 동의 화면 → 범위 drive.readonly + drive.file
 ///   · 데스크톱: "데스크톱 앱" Client ID와 Secret을 앱 설정에 입력 (Secret은 보안 저장소).
 ///     리디렉션은 http://127.0.0.1:53682/callback (루프백, 자동 허용)
 ///   · Android: Android 클라이언트에 패키지 이름과 서명 SHA-1 등록 (Google Play services 필요).

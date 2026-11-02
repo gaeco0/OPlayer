@@ -345,6 +345,27 @@ class CloudSource extends MediaSource {
   bool get canSearch => definition.manifest['canSearch'] == true;
 
   @override
+  bool get hasFixedUploadRoot => definition.manifest['uploadRoot'] != null;
+  @override
+  String get uploadRootTitle => (definition.manifest['uploadRoot'] as Map?)?['title'] as String? ?? rootTitle;
+  Future<String>? _uploadRoot;
+  @override
+  Future<String> uploadRoot() async {
+    if (!hasFixedUploadRoot) return rootPath;
+    return _uploadRoot ??=
+        (() async {
+          final result = await _call('uploadRoot', {}, retry: false);
+          if (result is! String || result.isEmpty || result.length > 4096 || result.contains('\u0000')) {
+            throw StateError('잘못된 업로드 폴더 응답입니다');
+          }
+          return result;
+        })().catchError((Object error) {
+          _uploadRoot = null;
+          throw error;
+        });
+  }
+
+  @override
   bool get canUpload => definition.manifest['canUpload'] == true && definition.authType == 'oauth';
 
   @override

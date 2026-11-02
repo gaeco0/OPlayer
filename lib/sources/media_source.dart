@@ -55,6 +55,10 @@ abstract class MediaSource {
 
   Future<List<RemoteEntry>> list(String path);
 
+  bool get hasFixedUploadRoot => false;
+  String get uploadRootTitle => rootTitle;
+  Future<String> uploadRoot() async => rootPath;
+
   bool get canSelectFiles => false;
   Future<void> selectFiles() => throw UnsupportedError('이 저장소는 파일 선택을 지원하지 않습니다');
 

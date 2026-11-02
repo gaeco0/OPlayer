@@ -294,13 +294,27 @@ Actions Secret 이름과 운영자 등록 절차는 [Google 등록 안내](../do
 - 업로드 지원 계정은 다운로드 저장 위치와 다운로드 항목의 **다른 저장소로 이동**에 나타납니다.
   같은 이름의 기존 파일은 사용자 덮어쓰기 확인을 유지하며, 다른 파일 ID로 바뀌면 덮어쓰기를 거절합니다.
 
-공식 Google Drive `1.5.0`은 `https://www.googleapis.com/auth/drive.file`만 요청합니다.
-전체 Drive 대신 앱이 만들었거나 접근을 허용받은 파일만 탐색·검색·재생·업로드하며, 덮어쓰기도 해당 파일에 한정합니다.
-루트는 **OPlayer 파일**로 표시하고 허용된 파일 전체를 조회합니다. 확장앱의 OAuth `extraAuthParams`에 `trigger_onepick=true`, `allow_multiple=true`를 지정하면 연결할 때 Google 파일 선택기를 띄웁니다. 기존 계정에서는 Picker 지원 앱의 **Drive 파일 추가**로 영상과 자막을 함께 선택합니다. 폴더 전체의 재귀 접근이나 전체 라이브러리 권한은 부여하지 않습니다.
-기존 연결은 Google 계정 → 서드 파티 연결에서 OPlayer 권한을 삭제한 뒤 앱에서도 계정을 해제·재연결하세요.
-이전에 저장한 전체 접근 토큰은 새 파일 단위 연결에서 재사용하지 않습니다. Android 네이티브 파일 선택과 기존 계정의 추가 선택 버튼은 0.1.9-nightly.20261103.2 이상 앱이 필요합니다. Google Drive 1.5.0은 API 5·googlePicker를 요구하므로 모든 OS에서 API 5 지원 앱이 필요합니다. 1.4.1의 데스크톱 신규 연결은 기존 앱에서도 지원합니다. Google Cloud 프로젝트에서 Drive API와 **Google Picker API**를 사용 설정하세요. 별도 API Key 없이 플랫폼별 기존 OAuth Client ID를 사용합니다. 백그라운드 갱신에서는 선택기를 띄우지 않습니다.
-기술 기준: [Google 공식 네이티브 Picker 안내](https://developers.google.com/workspace/drive/picker/guides/desktop-mobile-picker).
-Cloud Console 데이터 액세스에서 `drive`·`drive.readonly`를 제거하고 `drive.file`만 남기세요. 동기화는 별도 `drive.appdata` 권한입니다.
+공식 Google Drive `1.6.0`은 다음 두 권한을 일반 OAuth 로그인에서 함께 요청합니다.
+- `https://www.googleapis.com/auth/drive.readonly`: 기존 Drive 폴더·영상·자막·썸네일 탐색/재생.
+- `https://www.googleapis.com/auth/drive.file`: 앱이 만든 OPlayer 전용 폴더와 파일 생성/업로드 및 쓰기 권한이 있는 파일 덮어쓰기.
+
+루트는 **내 드라이브**로 표시하고 실제 폴더의 직계 하위 항목을 조회합니다. Picker는 사용하지 않습니다.
+저장 위치 선택 화면은 `uploadRoot()`를 호출하여 앱 전용 `OPlayer` 폴더를 생성하거나 재사용하고 해당 폴더 ID를 저장합니다.
+폴더는 숨겨진 `appDataFolder`가 아닌 일반 내 드라이브 폴더이며, `appProperties.oplayerUploadFolder=v1`과
+`isAppAuthorized`를 확인합니다. 이름만 같은 사용자 폴더를 채택하지 않고 기존 임의 파일의 수정·삭제도 제공하지 않습니다.
+기존 root 저장 위치는 첫 업로드 시 전용 폴더로 연결합니다. 다른 폴더 ID로 저장했던 설정은 전용 폴더를 다시 선택해야 합니다.
+동시에 최초 설정하는 여러 기기가 각각 전용 폴더를 만들 수 있으며, 앱은 표식이 있는 앱 소유 폴더 중 먼저 생성된 것을 재사용합니다.
+
+API 5·`requiresHost: ["googleDriveReadUpload", "fixedUploadRoot"]` 지원 앱이 필요합니다.
+0.1.9-nightly.20261103.2에는 이 호스트 기능이 없어 확장앱 1.6.0을 설치할 수 없습니다. 앱 업데이트와 계정 재연결이 필요합니다.
+Cloud Console 데이터 액세스에 위 두 범위를 등록하고 전체 `drive`는 제거하세요. `drive.readonly`는 제한된 범위 검증 대상입니다.
+동기화는 별도 `drive.appdata` 권한·토큰을 유지합니다.
+
+고정 업로드 위치를 제공하는 리소스 확장앱은 `uploadRoot: {"title":"OPlayer"}`를 선언하고 `async uploadRoot()`에서
+실제 저장 폴더의 경로/ID 문자열을 반환합니다. `canUpload: true`, API 5 및 `fixedUploadRoot` 호스트 요구 선언이 필요합니다.
+호스트는 계정 잠금 확인 후 함수를 호출하고, 업로드 선택 화면에서 일반 읽기 전용 디렉터리를 선택하지 않도록 제한합니다.
+업로드 함수도 전달받은 경로가 실제 전용 폴더인지 다시 검증해야 합니다. 일반 목록 `root`와 업로드 루트는 별개입니다.
+
 - 앱 0.1.7-nightly.20261024.1부터 선택적 `canRename: true`와 `async rename({path,name,newName})`를 함께 선언할 수 있습니다.
   파일 이름변경 성공을 확인한 뒤 정확히 `true`를 반환합니다. `path`는 기존 `list`가 반환한 ID이며 이름변경 후에도
   유지해야 합니다. ID나 경로가 바뀌는 공급자는 이 규약을 선언하지 마세요. 폴더·루트 이름변경은 지원하지 않습니다.

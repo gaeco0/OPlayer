@@ -43,7 +43,7 @@ class GoogleDriveBridge(private val activity: Activity, messenger: BinaryMesseng
             if (pending != null) { result.error("BUSY", "이미 Google 로그인 중입니다", null); return@setMethodCallHandler }
             val scopes = call.argument<List<String>>("scopes")
                 ?: listOf("https://www.googleapis.com/auth/drive.file")
-            val allowed = setOf("https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive.appdata")
+            val allowed = setOf("https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/drive.appdata")
             if (scopes.isEmpty() || scopes.any { it !in allowed }) {
                 result.error("SCOPE", "지원하지 않는 Google 권한입니다. Google Drive 확장앱을 최신 버전으로 업데이트해 주세요", null)
                 return@setMethodCallHandler
@@ -76,7 +76,11 @@ class GoogleDriveBridge(private val activity: Activity, messenger: BinaryMesseng
                         }
                     }
                 }
-                .apply { if (!email.isNullOrBlank()) setAccount(Account(email, "com.google")) }
+                .apply {
+                    if (!email.isNullOrBlank()) setAccount(Account(email, "com.google"))
+                    else if (interactive) setPrompt(AuthorizationRequest.Prompt.SELECT_ACCOUNT or
+                        (if (pickFiles) AuthorizationRequest.Prompt.CONSENT else AuthorizationRequest.Prompt.NOT_SET))
+                }
                 .build()
             fun authorize() {
                 client.authorize(request).addOnSuccessListener { authorization ->

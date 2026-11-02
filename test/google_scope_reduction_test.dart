@@ -133,4 +133,36 @@ void main() {
     expect(calls.last['pickFiles'], false);
     expect(calls.last['interactive'], false);
   });
+  test('read/upload accepts the explicitly requested pair and requires both grants', () {
+    const requested = [googleDriveReadonlyScope, googleDriveFileScope];
+    validateGoogleFileGrant(requested, requested);
+    expect(() => validateGoogleFileGrant(requested, [googleDriveFileScope]), throwsA(contains('모두 승인')));
+    expect(() => validateGoogleFileGrant(requested, [googleDriveReadonlyScope]), throwsA(contains('모두 승인')));
+    expect(() => validateGoogleFileGrant(requested, [...requested, broad]), throwsA(contains('기존 전체 Drive')));
+  });
+  test('Android read/upload keeps both scopes and never triggers Picker or a redundant retry', () async {
+    const channel = MethodChannel('oplayer/google-drive');
+    final calls = <Map>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call.arguments as Map);
+      return {
+        'accessToken': 'combined',
+        'grantedScopes': [googleDriveReadonlyScope, googleDriveFileScope],
+      };
+    });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, null),
+    );
+    final client = GoogleAndroidOAuthClient(
+      clientId: 'test',
+      requestedScopes: const [googleDriveReadonlyScope, googleDriveFileScope],
+    );
+    final token = await client.authorize();
+    expect(calls, hasLength(1));
+    expect(calls.single['scopes'], [googleDriveReadonlyScope, googleDriveFileScope]);
+    expect(calls.single['pickFiles'], false);
+    await client.refresh(token);
+    expect(calls.last['interactive'], false);
+    expect(calls.last['pickFiles'], false);
+  });
 }

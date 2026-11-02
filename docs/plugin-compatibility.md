@@ -18,7 +18,7 @@ iOS는 현재 배포 대상이 아니며 공식 확장앱의 지원 플랫폼으
 - `platforms`를 설정 화면뿐 아니라 설치·활성화·목록·직접 실행에도 적용합니다.
 - 저장소 JSON과 JS의 플랫폼·필수 호스트 기능·API 버전이 일치해야 설치됩니다.
 - 신규 호스트 기능에 의존하면 API 5와 `requiresHost`를 명시합니다. 알 수 없는 기능은 거절합니다.
-- Google Drive 1.5.0은 `requiresHost: ["googlePicker"]`를 요구해 구형 앱에 설치되지 않습니다.
+- Google Drive 1.5.0은 `googlePicker`를 요구합니다. 개발본 1.6.0은 `googleDriveReadUpload`와 `fixedUploadRoot`를 요구해 두 권한과 전용 업로드 폴더를 지원하지 않는 구형 앱에 설치되지 않습니다.
 - Android Google Picker 다중 선택·MIME·파일 ID·폴더 옵션을 SDK로 전달합니다. 미지원 옵션은 조용히 무시하지 않고 거절합니다.
 - 백그라운드 갱신은 Picker를 열지 않으며 계정이 바뀐 토큰을 기존 리소스에 저장하지 않습니다.
 - 공식 확장앱 메타데이터를 5개 OS(iOS의 미지원 판정 포함)에서 검사하는 회귀 테스트를 유지합니다.
@@ -31,3 +31,7 @@ Google 계정 로그인·Picker 화면, 외부 클라우드의 실제 계정 권
 모의 테스트나 컴파일만으로 검증할 수 없습니다. 모든 OS의 실제 기기를 직접 조작한 결과로 간주하지 않습니다.
 Google Cloud에서 Google Picker API 활성화가 필요하며, `drive.file`은 선택한 파일·앱 생성 파일만 허용합니다.
 폴더 선택은 하위 파일 전체에 대한 재귀 권한을 의미하지 않습니다.
+
+## 개발본 1.6.0
+
+Drive의 일반 로그인은 readonly+file을 함께 요청하고 Picker는 호출하지 않습니다. Android에서도 readonly를 명시적으로 허용·검증합니다. 기존 Picker/file-only 확장앱은 계속 지원합니다. 고정 업로드 루트 SDK는 Android·Windows·Linux·macOS에 공통 구현합니다. 현재 배포본 .20261103.2에는 새 호스트 기능이 포함되지 않았습니다.

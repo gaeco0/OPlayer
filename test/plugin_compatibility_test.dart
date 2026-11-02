@@ -31,6 +31,13 @@ void main() {
       expect(entry['platforms'], plugin.manifest['platforms'], reason: plugin.id);
       expect(entry['requiresHost'], plugin.manifest['requiresHost'], reason: plugin.id);
       expect(entry['pluginApi'], plugin.manifest['api']);
+      if ((plugin.oauth['scopes'] as List? ?? []).contains('https://www.googleapis.com/auth/drive.readonly') &&
+          plugin.id == 'cloud.gdrive') {
+        expect(entry['requiresHost'], contains('googleDriveReadUpload'));
+        expect(entry['requiresHost'], contains('fixedUploadRoot'));
+        expect(plugin.manifest['uploadRoot'], isNotNull);
+      }
+
       if ((plugin.oauth['extraAuthParams'] as Map?)?['trigger_onepick'] == 'true') {
         expect(entry['pluginApi'], 5, reason: 'Picker must be rejected by old API-4-only apps');
         expect(entry['requiresHost'], contains('googlePicker'), reason: plugin.id);
@@ -79,7 +86,7 @@ void main() {
   test('native Google options must use known parameters and the official Google endpoints', () {
     final source = File('plugins/cloud.gdrive.js').readAsStringSync();
     expect(
-      () => OPlugin.parse(source.replaceFirst('"trigger_onepick"', '"unknown_native_option"')),
+      () => OPlugin.parse(source.replaceFirst('"include_granted_scopes"', '"unknown_native_option"')),
       throwsFormatException,
     );
     expect(

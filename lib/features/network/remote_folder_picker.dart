@@ -34,7 +34,26 @@ class _RemoteFolderPickerState extends State<RemoteFolderPicker> {
   @override
   void initState() {
     super.initState();
-    _load();
+    _prepare();
+  }
+
+  Future<void> _prepare() async {
+    try {
+      await ResourceLocks.instance.requireAccess(widget.source.keyFor(widget.source.rootPath));
+      final path = await widget.source.uploadRoot();
+      if (!mounted) return;
+      _stack
+        ..clear()
+        ..add((path, widget.source.uploadRootTitle));
+      await _load();
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = '$error';
+        });
+      }
+    }
   }
 
   Future<void> _load() async {
@@ -44,7 +63,7 @@ class _RemoteFolderPickerState extends State<RemoteFolderPicker> {
     });
     try {
       await ResourceLocks.instance.requireAccess(widget.source.keyFor(_cwd));
-      final all = await widget.source.list(_cwd);
+      final all = widget.source.hasFixedUploadRoot ? <RemoteEntry>[] : await widget.source.list(_cwd);
       _dirs = all.where((e) => e.isDir).toList()..sort((a, b) => naturalCompare(a.name, b.name));
     } catch (e) {
       _error = '$e';
@@ -54,7 +73,7 @@ class _RemoteFolderPickerState extends State<RemoteFolderPicker> {
 
   @override
   Widget build(BuildContext context) {
-    final crumbs = _stack.skip(1).map((e) => e.$2).join(' / ');
+    final crumbs = (widget.source.hasFixedUploadRoot ? _stack : _stack.skip(1)).map((e) => e.$2).join(' / ');
     // SMB 루트("/")는 공유 목록이라 파일을 둘 수 없음
     final canSelect = !(widget.source.scheme == 'smb' && _cwd == '/');
     return PopScope(
@@ -92,7 +111,12 @@ class _RemoteFolderPickerState extends State<RemoteFolderPicker> {
                     if (_dirs.isEmpty)
                       Padding(
                         padding: EdgeInsets.all(24),
-                        child: Text('하위 폴더가 없습니다', style: TextStyle(color: OColors.of(context).textSecondary)),
+                        child: Text(
+                          widget.source.hasFixedUploadRoot
+                              ? '${widget.source.uploadRootTitle} 전용 폴더에 저장합니다'
+                              : '하위 폴더가 없습니다',
+                          style: TextStyle(color: OColors.of(context).textSecondary),
+                        ),
                       ),
                     for (final d in _dirs)
                       ListTile(

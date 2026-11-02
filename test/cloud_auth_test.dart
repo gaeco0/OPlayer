@@ -284,24 +284,35 @@ void main() {
     expect((calls.last.arguments as Map)['email'], 'selected@example.com');
     expect((calls.last.arguments as Map)['invalidateToken'], 'native-token');
   });
-  test('Drive Picker is supplied by the extension and binds desktop selection to the account hint', () {
+  test('Drive read/upload requests both scopes without Picker and binds the account hint', () {
     final client = oauthClientFor(
       CloudProvider.gdrive,
       clientId: 'test.apps.googleusercontent.com',
       accountEmail: 'same@example.com',
     );
-    expect(client.scopes, [googleDriveFileScope]);
-    expect(client.extraAuthParams['trigger_onepick'], 'true');
-    expect(client.extraAuthParams['allow_multiple'], 'true');
+    expect(client.scopes, [googleDriveReadonlyScope, googleDriveFileScope]);
+    expect(client.extraAuthParams['trigger_onepick'], isNull);
     expect(client.extraAuthParams['login_hint'], 'same@example.com');
     final source = GoogleDriveSource(
       CloudAccount(id: 'picker', provider: CloudProvider.gdrive, name: 'same@example.com'),
     );
-    expect(source.canSelectFiles, true);
+    expect(source.canSelectFiles, false);
+    expect(source.hasFixedUploadRoot, true);
+    expect(source.uploadRootTitle, 'OPlayer');
     final dropbox = DropboxSource(CloudAccount(id: 'dropbox', provider: CloudProvider.dropbox, name: 'other'));
     expect(dropbox.canSelectFiles, false);
   });
   test('adding Drive files verifies account before replacing token and preserves the refresh grant', () async {
+    // Preserve the API-5 Picker flow for installed file-only extensions.
+    final script = File('plugins/cloud.gdrive.js').readAsStringSync();
+    final meta = jsonDecode(script.split('\n').first.substring(12)) as Map;
+    (meta['oauth'] as Map)['scopes'] = [googleDriveFileScope];
+    ((meta['oauth'] as Map)['extraAuthParams'] as Map).addAll(<String, dynamic>{
+      'trigger_onepick': 'true',
+      'allow_multiple': 'true',
+    });
+    await PluginStore.instance.load('// @oplayer ${jsonEncode(meta)}\n${script.substring(script.indexOf('\n') + 1)}');
+
     final account = CloudAccount(
       id: 'picker-same',
       provider: CloudProvider.gdrive,
