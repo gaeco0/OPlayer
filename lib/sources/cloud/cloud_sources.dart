@@ -85,7 +85,12 @@ OAuthClient oauthClientFor(CloudProvider provider, {String? clientId, String? ac
 }
 
 /// 로그인 → 계정 이름 조회 → 저장
-Future<CloudAccount> connectCloudAccount(CloudProvider provider, {String? pluginId, String? clientId}) async {
+Future<CloudAccount> connectCloudAccount(
+  CloudProvider provider, {
+  String? pluginId,
+  String? clientId,
+  bool saveAccount = true,
+}) async {
   final definition = PluginStore.instance.require(pluginId ?? 'cloud.${provider.name}');
   final client = definition.authType == 'oauth'
       ? oauthClientFor(provider, pluginId: pluginId, clientId: clientId)
@@ -117,7 +122,7 @@ Future<CloudAccount> connectCloudAccount(CloudProvider provider, {String? plugin
     final name = await src.accountName();
     final chosenName = '${credentials?['displayName'] ?? ''}'.trim();
     account.name = chosenName.isEmpty ? name : chosenName;
-    await ServerStore.instance.saveAccount(account);
+    if (saveAccount) await ServerStore.instance.saveAccount(account);
   } catch (_) {
     await SecureStore.instance.writeRequired(account.tokenKey, null);
     rethrow;
@@ -270,7 +275,7 @@ class CloudSource extends MediaSource {
         request: (url, options) async {
           final verb = options['method'] as String? ?? 'GET';
           if (!['GET', 'POST', 'HEAD', 'PUT', 'PATCH', 'DELETE'].contains(verb) ||
-              (s3 != null && !['GET', 'HEAD'].contains(verb))) {
+              (s3 != null && !['GET', 'HEAD', 'PUT'].contains(verb))) {
             throw StateError('지원하지 않는 클라우드 요청 방식');
           }
           if (options['response'] == 'signedUrl') {
@@ -295,6 +300,13 @@ class CloudSource extends MediaSource {
       }
       rethrow;
     }
+  }
+
+  Future<Object?> syncCall(String method, Map<String, dynamic> input) {
+    if (!definition.supports('sync') || !['syncAccount', 'syncList', 'syncRead', 'syncWrite'].contains(method)) {
+      throw StateError('동기화 기능을 선언한 확장앱이 필요합니다');
+    }
+    return _call(method, input);
   }
 
   Future<String> accountName() async => await _call('accountName', {}) as String? ?? definition.name;

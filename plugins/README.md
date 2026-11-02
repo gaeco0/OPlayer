@@ -627,3 +627,19 @@ Windows CRLF 원본의 해시를 등록하면 GitHub가 제공하는 LF 파일�
 ### OAuth 권한 정책
 
 앱은 확장앱의 `oauth.scopes`로 인증을 요청하며 특정 Drive 범위의 허용 목록이나 기존 연결 차단 정책을 두지 않습니다. `requiresHost: ["oauthScopes"]`로 승인 정보 전달 지원을 확인할 수 있습니다. JS의 `OPlayer.auth.requestedScopes`는 요청 목록, `OPlayer.auth.grantedScopes`는 실제 승인 목록입니다. 두 목록은 읽기 전용이며 토큰은 노출하지 않습니다. 이전 저장 토큰이나 응답에 승인 정보가 없으면 `grantedScopes`는 null입니다. 필요한 권한과 기능별 동작, 재승인 안내는 확장앱이 판단하고 서비스의 API 권한 검증은 유지됩니다. Google Drive 공식 확장앱은 조회와 업로드에 필요한 권한 및 전용 폴더 쓰기 제한을 자체 검사합니다.
+
+## 재생 동기화 확장앱
+
+리소스 유형의 API 5 `sync` capability로 제공한다. `requiresHost: ["syncStorage"]`를 선언해야 하며, `storage` 없이 동기화만 제공할 수도 있다. 설치·활성화한 제공자는 설정 → 재생 동기화에서 선택한다. OAuth/설정/도메인 선언은 다른 리소스 확장앱과 동일하다. 자격 증명은 네이티브에 남고 JS는 `OPlayer.request`를 사용한다.
+
+| 함수 | 입력 | 반환 |
+|---|---|---|
+| `accountName` | `{}` | 표시 이름 문자열 |
+| `syncAccount` | `{}` | `{id, name}`: 변경되지 않는 계정 ID·표시 이름 |
+| `syncList` | `{}` | `[{id, name}]`: 이 앱의 동기화 문서만, 최대 512개 |
+| `syncRead` | `{id}` | 동기화 JSON 문서 객체, 최대 4 MiB |
+| `syncWrite` | `{name, device, document, id?}` | 저장 완료 시 `true` |
+
+호스트는 `oplayer-sync-v1-<device>.json` 이름으로 기기별 문서를 기록하며 같은 이름의 기존 ID를 `syncWrite`에 전달한다. 확장앱은 목록 페이지 순회·원격 폴더 생성·다운로드 리다이렉트·생성/수정을 구현한다. 읽기 후 호스트가 형식·참조·총 크기를 검증하고 병합한다. 비밀번호·토큰·원본 미디어 파일은 동기화 문서에 포함하지 않는다. 삭제 기록(tombstone)을 보존해야 오프라인 기기의 오래된 기록이 다시 살아나지 않는다.
+
+공식 예제: `sync.gdrive.js`(Drive 앱 데이터), `sync.onedrive.js`(앱 전용 폴더), `sync.box.js`(전용 폴더). 저장 방식 변경과 제공자 추가는 이 공통 계약을 따르는 JS 확장앱만 배포하면 된다. 새로운 네이티브 SDK 기능을 요구할 때는 별도 호스트 업데이트가 필요하다.

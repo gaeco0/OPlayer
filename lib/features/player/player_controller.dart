@@ -17,7 +17,7 @@ import '../../core/media_utils.dart';
 import '../../core/ffmpeg.dart';
 import '../../core/resume_store.dart';
 import '../../core/resource_playback_store.dart';
-import '../../core/google_sync.dart';
+import '../../core/playback_sync.dart';
 import '../../core/settings.dart';
 import '../../core/resource_locks.dart';
 import '../../core/network/network_service.dart';
@@ -756,7 +756,7 @@ class PlayerController extends ChangeNotifier {
     if (st.resumeMode != ResumeMode.off) {
       preparing = true;
       notifyListeners();
-      await GoogleSync.instance.refreshForPlayback(current.key);
+      await PlaybackSync.instance.refreshForPlayback(current.key);
       if (_disposed || generation != _openGeneration) return;
     }
     final r = st.resumeMode == ResumeMode.off ? null : ResumeStore.instance.get(current.key);

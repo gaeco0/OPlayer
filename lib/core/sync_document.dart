@@ -1,7 +1,7 @@
 import 'dart:math';
 
 /// Per-entity last-writer merge. Tombstones prevent deleted items from returning
-/// when an offline device reconnects. Each device writes its own Drive file.
+/// when an offline device reconnects. Each device writes its own provider file.
 class SyncDocument {
   SyncDocument(this.device, [Map<String, dynamic>? saved]) {
     if (saved != null) merge(saved);

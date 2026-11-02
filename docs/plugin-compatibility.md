@@ -39,3 +39,7 @@ Drive의 일반 로그인은 readonly+file을 함께 요청하고 Picker는 호�
 ### OAuth 권한 정책
 
 앱은 확장앱의 `oauth.scopes`로 인증을 요청하며 특정 Drive 범위의 허용 목록이나 기존 연결 차단 정책을 두지 않습니다. `requiresHost: ["oauthScopes"]`로 승인 정보 전달 지원을 확인할 수 있습니다. JS의 `OPlayer.auth.requestedScopes`는 요청 목록, `OPlayer.auth.grantedScopes`는 실제 승인 목록입니다. 두 목록은 읽기 전용이며 토큰은 노출하지 않습니다. 이전 저장 토큰이나 응답에 승인 정보가 없으면 `grantedScopes`는 null입니다. 필요한 권한과 기능별 동작, 재승인 안내는 확장앱이 판단하고 서비스의 API 권한 검증은 유지됩니다. Google Drive 공식 확장앱은 조회와 업로드에 필요한 권한 및 전용 폴더 쓰기 제한을 자체 검사합니다.
+
+## 재생 동기화 저장소
+
+API 5 리소스 확장앱은 `sync` capability와 `requiresHost: ["syncStorage"]`로 동기화를 제공할 수 있습니다. Google Drive·Dropbox·OneDrive·Box·S3 호환 저장소·네이버 MYBOX는 별도 확장앱이며 기본 설치하지 않습니다. Android/TV·Windows·Linux·macOS에서 같은 JS 계약을 사용합니다. 기존 파일 탐색 확장앱과 인증·데이터를 분리하고 설정에서 활성화한 제공자를 선택합니다. 호스트는 계정 식별·문서 형식·크기·병합·이어보기 적용을 담당하며 제공자 이름이나 권한별 정책을 검사하지 않습니다.

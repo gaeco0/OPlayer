@@ -3,12 +3,15 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/widgets.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../sources/cloud/cloud_config.dart';
-import '../sources/cloud/oauth.dart';
-import 'google_app_data.dart';
+import 'plugins/sync_storage.dart';
+import 'plugins/plugin_store.dart';
+import 'plugins/plugin.dart';
+import '../sources/cloud/cloud_sources.dart';
+import '../sources/server_store.dart';
 import 'network/network_service.dart';
 import 'playlist_store.dart';
 import 'resource_locks.dart';
@@ -17,19 +20,24 @@ import 'secure_store.dart';
 import 'sync_document.dart';
 import 'sync_references.dart';
 
-class GoogleSync extends ChangeNotifier with WidgetsBindingObserver {
-  GoogleSync({http.Client Function()? clientFactory})
+class PlaybackSync extends ChangeNotifier with WidgetsBindingObserver {
+  PlaybackSync({http.Client Function()? clientFactory})
     : _clientFactory = clientFactory ?? (() => IOClient(NetworkService.instance.createHttpClient()));
-  static final instance = GoogleSync();
+  static final instance = PlaybackSync();
   final http.Client Function() _clientFactory;
   late SharedPreferences _prefs;
   String? _accountId;
   String? email;
-  String _clientId = '';
+  String? providerId;
+  CloudAccount? _account;
+  Iterable<OPlugin> get providers => PluginStore.instance.enabled.where((p) => p.supports('sync'));
+  String? get providerName => PluginStore.instance.installed[providerId]?.name;
+  bool get available => providers.any((p) => p.id == providerId);
+  bool get legacyConnection => _prefs.getKeys().any((key) => key.endsWith('_sync_connection'));
   String _device = '';
   SyncDocument? _document;
   Map<String, Map<String, dynamic>> _baseline = {};
-  GoogleAppData? _api;
+  PluginSyncStorage? _api;
   Future<void>? _running;
   Future<void> _writing = Future.value();
   Timer? _timer;
@@ -46,34 +54,42 @@ class GoogleSync extends ChangeNotifier with WidgetsBindingObserver {
   DateTime? lastSync;
   bool get connected => _accountId != null;
   static bool get supported => Platform.isAndroid || Platform.isWindows || Platform.isLinux || Platform.isMacOS;
-  String get clientId =>
-      _prefs.getString('sync_google_client_${Platform.operatingSystem}') ??
-      (Platform.isAndroid ? CloudConfig.googleAndroidClientId : CloudConfig.googleDesktopClientId);
-  String get _tokenKey => 'google_sync_token_$_accountId';
-  String get _stateKey => 'google_sync_state_$_accountId';
+  String get _connectionKey => 'pluginSyncConnection:$providerId';
+  String get _stateKey => 'pluginSyncState:$providerId:$_accountId';
+  String get _autoKey => 'pluginSyncAuto:$providerId:$_accountId';
+  String get _lastKey => 'pluginSyncLast:$providerId:$_accountId';
 
-  OAuthClient _oauth(String id, {String? email}) => Platform.isAndroid
-      ? GoogleAndroidOAuthClient(clientId: id, accountEmail: email, requestedScopes: const [googleSyncScope])
-      : OAuthClient(
-          authEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-          tokenEndpoint: 'https://oauth2.googleapis.com/token',
-          clientId: id,
-          clientSecret: CloudConfig.googleBundledSecret(id),
-          clientSecretKey: CloudConfig.googleSecretKey(id),
-          scopes: const [googleSyncScope],
-          mobileScheme: CloudConfig.mobileScheme,
-          extraAuthParams: const {'access_type': 'offline', 'prompt': 'consent'},
-        );
-
-  Future<void> configure(String id, String secret) async {
-    if (connected || busy) throw StateError('계정 연결을 해제한 뒤 등록 정보를 변경하세요');
-    id = id.trim();
-    if ((!Platform.isAndroid || id.isNotEmpty) && !id.endsWith('.apps.googleusercontent.com')) {
-      throw const FormatException('Google OAuth Client ID를 입력하세요');
-    }
-    if (!Platform.isAndroid) await SecureStore.instance.writeRequired(CloudConfig.googleSecretKey(id), secret.trim());
-    await _prefs.setString('sync_google_client_${Platform.operatingSystem}', id);
+  Future<void> selectProvider(String id) async {
+    final plugin = PluginStore.instance.require(id);
+    if (!plugin.supports('sync')) throw StateError('동기화 확장앱이 아닙니다');
+    if (busy) throw StateError('동기화 중에는 제공자를 변경할 수 없습니다');
+    if (providerId == id) return;
+    if (connected) await disconnect();
+    providerId = id;
+    _lastAttempt = null;
+    lastSync = null;
+    _needsSync = false;
+    await _prefs.setString('sync_provider', id);
     notifyListeners();
+  }
+
+  void _pluginChanged() {
+    if (providerId != null && !PluginStore.instance.installed.containsKey(providerId)) {
+      _generation++;
+      _api?.close();
+      _api = null;
+      _accountId = null;
+      _account = null;
+      email = null;
+      automatic = false;
+    }
+    if (!available) {
+      _generation++;
+      _timer?.cancel();
+      _timer = null;
+    }
+    notifyListeners();
+    _schedule();
   }
 
   Future<void> init() async {
@@ -82,19 +98,22 @@ class GoogleSync extends ChangeNotifier with WidgetsBindingObserver {
     _prefs = await SharedPreferences.getInstance();
     await SyncReferences.instance.init();
     _device = Platform.isAndroid
-        ? (await GoogleAndroidOAuthClient.channel.invokeMethod<String>('syncDeviceId'))!
-        : _prefs.getString('google_sync_device') ??
+        ? (await const MethodChannel('oplayer/google-drive').invokeMethod<String>('syncDeviceId'))!
+        : _prefs.getString('sync_device') ??
+              _prefs.getString('google_sync_device') ??
               base64Url.encode(List.generate(16, (_) => Random.secure().nextInt(256))).replaceAll('=', '');
-    await _prefs.setString('google_sync_device', _device);
-    final saved = _prefs.getString('google_sync_connection');
+    await _prefs.setString('sync_device', _device);
+    providerId = _prefs.getString('sync_provider');
+    final saved = _prefs.getString(_connectionKey);
     if (saved != null) {
       final value = jsonDecode(saved) as Map;
       _accountId = value['id'] as String;
       email = value['email'] as String;
-      _clientId = value['clientId'] as String;
+      _account = CloudAccount.fromJson((value['account'] as Map).cast<String, dynamic>());
       _loadState();
-      automatic = _prefs.getBool('google_sync_auto_$_accountId') ?? true;
+      automatic = _prefs.getBool(_autoKey) ?? true;
     }
+    PluginStore.instance.addListener(_pluginChanged);
     PlaylistStore.instance.addListener(_changed);
     ResumeStore.instance.addListener(_changed);
     ResourceLocks.instance.addListener(_schedule);
@@ -110,48 +129,80 @@ class GoogleSync extends ChangeNotifier with WidgetsBindingObserver {
       for (final e in ((saved['baseline'] as Map?) ?? {}).entries)
         e.key as String: Map<String, dynamic>.from(e.value as Map),
     };
-    final last = _prefs.getInt('google_sync_last_$_accountId');
+    final last = _prefs.getInt(_lastKey);
     lastSync = last == null ? null : DateTime.fromMillisecondsSinceEpoch(last);
     _api?.close();
-    _api = GoogleAppData(TokenHolder(_tokenKey, _oauth(_clientId, email: email)), _clientFactory());
+    _api = PluginSyncStorage(_account!, clientFactory: _clientFactory);
   }
 
   Future<void> connect() async {
     if (busy || connected) return;
-    if (!supported) throw UnsupportedError('Google 동기화는 현재 Android와 데스크톱에서 지원합니다');
-    final id = clientId;
-    if (!Platform.isAndroid && id.isEmpty) throw StateError('Google OAuth 앱 등록 정보를 먼저 입력하세요');
+    if (providerId == null || !available) throw StateError('설치하고 활성화한 동기화 확장앱을 먼저 선택하세요');
     busy = true;
     error = null;
     notifyListeners();
-    final temporaryKey = 'google_sync_pending_$_device';
-    GoogleAppData? temporary;
+    CloudAccount? pending;
+    PluginSyncStorage? temporary;
+    String? legacyPrefix;
+    String? legacyAccount;
     try {
-      final tokens = await _oauth(id).authorize();
-      final holder = TokenHolder(temporaryKey, _oauth(id));
-      await holder.save(tokens);
-      temporary = GoogleAppData(holder, _clientFactory());
+      pending = await http.runWithClient(
+        () => connectCloudAccount(CloudProvider.plugin, pluginId: providerId, saveAccount: false),
+        _clientFactory,
+      );
+      temporary = PluginSyncStorage(pending!, clientFactory: _clientFactory);
       final who = await temporary.account();
-      await SecureStore.instance.writeRequired('google_sync_token_${who.id}', jsonEncode(tokens.toJson()));
-      await _prefs.setString('google_sync_connection', jsonEncode({'id': who.id, 'email': who.email, 'clientId': id}));
+      final legacy = PluginStore.instance.require(providerId!).manifest['legacySyncKey'] as String?;
+      if (legacy != null) {
+        final raw = _prefs.getString('${legacy}_sync_connection');
+        if (raw != null && (jsonDecode(raw) as Map)['id'] == who.id) {
+          for (final pair in [('state', 'pluginSyncState'), ('auto', 'pluginSyncAuto'), ('last', 'pluginSyncLast')]) {
+            final value = _prefs.get('${legacy}_sync_${pair.$1}_${who.id}');
+            final target = '${pair.$2}:$providerId:${who.id}';
+            if (value is String) await _prefs.setString(target, value);
+            if (value is bool) await _prefs.setBool(target, value);
+            if (value is int) await _prefs.setInt(target, value);
+          }
+          legacyPrefix = legacy;
+          legacyAccount = who.id;
+        }
+      }
+      if (!await _prefs.setString(
+        _connectionKey,
+        jsonEncode({'id': who.id, 'email': who.email, 'account': pending.toJson()}),
+      )) {
+        throw StateError('동기화 연결을 저장하지 못했습니다');
+      }
+      _account = pending;
       _accountId = who.id;
       email = who.email;
-      _clientId = id;
-      automatic = true;
-      await _prefs.setBool('google_sync_auto_$_accountId', true);
+      automatic = _prefs.getBool(_autoKey) ?? true;
+      await _prefs.setBool(_autoKey, automatic);
       _loadState();
       _changed();
+      await _writing;
+      if (legacyPrefix != null) {
+        await SecureStore.instance.writeRequired('${legacyPrefix}_sync_token_$legacyAccount', null);
+        await _prefs.remove('${legacyPrefix}_sync_connection');
+        for (final field in ['state', 'auto', 'last']) {
+          await _prefs.remove('${legacyPrefix}_sync_${field}_$legacyAccount');
+        }
+      }
     } catch (e) {
+      if (pending != null) await SecureStore.instance.writeRequired(pending.tokenKey, null);
+      await _api?.close();
+      _api = null;
+      _account = null;
+      _accountId = null;
+      email = null;
+      automatic = false;
+      await _prefs.remove(_connectionKey);
       error = '$e';
       rethrow;
     } finally {
-      temporary?.close();
-      try {
-        await SecureStore.instance.writeRequired(temporaryKey, null);
-      } finally {
-        busy = false;
-        notifyListeners();
-      }
+      await temporary?.close();
+      busy = false;
+      notifyListeners();
     }
     await syncNow();
   }
@@ -220,6 +271,7 @@ class GoogleSync extends ChangeNotifier with WidgetsBindingObserver {
   void _schedule() {
     if (!supported ||
         !connected ||
+        !available ||
         !automatic ||
         !_foreground ||
         busy ||
@@ -239,7 +291,7 @@ class GoogleSync extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> setAutomatic(bool value) async {
     automatic = value;
-    await _prefs.setBool('google_sync_auto_$_accountId', value);
+    await _prefs.setBool(_autoKey, value);
     _timer?.cancel();
     _timer = null;
     notifyListeners();
@@ -377,12 +429,12 @@ class GoogleSync extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _sync() async {
-    if (!connected || _api == null) throw StateError('Google 계정을 먼저 연결하세요');
+    if (!connected || !available || _api == null) throw StateError('동기화 계정을 먼저 연결하세요');
     if (ResourceLocks.instance.shielded || ResourceLocks.instance.isLocked(recentResourceKey)) return;
     final generation = _generation;
     final api = _api!;
     void check() {
-      if (generation != _generation || !connected) throw StateError('동기화가 취소되었습니다');
+      if (generation != _generation || !connected || !available) throw StateError('동기화가 취소되었습니다');
     }
 
     busy = true;
@@ -396,7 +448,7 @@ class GoogleSync extends ChangeNotifier with WidgetsBindingObserver {
       await _persist();
       final who = await api.account();
       check();
-      if (who.id != _accountId) throw StateError('Google 계정이 변경되었습니다. 다시 연결하세요');
+      if (who.id != _accountId) throw StateError('동기화 계정이 변경되었습니다. 다시 연결하세요');
       final files = await api.files();
       final remote = <Map<String, dynamic>>[];
       var size = 0;
@@ -420,7 +472,7 @@ class GoogleSync extends ChangeNotifier with WidgetsBindingObserver {
       await api.write(_device, snapshot, id: files.where((f) => f.name == api.fileName(_device)).firstOrNull?.id);
       check();
       lastSync = DateTime.now();
-      await _prefs.setInt('google_sync_last_$_accountId', lastSync!.millisecondsSinceEpoch);
+      await _prefs.setInt(_lastKey, lastSync!.millisecondsSinceEpoch);
     } catch (e) {
       if (generation == _generation) error = '$e';
       rethrow;
@@ -437,8 +489,9 @@ class GoogleSync extends ChangeNotifier with WidgetsBindingObserver {
     _timer = null;
     _api?.close();
     _api = null;
-    await SecureStore.instance.writeRequired(_tokenKey, null);
-    await _prefs.remove('google_sync_connection');
+    if (_account != null) await SecureStore.instance.writeRequired(_account!.tokenKey, null);
+    await _prefs.remove(_connectionKey);
+    _account = null;
     _accountId = null;
     email = null;
     automatic = false;
@@ -464,6 +517,7 @@ class GoogleSync extends ChangeNotifier with WidgetsBindingObserver {
     _poll?.cancel();
     _api?.close();
     if (_initialized) {
+      PluginStore.instance.removeListener(_pluginChanged);
       PlaylistStore.instance.removeListener(_changed);
       ResumeStore.instance.removeListener(_changed);
       ResourceLocks.instance.removeListener(_schedule);

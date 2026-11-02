@@ -339,6 +339,174 @@
         "linux",
         "macos"
       ]
+    },
+    {
+      "id": "sync.gdrive",
+      "name": "Google Drive 동기화",
+      "version": "1.0.0",
+      "kind": "resource",
+      "capabilities": [
+        "sync"
+      ],
+      "pluginApi": 5,
+      "author": "OPlayer",
+      "features": [
+        "재생목록 동기화",
+        "최근 재생·이어보기 동기화"
+      ],
+      "description": "Google Drive API와 drive.appdata 범위를 등록하세요. 재생 기록 JSON만 비공개 앱 데이터 저장소에 저장합니다. 파일 탐색용 Drive 확장앱과 별도 인증입니다.",
+      "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/sync.gdrive.js",
+      "sha256": "45e003468162c1d3b8c2be43d78559c139eb4ad777da44b7efb30164d120928f",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
+      "platforms": [
+        "android",
+        "windows",
+        "linux",
+        "macos"
+      ],
+      "requiresHost": [
+        "syncStorage"
+      ]
+    },
+    {
+      "id": "sync.onedrive",
+      "name": "OneDrive 동기화",
+      "version": "1.0.0",
+      "kind": "resource",
+      "capabilities": [
+        "sync"
+      ],
+      "pluginApi": 5,
+      "author": "OPlayer",
+      "features": [
+        "재생목록 동기화",
+        "최근 재생·이어보기 동기화"
+      ],
+      "description": "Microsoft Entra에서 Files.ReadWrite.AppFolder · User.Read · offline_access 권한과 모바일/데스크톱 복귀 주소를 등록하세요. OneDrive 앱 전용 폴더에 재생 기록 JSON을 저장합니다.",
+      "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/sync.onedrive.js",
+      "sha256": "f77ea846bf8a088e32f02400fd57e3b3dc2649b6640560c2cfa8ff9ca67f1550",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
+      "platforms": [
+        "android",
+        "windows",
+        "linux",
+        "macos"
+      ],
+      "requiresHost": [
+        "syncStorage"
+      ]
+    },
+    {
+      "id": "sync.box",
+      "name": "Box 동기화",
+      "version": "1.0.0",
+      "kind": "resource",
+      "capabilities": [
+        "sync"
+      ],
+      "pluginApi": 5,
+      "author": "OPlayer",
+      "features": [
+        "재생목록 동기화",
+        "최근 재생·이어보기 동기화"
+      ],
+      "description": "Box Developer Console에서 OAuth 앱과 파일·폴더 읽기/쓰기 권한을 등록하세요. 내 파일의 OPlayer Sync 폴더에 재생 기록 JSON을 저장합니다. Client ID와 Secret은 이 확장앱 설정에 입력합니다.",
+      "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/sync.box.js",
+      "sha256": "96ec30ae01d273cd976d359c23dee314e171bfe35172ccf07a322813e91fcb7a",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
+      "platforms": [
+        "android",
+        "windows",
+        "linux",
+        "macos"
+      ],
+      "requiresHost": [
+        "syncStorage"
+      ]
+    },
+    {
+      "id": "sync.dropbox",
+      "name": "Dropbox 동기화",
+      "version": "1.0.0",
+      "kind": "resource",
+      "capabilities": [
+        "sync"
+      ],
+      "pluginApi": 5,
+      "author": "OPlayer",
+      "features": [
+        "재생목록 동기화",
+        "최근 재생·이어보기 동기화"
+      ],
+      "description": "Dropbox Scoped access 앱에 files.metadata.read · files.content.read · files.content.write · account_info.read 권한과 복귀 주소를 등록하세요. App folder 또는 Full Dropbox 앱에서 OPlayer Sync 폴더에 기록 JSON을 저장합니다.",
+      "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/sync.dropbox.js",
+      "sha256": "2c70f48222edbc0d93f4d415d619c5eb4403a8571990150d5ad0ddef8f459f97",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
+      "platforms": [
+        "android",
+        "windows",
+        "linux",
+        "macos"
+      ],
+      "requiresHost": [
+        "syncStorage"
+      ]
+    },
+    {
+      "id": "sync.s3",
+      "name": "S3 호환 저장소 동기화",
+      "version": "1.0.0",
+      "kind": "resource",
+      "capabilities": [
+        "sync"
+      ],
+      "pluginApi": 5,
+      "author": "OPlayer",
+      "features": [
+        "재생목록 동기화",
+        "최근 재생·이어보기 동기화"
+      ],
+      "description": "AWS S3·R2·MinIO·네이버 클라우드 Object Storage 등의 버킷 목록 조회·객체 읽기·쓰기 권한을 등록하세요. 지정한 접두사 아래에 기기별 기록 JSON을 저장합니다. 같은 기기들은 Endpoint·버킷·접두사를 맞추세요.",
+      "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/sync.s3.js",
+      "sha256": "d3f1e55201eaf2299eb45d1431e33b4f297a68c3b18ab57d4dc218cbed8a1409",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
+      "platforms": [
+        "android",
+        "windows",
+        "linux",
+        "macos"
+      ],
+      "requiresHost": [
+        "syncStorage"
+      ]
+    },
+    {
+      "id": "sync.mybox",
+      "name": "네이버 MYBOX 동기화",
+      "version": "1.0.0",
+      "kind": "resource",
+      "capabilities": [
+        "sync"
+      ],
+      "pluginApi": 5,
+      "author": "OPlayer",
+      "features": [
+        "재생목록 동기화",
+        "최근 재생·이어보기 동기화"
+      ],
+      "description": "MYBOX 설정에서 파일 조회·다운로드·업로드·폴더 생성 가능한 개인 액세스 토큰을 발급하세요. 내 파일의 OPlayer Sync 폴더에 JSON만 저장합니다. 토큰 만료 후 같은 계정의 새 토큰으로 연결하세요.",
+      "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/sync.mybox.js",
+      "sha256": "aef2d21aa7bf9d6e74cbfcf30998f7fb874d4f0663747950142da80fabf5a546",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
+      "platforms": [
+        "android",
+        "windows",
+        "linux",
+        "macos"
+      ],
+      "requiresHost": [
+        "syncStorage"
+      ]
     }
   ]
 }

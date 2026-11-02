@@ -7,8 +7,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:oplayer/core/google_app_data.dart';
-import 'package:oplayer/core/google_sync.dart';
+import 'package:oplayer/core/plugins/plugin_store.dart';
+import 'package:oplayer/core/plugins/plugin_runtime.dart';
+import 'package:oplayer/core/plugins/plugin.dart';
+import 'package:oplayer/sources/server_store.dart';
+import 'package:oplayer/core/playback_sync.dart';
 import 'package:oplayer/core/playlist_store.dart';
 import 'package:oplayer/core/resume_store.dart';
 import 'package:oplayer/core/resource_locks.dart';
@@ -18,22 +21,7 @@ import 'package:oplayer/core/sync_document.dart';
 import 'package:oplayer/core/sync_references.dart';
 import 'package:oplayer/sources/cloud/oauth.dart';
 
-class _OAuth extends OAuthClient {
-  _OAuth()
-    : super(
-        authEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-        tokenEndpoint: 'https://oauth2.googleapis.com/token',
-        clientId: 'test',
-        scopes: [googleSyncScope],
-        mobileScheme: 'oplayer',
-      );
-  int refreshes = 0;
-  @override
-  Future<OAuthTokens> refresh(OAuthTokens t) async {
-    refreshes++;
-    return OAuthTokens(accessToken: 'new', expiry: DateTime.now().add(const Duration(hours: 1)));
-  }
-}
+const googleSyncScope = 'https://www.googleapis.com/auth/drive.appdata';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -121,49 +109,55 @@ void main() {
     expect(calls.last['scopes'], ['https://www.googleapis.com/auth/drive.file']);
   });
 
-  test('Drive appdata transport refreshes once, paginates and creates or updates only private app files', () async {
-    FlutterSecureStorage.setMockInitialValues({});
-    final oauth = _OAuth();
-    final tokens = TokenHolder('transport', oauth);
-    await tokens.save(OAuthTokens(accessToken: 'old', expiry: DateTime.now().add(const Duration(hours: 1))));
-    var rejected = false, creates = 0, updates = 0;
-    final api = GoogleAppData(
-      tokens,
-      MockClient((request) async {
-        expect(request.url.host, 'www.googleapis.com');
-        expect(request.followRedirects, false);
-        if (!rejected) {
-          rejected = true;
-          return http.Response('{}', 401);
-        }
-        expect(request.headers['Authorization'], 'Bearer new');
-        if (request.method == 'POST') {
-          creates++;
-          expect(request.body, contains('"parents":["appDataFolder"]'));
-          expect(request.body, contains('한글'));
-          return http.Response('{}', 200);
-        }
-        if (request.method == 'PATCH') {
-          updates++;
-          expect(request.url.queryParameters['uploadType'], 'media');
-          expect(jsonDecode(request.body)['version'], 1);
-          return http.Response('{}', 200);
-        }
-        expect(request.url.queryParameters['spaces'], 'appDataFolder');
-        if (request.url.queryParameters['pageToken'] == null) {
-          return http.Response('{"files":[{"id":"one","name":"first"}],"nextPageToken":"next"}', 200);
-        }
-        return http.Response('{"files":[{"id":"two","name":"second"}]}', 200);
-      }),
-    );
-    expect((await api.files()).map((f) => f.id), ['one', 'two']);
-    expect(oauth.refreshes, 1);
+  test('Google sync transport lives in the extension and preserves appdata format', () async {
+    final plugin = OPlugin.parse(await File('plugins/sync.gdrive.js').readAsString());
+    var creates = 0, updates = 0;
+    Future<Object?> request(String url, Map<String, dynamic> options) async {
+      final uri = Uri.parse(url);
+      expect(uri.host, 'www.googleapis.com');
+      if (options['method'] == 'POST') {
+        creates++;
+        expect(options['body'], contains('"parents":["appDataFolder"]'));
+        expect(options['body'], contains('한글'));
+        expect(options['body'], contains('\r\nContent-Type:'));
+        return {};
+      }
+      if (options['method'] == 'PATCH') {
+        updates++;
+        expect(options['body'], containsPair('version', 1));
+        return {};
+      }
+      expect(uri.queryParameters['spaces'], 'appDataFolder');
+      return uri.queryParameters['pageToken'] == null
+          ? {
+              'files': [
+                {'id': 'one', 'name': 'first'},
+              ],
+              'nextPageToken': 'next',
+            }
+          : {
+              'files': [
+                {'id': 'two', 'name': 'second'},
+              ],
+            };
+    }
+
+    final files = await callPlugin(plugin, 'syncList', {}, request: request) as List;
+    expect(files.map((f) => f['id']), ['one', 'two']);
     final doc = SyncDocument('한글')..change('playlist:x', {'name': '한글'});
-    await api.write('device', doc.toJson());
-    await api.write('device', doc.toJson(), id: 'own-file');
+    await callPlugin(plugin, 'syncWrite', {
+      'name': 'test.json',
+      'device': 'device',
+      'document': doc.toJson(),
+    }, request: request);
+    await callPlugin(plugin, 'syncWrite', {
+      'name': 'test.json',
+      'device': 'device',
+      'document': doc.toJson(),
+      'id': 'own',
+    }, request: request);
     expect(creates, 1);
     expect(updates, 1);
-    api.close();
   });
 
   test('a synchronized reference cannot bypass the original resource lock when changing watched status', () async {
@@ -199,17 +193,24 @@ void main() {
       final root = '${Directory.systemTemp.path}${Platform.pathSeparator}oplayer_sync_test';
       final file = '$root${Platform.pathSeparator}episode.mp4';
       SharedPreferences.setMockInitialValues({
-        'google_sync_connection': jsonEncode({
+        'sync_provider': 'sync.gdrive',
+        'pluginSyncConnection:sync.gdrive': jsonEncode({
           'id': 'account',
           'email': 'a@example.com',
-          'clientId': 'desktop.apps.googleusercontent.com',
+          'account': CloudAccount(
+            id: 'sync-account',
+            provider: CloudProvider.plugin,
+            name: 'a@example.com',
+            pluginId: 'sync.gdrive',
+            oauthClientId: 'desktop.apps.googleusercontent.com',
+          ).toJson(),
         }),
-        'google_sync_auto_account': false,
+        'pluginSyncAuto:sync.gdrive:account': false,
         'sync_sources_v1': jsonEncode({root: '영화'}),
       });
       FlutterSecureStorage.setMockInitialValues({});
       await SecureStore.instance.writeRequired(
-        'google_sync_token_account',
+        'tok_sync-account',
         jsonEncode(
           OAuthTokens(accessToken: 'private-token', expiry: DateTime.now().add(const Duration(hours: 1))).toJson(),
         ),
@@ -225,7 +226,7 @@ void main() {
       var writes = 0;
       Completer<void>? gate, reached;
       var remote = SyncDocument('other');
-      late GoogleSync sync;
+      late PlaybackSync sync;
       final client = MockClient((request) async {
         expect(request.headers['Authorization'], 'Bearer private-token');
         expect(request.url.host, 'www.googleapis.com');
@@ -266,7 +267,9 @@ void main() {
         }
         fail('Unexpected Google sync request: ${request.method} ${request.url.path}');
       });
-      sync = GoogleSync(clientFactory: () => client);
+      await PluginStore.instance.init();
+      await PluginStore.instance.load(await File('plugins/sync.gdrive.js').readAsString());
+      sync = PlaybackSync(clientFactory: () => client);
       await sync.init();
       addTearDown(sync.dispose);
       final key = SyncReferences.instance.portable(file)!;
@@ -327,7 +330,7 @@ void main() {
       expect(writes, before);
       expect(PlaylistStore.instance.find(local)!.name, 'Changed during sync');
       await sync.disconnect();
-      expect(await SecureStore.instance.readRequired('google_sync_token_account'), null);
+      expect(await SecureStore.instance.readRequired('tok_sync-account'), null);
       expect(PlaylistStore.instance.find(local), isNotNull);
     },
   );

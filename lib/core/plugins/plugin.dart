@@ -31,6 +31,7 @@ class OPlugin {
     },
     'resource': {
       'storage': ['accountName', 'list', 'stream'],
+      'sync': ['accountName', 'syncAccount', 'syncList', 'syncRead', 'syncWrite'],
     },
   };
   String? compatibilityIssue({String? platform}) => pluginCompatibilityIssue(manifest, platform: platform);
@@ -141,6 +142,16 @@ class OPlugin {
       if (plugin.site && !plugin.supports('blockRequests') && meta.containsKey('blockRules')) {
         throw const FormatException('광고 차단에는 blockRequests 기능 선언이 필요합니다');
       }
+    }
+    if (meta['legacySyncKey'] != null &&
+        (!plugin.supports('sync') ||
+            meta['legacySyncKey'] is! String ||
+            !RegExp(r'^[a-z][a-z0-9_]{0,39}$').hasMatch(meta['legacySyncKey'] as String))) {
+      throw const FormatException('잘못된 이전 동기화 형식');
+    }
+    if (plugin.supports('sync') &&
+        (meta['api'] != 5 || !(meta['requiresHost'] as List? ?? []).contains('syncStorage'))) {
+      throw const FormatException('동기화 기능은 API 5와 syncStorage 호스트 기능이 필요합니다');
     }
     if (meta['canDelete'] != null && meta['canDelete'] is! bool) {
       throw const FormatException('잘못된 삭제 지원 선언');

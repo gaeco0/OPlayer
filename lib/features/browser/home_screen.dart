@@ -200,13 +200,13 @@ class _HomeScreenState extends State<HomeScreen> {
             const ListTile(
               title: Text('클라우드 연결', style: TextStyle(fontWeight: FontWeight.w700)),
             ),
-            for (final plugin in PluginStore.instance.enabled.where((p) => p.cloud))
+            for (final plugin in PluginStore.instance.enabled.where((p) => p.cloud && p.supports('storage')))
               ListTile(
                 leading: const Icon(Icons.cloud_outlined),
                 title: Text(plugin.name),
                 onTap: () => Navigator.pop(c, plugin),
               ),
-            if (!PluginStore.instance.enabled.any((p) => p.cloud))
+            if (!PluginStore.instance.enabled.any((p) => p.cloud && p.supports('storage')))
               const ListTile(title: Text('설정 → 확장앱에서 클라우드 확장앱을 설치하고 켜 주세요')),
           ],
         ),

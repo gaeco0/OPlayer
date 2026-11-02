@@ -61,7 +61,7 @@ class S3Credentials {
   }
 
   Uri presign(Uri uri, {String method = 'GET', DateTime? now, int expires = 3600}) {
-    if (!allows(uri.toString()) || !['GET', 'HEAD'].contains(method) || expires < 1 || expires > 604800) {
+    if (!allows(uri.toString()) || !['GET', 'HEAD', 'PUT'].contains(method) || expires < 1 || expires > 604800) {
       throw const FormatException('허용되지 않은 S3 서명 요청');
     }
     final dateTime =

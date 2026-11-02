@@ -185,6 +185,24 @@ class PluginStore extends ChangeNotifier {
         await SourceRegistry.instance.invalidate(account.id);
         await ServerStore.instance.removeAccount(account);
       }
+      final syncKey = 'pluginSyncConnection:$id';
+      final syncConnection = _prefs!.getString(syncKey);
+      if (syncConnection != null) {
+        final saved = jsonDecode(syncConnection) as Map;
+        final account = CloudAccount.fromJson((saved['account'] as Map).cast<String, dynamic>());
+        await SecureStore.instance.writeRequired(account.tokenKey, null);
+      }
+      for (final key
+          in _prefs!
+              .getKeys()
+              .where(
+                (key) =>
+                    key == syncKey ||
+                    ['pluginSyncState:$id:', 'pluginSyncAuto:$id:', 'pluginSyncLast:$id:'].any(key.startsWith),
+              )
+              .toList()) {
+        if (!await _prefs!.remove(key)) throw StateError('동기화 확장앱 데이터를 삭제하지 못했습니다');
+      }
       await SecureStore.instance.deleteMatchingRequired(
         (key) => key == 'pluginCredentials:$id' || key.startsWith('pluginOAuthSecret:$id:'),
       );
