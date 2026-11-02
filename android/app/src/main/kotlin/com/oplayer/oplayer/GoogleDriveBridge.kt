@@ -52,6 +52,7 @@ class GoogleDriveBridge(private val activity: Activity, messenger: BinaryMesseng
             val email = call.argument<String>("email")
             val interactive = call.argument<Boolean>("interactive") == true
             val oldToken = call.argument<String>("invalidateToken")
+            val pickerOptions = call.argument<Map<String, String>>("pickerOptions") ?: emptyMap()
             val pickFiles = interactive && call.argument<Boolean>("pickFiles") == true
             if (pickFiles && scopes != listOf("https://www.googleapis.com/auth/drive.file")) {
                 fail("SCOPE", "파일 선택은 drive.file 단독 권한으로만 가능합니다")
@@ -64,7 +65,15 @@ class GoogleDriveBridge(private val activity: Activity, messenger: BinaryMesseng
                     if (pickFiles) {
                         setPrompt(AuthorizationRequest.Prompt.CONSENT)
                         addResourceParameter(AuthorizationRequest.ResourceParameter.PICKER_OAUTH_TRIGGER, "true")
-                        addResourceParameter(AuthorizationRequest.ResourceParameter.PICKER_ALLOW_MULTIPLE, "true")
+                        val parameters = mapOf(
+                            "allow_multiple" to AuthorizationRequest.ResourceParameter.PICKER_ALLOW_MULTIPLE,
+                            "mimetypes" to AuthorizationRequest.ResourceParameter.PICKER_MIMETYPES,
+                            "file_ids" to AuthorizationRequest.ResourceParameter.PICKER_FILE_IDS,
+                            "allow_folder_selection" to AuthorizationRequest.ResourceParameter.PICKER_ALLOW_FOLDER_SELECTION,
+                        )
+                        for ((key, parameter) in parameters) {
+                            pickerOptions[key]?.let { addResourceParameter(parameter, it) }
+                        }
                     }
                 }
                 .apply { if (!email.isNullOrBlank()) setAccount(Account(email, "com.google")) }

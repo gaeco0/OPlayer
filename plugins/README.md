@@ -1,3 +1,10 @@
+> 호환성: 새 호스트 기능에 의존하는 확장앱은 **API 5**와 `requiresHost`를 선언합니다.
+> API 1~4는 계속 지원합니다. `platforms`와 `requiresHost`는 설치·활성화·실행에 공통 적용하며,
+> 저장소 JSON에도 같은 값을 넣어 설치 전에 표시합니다. API 5 확장앱은 API 4까지만 아는 구형 앱이 설치할 수 없습니다.
+> `requiresHost: ["googlePicker"]`는 Android·Windows·Linux·macOS의 공식 네이티브 Google 파일 선택기 연결입니다.
+> 새 기능 이름을 임의로 만들어도 앱이 구현하지 않았으면 실행하지 않습니다.
+> 내장 브라우저가 없는 Linux에서는 브라우저 확장앱을 설치·활성화하지 않습니다.
+
 # OPlayer 확장앱
 
 설정 → **확장앱**에서 저장소를 추가하고 목록을 확인한 뒤 설치합니다.
@@ -287,11 +294,11 @@ Actions Secret 이름과 운영자 등록 절차는 [Google 등록 안내](../do
 - 업로드 지원 계정은 다운로드 저장 위치와 다운로드 항목의 **다른 저장소로 이동**에 나타납니다.
   같은 이름의 기존 파일은 사용자 덮어쓰기 확인을 유지하며, 다른 파일 ID로 바뀌면 덮어쓰기를 거절합니다.
 
-공식 Google Drive `1.4.1`은 `https://www.googleapis.com/auth/drive.file`만 요청합니다.
+공식 Google Drive `1.5.0`은 `https://www.googleapis.com/auth/drive.file`만 요청합니다.
 전체 Drive 대신 앱이 만들었거나 접근을 허용받은 파일만 탐색·검색·재생·업로드하며, 덮어쓰기도 해당 파일에 한정합니다.
 루트는 **OPlayer 파일**로 표시하고 허용된 파일 전체를 조회합니다. 확장앱의 OAuth `extraAuthParams`에 `trigger_onepick=true`, `allow_multiple=true`를 지정하면 연결할 때 Google 파일 선택기를 띄웁니다. 기존 계정에서는 Picker 지원 앱의 **Drive 파일 추가**로 영상과 자막을 함께 선택합니다. 폴더 전체의 재귀 접근이나 전체 라이브러리 권한은 부여하지 않습니다.
 기존 연결은 Google 계정 → 서드 파티 연결에서 OPlayer 권한을 삭제한 뒤 앱에서도 계정을 해제·재연결하세요.
-이전에 저장한 전체 접근 토큰은 새 파일 단위 연결에서 재사용하지 않습니다. Android 네이티브 파일 선택과 기존 계정의 추가 선택 버튼은 Picker 지원 앱 업데이트가 필요합니다(0.1.9-nightly.20261102.4에는 미포함). 데스크톱 신규 연결은 확장앱만 업데이트해 선택기를 사용할 수 있습니다. Google Cloud 프로젝트에서 Drive API와 **Google Picker API**를 사용 설정하세요. 별도 API Key 없이 플랫폼별 기존 OAuth Client ID를 사용합니다. 백그라운드 갱신에서는 선택기를 띄우지 않습니다.
+이전에 저장한 전체 접근 토큰은 새 파일 단위 연결에서 재사용하지 않습니다. Android 네이티브 파일 선택과 기존 계정의 추가 선택 버튼은 0.1.9-nightly.20261103.1 이상 앱이 필요합니다. Google Drive 1.5.0은 API 5·googlePicker를 요구하므로 모든 OS에서 API 5 지원 앱이 필요합니다. 1.4.1의 데스크톱 신규 연결은 기존 앱에서도 지원합니다. Google Cloud 프로젝트에서 Drive API와 **Google Picker API**를 사용 설정하세요. 별도 API Key 없이 플랫폼별 기존 OAuth Client ID를 사용합니다. 백그라운드 갱신에서는 선택기를 띄우지 않습니다.
 기술 기준: [Google 공식 네이티브 Picker 안내](https://developers.google.com/workspace/drive/picker/guides/desktop-mobile-picker).
 Cloud Console 데이터 액세스에서 `drive`·`drive.readonly`를 제거하고 `drive.file`만 남기세요. 동기화는 별도 `drive.appdata` 권한입니다.
 - 앱 0.1.7-nightly.20261024.1부터 선택적 `canRename: true`와 `async rename({path,name,newName})`를 함께 선언할 수 있습니다.

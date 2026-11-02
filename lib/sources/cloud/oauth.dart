@@ -267,6 +267,11 @@ class GoogleAndroidOAuthClient extends OAuthClient {
     final result = await channel.invokeMapMethod<String, dynamic>('authorize', {
       'interactive': interactive,
       'pickFiles': interactive && extraAuthParams['trigger_onepick'] == 'true',
+      if (interactive)
+        'pickerOptions': {
+          for (final key in ['allow_multiple', 'mimetypes', 'file_ids', 'allow_folder_selection'])
+            if (extraAuthParams.containsKey(key)) key: extraAuthParams[key],
+        },
       'email': accountEmail,
       'invalidateToken': invalidateToken,
       'scopes': scopes,

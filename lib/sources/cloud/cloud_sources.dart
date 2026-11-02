@@ -27,7 +27,10 @@ OAuthClient oauthClientFor(CloudProvider provider, {String? clientId, String? ac
   final definition = PluginStore.instance.require(pluginId ?? 'cloud.${provider.name}');
   if (definition.authType != 'oauth') throw StateError('OAuth 확장앱이 아닙니다');
   final oauth = definition.oauth;
-  if (Platform.isAndroid && (definition.oauth['nativeAndroid'] == 'google' || provider == CloudProvider.gdrive)) {
+  if (Platform.isAndroid &&
+      oauth['authEndpoint'] == 'https://accounts.google.com/o/oauth2/v2/auth' &&
+      oauth['tokenEndpoint'] == 'https://oauth2.googleapis.com/token' &&
+      (definition.oauth['nativeAndroid'] == 'google' || provider == CloudProvider.gdrive)) {
     return GoogleAndroidOAuthClient(
       clientId:
           clientId ??

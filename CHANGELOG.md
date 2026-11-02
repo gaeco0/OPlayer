@@ -5,8 +5,18 @@
 
 ## [Unreleased]
 
-- Google Drive 확장앱 1.4.1에서 파일 단위 권한 연결 시 Google 파일 선택기를 요청합니다. 기존 파일을 허용할 방법이 없어 목록이 비던 사용 흐름을 보완했습니다. Google Cloud에서 Google Picker API 사용 설정이 필요하며 전체 Drive 권한은 요청하지 않습니다.
+## [0.1.9-nightly.20261103.1]
+
+Google Drive 파일 선택과 확장앱 OS 호환성 공통 검사를 추가한 나이틀리입니다. 내부 빌드 번호 `+2`와 기존 Android 서명을 유지합니다.
+
+- 확장앱의 OS 지원 선언을 설치·활성화·실행·저장소 화면에 일관 적용했습니다. 새 호스트 기능을 요구하는 API 5와 `requiresHost`를 추가해 구형 앱에서 지원하지 않는 기능이 실행되지 않도록 했습니다. API 1~4는 계속 지원합니다.
+- 공식 확장앱 13개의 플랫폼 정보를 명시하고 저장소와 JS 선언을 대조합니다. 내장 브라우저가 없는 Linux는 브라우저 확장앱 미지원으로 표시하며 Google Drive 1.5.0은 API 5·googlePicker 지원 앱을 요구합니다.
+- Android Google Picker의 다중 선택·MIME·파일 ID·폴더 옵션 전달을 보완했습니다. 네이티브 Google 인증의 미지원 옵션·잘못된 서버 조합은 거절합니다. Windows ARM64·Linux·macOS 릴리즈에도 네이티브 확장앱 등록·파서 스모크 검사를 추가했습니다.
+
+- Google Drive 확장앱 1.5.0에서 파일 단위 권한 연결 시 Google 파일 선택기를 요청합니다. 기존 파일을 허용할 방법이 없어 목록이 비던 사용 흐름을 보완했습니다. Google Cloud에서 Google Picker API 사용 설정이 필요하며 전체 Drive 권한은 요청하지 않습니다.
 - Picker 지원 앱에서 기존 계정의 **Drive 파일 추가** 버튼과 빈 목록 안내를 제공합니다. 선택 후 목록을 다시 조회하며 다른 Google 계정의 토큰으로 기존 리소스를 교체하지 않습니다. Android는 네이티브 Picker 연결을 추가한 앱 업데이트가 필요하고, 백그라운드 토큰 갱신에서는 선택기를 띄우지 않습니다.
+
+- 로컬 전체 테스트 323개(환경 의존 1개 제외), Android Kotlin 컴파일과 정적 분석을 확인했습니다. 실제 Google 로그인·TV 조작·GPU/NPU는 실기기 확인이 필요합니다. 검수 범위는 `docs/plugin-compatibility.md`에 기록했습니다.
 
 ## [0.1.9-nightly.20261102.4]
 

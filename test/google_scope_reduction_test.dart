@@ -128,6 +128,8 @@ void main() {
     await client.refresh(tokens);
     expect(calls.first['pickFiles'], true);
     expect(calls.first['email'], 'same@example.com');
+    expect(calls.first['pickerOptions'], {'allow_multiple': 'true'});
+    expect(calls.last.containsKey('pickerOptions'), false);
     expect(calls.last['pickFiles'], false);
     expect(calls.last['interactive'], false);
   });

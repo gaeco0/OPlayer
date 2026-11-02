@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'plugin_compatibility.dart';
 
 /// A single JS file with a JSON metadata header, followed by `globalThis.plugin`.
 class OPlugin {
@@ -32,6 +33,7 @@ class OPlugin {
       'storage': ['accountName', 'list', 'stream'],
     },
   };
+  String? compatibilityIssue({String? platform}) => pluginCompatibilityIssue(manifest, platform: platform);
   bool get typed => contracts.containsKey(manifest['kind']);
   List<String> get capabilities => typed
       ? (manifest['capabilities'] as List).cast<String>()
@@ -99,7 +101,7 @@ class OPlugin {
     final first = source.trimLeft().split('\n').first;
     if (!first.startsWith('// @oplayer ')) throw const FormatException('확장앱 메타데이터가 없습니다');
     final meta = jsonDecode(first.substring(12)) as Map<String, dynamic>;
-    if (![1, 2, 3, 4].contains(meta['api']) ||
+    if (![1, 2, 3, 4, 5].contains(meta['api']) ||
         !RegExp(r'^[a-z][a-z0-9._-]{1,79}$').hasMatch('${meta['id']}') ||
         meta['name'] is! String ||
         '${meta['name']}'.isEmpty ||
@@ -123,12 +125,12 @@ class OPlugin {
     final plugin = OPlugin._(source, meta);
     if (plugin.typed) {
       final capabilities = meta['capabilities'];
-      if (meta['api'] != 4 ||
+      if (![4, 5].contains(meta['api']) ||
           capabilities is! List ||
           capabilities.isEmpty ||
           capabilities.any((c) => c is! String || !contracts[plugin.kind]!.containsKey(c)) ||
           capabilities.toSet().length != capabilities.length) {
-        throw const FormatException('유형에 맞는 API 4 기능(capabilities)을 선언하세요');
+        throw const FormatException('유형에 맞는 API 4/5 기능(capabilities)을 선언하세요');
       }
       if (!plugin.site && (meta.containsKey('sites') || meta.containsKey('blockRules')) ||
           !plugin.cloud &&
@@ -151,8 +153,18 @@ class OPlugin {
     if (meta['canUpload'] != null && meta['canUpload'] is! bool) {
       throw const FormatException('잘못된 업로드 지원 선언');
     }
+    final requirements = meta['requiresHost'];
+    if (requirements != null &&
+        (meta['api'] != 5 ||
+            requirements is! List ||
+            requirements.length > 30 ||
+            requirements.any((v) => v is! String || !RegExp(r'^[a-zA-Z][a-zA-Z0-9.]{0,63}$').hasMatch(v)) ||
+            requirements.toSet().length != requirements.length)) {
+      throw const FormatException('requiresHost 기능 선언에는 API 5와 올바른 기능 목록이 필요합니다');
+    }
     if (meta['platforms'] != null &&
         (meta['platforms'] is! List ||
+            (meta['platforms'] as List).isEmpty ||
             (meta['platforms'] as List).any((p) => !['android', 'ios', 'windows', 'linux', 'macos'].contains(p)))) {
       throw const FormatException('잘못된 지원 플랫폼 선언');
     }
@@ -160,7 +172,7 @@ class OPlugin {
       throw const FormatException('인증 도메인은 네트워크 권한에도 있어야 합니다');
     }
     if (plugin.site && plugin.sites.isEmpty) throw const FormatException('사이트 확장앱에는 sites 권한이 필요합니다');
-    if (plugin.subtitle && meta['api'] != 4) throw const FormatException('자막 검색에는 확장앱 API 4가 필요합니다');
+    if (plugin.subtitle && ![4, 5].contains(meta['api'])) throw const FormatException('자막 검색에는 확장앱 API 4 이상이 필요합니다');
     final rules = meta['blockRules'] ?? [];
     if (rules is! List || rules.length > 500) throw const FormatException('광고 차단 규칙 제한 초과');
     for (final rule in rules) {
@@ -230,7 +242,7 @@ class OPlugin {
         throw const FormatException('잘못된 복귀 주소 안내');
       }
     }
-    if (plugin.cloud && plugin.authType != 'oauth' && ![2, 3, 4].contains(meta['api'])) {
+    if (plugin.cloud && plugin.authType != 'oauth' && ![2, 3, 4, 5].contains(meta['api'])) {
       throw const FormatException('이 인증 방식에는 확장앱 API 2 이상이 필요합니다');
     }
     if (meta['canUpload'] == true && plugin.authType != 'oauth') {
@@ -242,6 +254,46 @@ class OPlugin {
       }
       for (final key in ['authEndpoint', 'tokenEndpoint']) {
         repositoryUri('${plugin.oauth[key]}');
+      }
+      final extra = plugin.oauth['extraAuthParams'];
+      if (extra != null && (extra is! Map || extra.entries.any((e) => e.key is! String || e.value is! String))) {
+        throw const FormatException('OAuth extraAuthParams는 문자열 옵션만 허용합니다');
+      }
+      final native = plugin.oauth['nativeAndroid'];
+      if (native != null &&
+          (native != 'google' ||
+              plugin.oauth['authEndpoint'] != 'https://accounts.google.com/o/oauth2/v2/auth' ||
+              plugin.oauth['tokenEndpoint'] != 'https://oauth2.googleapis.com/token')) {
+        throw const FormatException('네이티브 Google 인증은 공식 Google OAuth 서버만 지원합니다');
+      }
+      if (native == 'google' && extra is Map) {
+        for (final key in ['trigger_onepick', 'allow_multiple', 'allow_folder_selection', 'include_granted_scopes']) {
+          if (extra.containsKey(key) && !['true', 'false'].contains(extra[key])) {
+            throw const FormatException('Google 인증 선택 옵션은 true/false여야 합니다');
+          }
+        }
+        if (extra['include_granted_scopes'] == 'true') throw const FormatException('Android Google 인증은 요청한 권한만 사용합니다');
+      }
+      if (native == 'google' &&
+          extra is Map &&
+          extra.keys.any(
+            (key) => !const {
+              'access_type',
+              'prompt',
+              'include_granted_scopes',
+              'trigger_onepick',
+              'allow_multiple',
+              'mimetypes',
+              'file_ids',
+              'allow_folder_selection',
+            }.contains(key),
+          )) {
+        throw const FormatException('지원하지 않는 Android Google 인증 옵션');
+      }
+      if (extra is Map &&
+          extra['trigger_onepick'] == 'true' &&
+          jsonEncode(plugin.oauth['scopes']) != jsonEncode(['https://www.googleapis.com/auth/drive.file'])) {
+        throw const FormatException('Google Picker는 drive.file 단독 권한이 필요합니다');
       }
       if (plugin.oauth['scopes'] is! List || (plugin.oauth['scopes'] as List).any((v) => v is! String)) {
         throw const FormatException('OAuth scopes 형식 오류');

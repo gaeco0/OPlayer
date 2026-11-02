@@ -1,4 +1,4 @@
-// @oplayer {"api":4,"id":"player.video-presets","name":"영상 색상 프리셋","version":"1.0.0","kind":"player","capabilities":["videoFilter"],"hosts":[],"settings":[{"key":"preset","type":"select","label":"프리셋","options":["원본","선명하게","흑백"],"default":"원본"}]}
+// @oplayer {"api":4,"id":"player.video-presets","name":"영상 색상 프리셋","version":"1.0.1","kind":"player","capabilities":["videoFilter"],"hosts":[],"settings":[{"key":"preset","type":"select","label":"프리셋","options":["원본","선명하게","흑백"],"default":"원본"}],"platforms":["android","windows","linux","macos"]}
 globalThis.plugin = {
   videoFilter() {
     switch (OPlayer.config.preset) {

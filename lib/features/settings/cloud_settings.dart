@@ -54,13 +54,15 @@ class CloudPluginSettingsPage extends StatelessWidget {
           body: const Center(child: Text('확장앱이 설치되어 있지 않습니다')),
         );
       }
-      final supported = (plugin.manifest['platforms'] as List?)?.contains(Platform.operatingSystem) ?? true;
+      final compatibility = plugin.compatibilityIssue();
+      final supported = compatibility == null;
       final configured = cloudPluginConfigured(plugin);
       return Scaffold(
         appBar: AppBar(title: Text('${plugin.name} 설정')),
         body: ListView(
           children: [
             ListTile(title: Text(plugin.name), subtitle: Text('${plugin.version} · ${plugin.kindLabel} 확장앱')),
+            if (compatibility != null) ListTile(subtitle: Text(compatibility)),
             if (store.disabled.contains(pluginId))
               const ListTile(subtitle: Text('꺼진 확장앱입니다. 설정은 보관되며, 사용하려면 확장앱을 켜 주세요.')),
             ListTile(

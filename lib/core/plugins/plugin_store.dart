@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'plugin_compatibility.dart';
 import '../../sources/server_store.dart';
 import '../../sources/source_registry.dart';
 import 'upscale_models.dart';
@@ -22,6 +23,7 @@ class PluginListing {
   PluginListing(this.repository, this.data);
   final Uri repository;
   final Map<String, dynamic> data;
+  String? compatibilityIssue({String? platform}) => pluginCompatibilityIssue(data, platform: platform);
   String get id => data['id'] as String;
   String get name => data['name'] as String;
   String get version => data['version'] as String;
@@ -50,12 +52,16 @@ class PluginStore extends ChangeNotifier {
   final Map<String, String> errors = {};
   final Map<String, String> repositoryNames = {};
   SharedPreferences? _prefs;
-  Iterable<OPlugin> get enabled => installed.values.where((p) => !disabled.contains(p.id) && !_removing.contains(p.id));
+  Iterable<OPlugin> get enabled => installed.values.where(
+    (p) => !disabled.contains(p.id) && !_removing.contains(p.id) && p.compatibilityIssue() == null,
+  );
   OPlugin require(String id) {
     final p = installed[id];
     if (p == null || disabled.contains(id) || _removing.contains(id)) {
       throw StateError('$id 확장앱을 설치하고 켜 주세요 (설정 → 확장앱)');
     }
+    final issue = p.compatibilityIssue();
+    if (issue != null) throw StateError(issue);
     return p;
   }
 
@@ -148,6 +154,8 @@ class PluginStore extends ChangeNotifier {
 
   Future<void> load(String source) async {
     final p = await _settingsDefinition(OPlugin.parse(source));
+    final issue = p.compatibilityIssue();
+    if (issue != null) throw StateError(issue);
     await callPlugin(p, 'validate', {}, validateOnly: true);
     installed[p.id] = p;
     disabled.remove(p.id);
@@ -157,6 +165,8 @@ class PluginStore extends ChangeNotifier {
 
   Future<void> setEnabled(String id, bool value) async {
     if (value) {
+      final issue = installed[id]?.compatibilityIssue();
+      if (issue != null) throw StateError(issue);
       disabled.remove(id);
     } else {
       disabled.add(id);
@@ -246,6 +256,17 @@ class PluginStore extends ChangeNotifier {
       if (data['kind'] != null && !OPlugin.contracts.containsKey(listing.kind)) {
         throw const FormatException('지원하지 않는 확장앱 유형');
       }
+      for (final key in ['platforms', 'requiresHost']) {
+        final values = data[key];
+        if (values != null &&
+            (values is! List ||
+                values.any((v) => v is! String) ||
+                values.toSet().length != values.length ||
+                key == 'platforms' && (values.isEmpty || values.any((v) => !pluginPlatforms.contains(v))))) {
+          throw const FormatException('잘못된 확장앱 호환성 선언');
+        }
+      }
+      if (data['pluginApi'] != null && data['pluginApi'] is! int) throw const FormatException('잘못된 확장앱 API');
       final capabilities = data['capabilities'];
       if (capabilities != null &&
           (!OPlugin.contracts.containsKey(listing.kind) ||
@@ -273,6 +294,15 @@ class PluginStore extends ChangeNotifier {
             (capabilities.length != p.capabilities.length || !capabilities.every(p.capabilities.contains)) ||
         listing.data['pluginApi'] != null && listing.data['pluginApi'] != p.manifest['api']) {
       throw const FormatException('목록과 확장앱 유형·기능이 다릅니다');
+    }
+    for (final key in ['platforms', 'requiresHost']) {
+      final advertised = listing.data[key] as List?;
+      final actual = p.manifest[key] as List?;
+      if (advertised != null &&
+              (actual == null || advertised.length != actual.length || !advertised.every(actual.contains)) ||
+          key == 'requiresHost' && actual != null && advertised == null) {
+        throw const FormatException('목록과 확장앱 호환성 정보가 다릅니다');
+      }
     }
     return p;
   }

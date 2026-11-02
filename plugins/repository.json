@@ -6,7 +6,7 @@
     {
       "id": "cloud.box",
       "name": "Box",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "kind": "resource",
       "capabilities": [
         "storage"
@@ -20,13 +20,19 @@
       ],
       "description": "Box 계정 연결·폴더 탐색·미디어 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.box.js",
-      "sha256": "d9f6c423c100ba6250300c945cb94b088174948747c6f6379960079c5ca5f887",
-      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+      "sha256": "dbf606f618f83168937755887323a61b5887dafb897872cd40e303e36fe03761",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
+      "platforms": [
+        "android",
+        "windows",
+        "linux",
+        "macos"
+      ]
     },
     {
       "id": "cloud.dropbox",
       "name": "Dropbox",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "kind": "resource",
       "capabilities": [
         "storage"
@@ -40,18 +46,24 @@
       ],
       "description": "Dropbox 계정 연결·폴더 탐색·미디어 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.dropbox.js",
-      "sha256": "9340b170bb1fdf8d041cc9c87d162c1b0cd6ddb4acedafe6676f9b0a7eb433e2",
-      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+      "sha256": "e032b642a85436f8b982e68c93a8893f9345ed777a411c9dac4c4ba3419b6465",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
+      "platforms": [
+        "android",
+        "windows",
+        "linux",
+        "macos"
+      ]
     },
     {
       "id": "cloud.gdrive",
       "name": "Google Drive",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "kind": "resource",
       "capabilities": [
         "storage"
       ],
-      "pluginApi": 4,
+      "pluginApi": 5,
       "author": "OPlayer",
       "features": [
         "파일 단위 접근",
@@ -61,13 +73,22 @@
       ],
       "description": "drive.file 최소 권한으로 OPlayer 파일 탐색·재생·업로드",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.gdrive.js",
-      "sha256": "28b50bd3be1258494c0b8ffaaff375933b6d04f28ace3e9e524d4057e167aa30",
-      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+      "sha256": "eea88dba2ada602b715dc72cf094c58eacac1708cecf8a5963828c304ed04702",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
+      "platforms": [
+        "android",
+        "windows",
+        "linux",
+        "macos"
+      ],
+      "requiresHost": [
+        "googlePicker"
+      ]
     },
     {
       "id": "cloud.mybox",
       "name": "네이버 MYBOX",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "kind": "resource",
       "capabilities": [
         "storage"
@@ -81,13 +102,19 @@
       ],
       "description": "네이버 MYBOX 계정 연결·폴더 탐색·미디어 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.mybox.js",
-      "sha256": "eb1acac94470ad6818a329db003018bd70b4d7b0807e892a89a0a2bc1cae9c62",
-      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+      "sha256": "b8ec0795fdb2dcc9f8c4738a8792a6d419a26e3a55a9af6927ca4bd7221392ee",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
+      "platforms": [
+        "android",
+        "windows",
+        "linux",
+        "macos"
+      ]
     },
     {
       "id": "cloud.onedrive",
       "name": "OneDrive",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "kind": "resource",
       "capabilities": [
         "storage"
@@ -101,13 +128,19 @@
       ],
       "description": "OneDrive 계정 연결·폴더 탐색·미디어 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.onedrive.js",
-      "sha256": "c022bc3906db7083ea842c45136c6977353b1e8ce64d436a2498837e77d3563b",
-      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+      "sha256": "fe3e60c4cb625c77bb081b0843e785714728b26289fc8273a203d5d58c2d40d4",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
+      "platforms": [
+        "android",
+        "windows",
+        "linux",
+        "macos"
+      ]
     },
     {
       "id": "cloud.s3",
       "name": "S3 호환 스토리지",
-      "version": "1.1.1",
+      "version": "1.1.2",
       "kind": "resource",
       "capabilities": [
         "storage"
@@ -121,13 +154,19 @@
       ],
       "description": "S3 호환 스토리지 계정 연결·폴더 탐색·미디어 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.s3.js",
-      "sha256": "9d4ace89f2e49f55f78c129a496757edd147fd0df9fe75e043692c3e8bbea9fd",
-      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+      "sha256": "1facd0964b5a5b4865031b4af97d3a7f976d5b7a2d0f8246b2601a039d2aeae3",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
+      "platforms": [
+        "android",
+        "windows",
+        "linux",
+        "macos"
+      ]
     },
     {
       "id": "player.video-presets",
       "name": "영상 색상 프리셋",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "kind": "player",
       "capabilities": [
         "videoFilter"
@@ -139,13 +178,19 @@
       ],
       "description": "영상 색상·회전·반전 설정 프리셋",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/player.video-presets.js",
-      "sha256": "6be4f7fc574adb6cb9b731dc7c2227146a9a570a98e3a9297227573eb29e4105",
-      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+      "sha256": "36feb977f4b9ad7446858b5ebcc065acf53ea3ad9031b33663fce791d4c0c1bd",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
+      "platforms": [
+        "android",
+        "windows",
+        "linux",
+        "macos"
+      ]
     },
     {
       "id": "resource.jellyfin",
       "name": "Jellyfin",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "kind": "resource",
       "capabilities": [
         "storage"
@@ -160,13 +205,19 @@
       ],
       "description": "사용자 지정 Jellyfin 서버의 라이브러리·영상·음악 탐색과 검색·원본 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/resource.jellyfin.js",
-      "sha256": "72170f42518f9f6e3031e9fe2081379bb6d74b3b46eae017565e3ecc2e5ccb8b",
-      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+      "sha256": "35eede3890245195d99489ed24dc4d8f5cd6ddaa4f7719ac011837325dc7d18c",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
+      "platforms": [
+        "android",
+        "windows",
+        "linux",
+        "macos"
+      ]
     },
     {
       "id": "resource.peertube",
       "name": "PeerTube",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "kind": "resource",
       "capabilities": [
         "storage"
@@ -181,13 +232,19 @@
       ],
       "description": "사용자 지정 PeerTube 인스턴스의 공개·내 영상 탐색, 검색과 HTTP/HLS 재생",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/resource.peertube.js",
-      "sha256": "ecbca562972d748a26865ad241d0d3f9205bc2a2fbf8e00679d6a31eba33958f",
-      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+      "sha256": "492035cfc1f84211e8b521f36b3592d22e25f8ed2b4796c006129c8dad8ce449",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
+      "platforms": [
+        "android",
+        "windows",
+        "linux",
+        "macos"
+      ]
     },
     {
       "id": "site.disable-devtool",
       "name": "disable-devtool 차단",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "kind": "browser",
       "capabilities": [
         "page",
@@ -203,13 +260,18 @@
       ],
       "description": "모든 웹사이트에서 개발자 도구 감지로 인한 강제 이동을 억제합니다. 다른 코드에 합쳐진 변형은 일부만 대응합니다.",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/site.disable-devtool.js",
-      "sha256": "b1009ff6be344f2c0d4819f4676a9bebe377c708e66c90328aa67bb95fe793d7",
-      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+      "sha256": "82e063a253e4a06f77cfd2c0b8e3a9949d8bb90e40e77cef5bbde4a450d288eb",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
+      "platforms": [
+        "android",
+        "windows",
+        "macos"
+      ]
     },
     {
       "id": "subtitle.opensubtitles",
       "name": "OpenSubtitles",
-      "version": "1.0.4",
+      "version": "1.0.5",
       "kind": "player",
       "capabilities": [
         "subtitles"
@@ -222,13 +284,19 @@
       ],
       "description": "OpenSubtitles 자막 검색·다운로드·적용",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/subtitle.opensubtitles.js",
-      "sha256": "76dcd0f69fc377b4083c0e903a30469e6d815be086f78facddd696a00fb83e7f",
-      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+      "sha256": "831cd449a4786274d3028c0425099e3aa3db552b084ecfbcf5a712f4fa923e3c",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
+      "platforms": [
+        "android",
+        "windows",
+        "linux",
+        "macos"
+      ]
     },
     {
       "id": "player.ai-upscale",
       "name": "경량 AI 업스케일 모델",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "kind": "player",
       "pluginApi": 4,
       "author": "OPlayer",
@@ -239,13 +307,19 @@
       ],
       "description": "업스케일 SDK 필요 · Anime4K CNN S·Denoise S·FSRCNNX 8",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/player.ai-upscale.js",
-      "sha256": "e8604e1dd30510286f33b94edd476b277884875acfa69e747c90b7f49ef09cd4",
-      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+      "sha256": "67bb430b48eb0bfae6560621fa0bdbe30918ef5549e54744d95e30b908bfde68",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
+      "platforms": [
+        "android",
+        "windows",
+        "linux",
+        "macos"
+      ]
     },
     {
       "id": "player.ai-interpolation",
       "name": "AI 보간 모델",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "kind": "player",
       "pluginApi": 4,
       "author": "OPlayer",
@@ -256,8 +330,14 @@
       ],
       "description": "AI 보간 모델 SDK 필요 · RIFE v4.6 · 1배속 SDR",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/player.ai-interpolation.js",
-      "sha256": "eedf8d34f23db8028632dd2948408f341841da77efd28851edea85317d4208b6",
-      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins"
+      "sha256": "5f9752aee5e2bf9c08a65556e0720b5fbb7917b066390bb09b795c3057cd251e",
+      "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
+      "platforms": [
+        "android",
+        "windows",
+        "linux",
+        "macos"
+      ]
     }
   ]
 }

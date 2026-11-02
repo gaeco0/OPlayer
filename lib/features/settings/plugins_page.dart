@@ -49,6 +49,8 @@ class _PluginsPageState extends State<PluginsPage> {
   });
   Future<void> _install(OPlugin p) async {
     if (!mounted) return;
+    final issue = p.compatibilityIssue();
+    if (issue != null) throw StateError(issue);
     final approved = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
@@ -160,10 +162,14 @@ class _PluginsPageState extends State<PluginsPage> {
                 for (final p in store.installed.values.where((p) => category.isEmpty || p.kind == category))
                   ListTile(
                     title: Text(p.name),
-                    subtitle: Text('${p.version} · ${p.kindLabel}\n${p.capabilities.join(' · ')}'),
+                    subtitle: Text(
+                      '${p.version} · ${p.kindLabel}\n${p.capabilities.join(' · ')}${p.compatibilityIssue() == null ? '' : '\n${p.compatibilityIssue()}'}',
+                    ),
                     leading: Switch(
-                      value: !store.disabled.contains(p.id),
-                      onChanged: busy ? null : (v) => _guard(() => store.setEnabled(p.id, v)),
+                      value: !store.disabled.contains(p.id) && p.compatibilityIssue() == null,
+                      onChanged: busy || p.compatibilityIssue() != null
+                          ? null
+                          : (v) => _guard(() => store.setEnabled(p.id, v)),
                     ),
                     onTap: (p.cloud || p.settings.isNotEmpty) && !busy
                         ? () => Navigator.of(
@@ -226,10 +232,14 @@ class _PluginsPageState extends State<PluginsPage> {
                       title: Text(entry.name),
                       subtitle: Text(
                         '${entry.version} · ${categories[entry.kind] ?? '기존 규약'}${entry.author.isEmpty ? '' : ' · ${entry.author}'}\n${entry.description}'
-                        '${entry.features.isEmpty ? '' : '\n기능: ${entry.features.join(' · ')}'}',
+                        '${entry.features.isEmpty ? '' : '\n기능: ${entry.features.join(' · ')}'}'
+                        '${entry.compatibilityIssue() == null ? '' : '\n${entry.compatibilityIssue()}'}',
                       ),
                       trailing: FilledButton(
-                        onPressed: busy || store.installed[entry.id]?.version == entry.version
+                        onPressed:
+                            busy ||
+                                entry.compatibilityIssue() != null ||
+                                store.installed[entry.id]?.version == entry.version
                             ? null
                             : () => _guard(() async => _install(await store.download(entry))),
                         child: Text(

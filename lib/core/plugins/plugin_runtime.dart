@@ -4,6 +4,7 @@ import 'dart:io';
 import '../../sources/cloud/cloud_config.dart';
 import 'package:quickjs_engine/quickjs_engine.dart';
 import 'plugin.dart';
+import 'plugin_compatibility.dart';
 import 'plugin_values.dart';
 import 'plugin_parser.dart';
 
@@ -21,6 +22,8 @@ Future<Object?> callPlugin(
   bool Function(String)? allowsRequest,
   bool validateOnly = false,
 }) async {
+  final issue = plugin.compatibilityIssue();
+  if (issue != null) throw StateError(issue);
   if (!RegExp(r'^[a-zA-Z]+$').hasMatch(method)) throw ArgumentError.value(method);
   if (!validateOnly && !plugin.allowedMethods.contains(method)) {
     throw StateError('선언하지 않은 확장앱 기능: $method');
@@ -45,7 +48,7 @@ Future<Object?> callPlugin(
       });
       $pluginParserFactory
       globalThis.OPlayer = Object.freeze({
-        api: 4, kind: ${jsonEncode(plugin.kind)}, capabilities: Object.freeze(${jsonEncode(plugin.capabilities)}),
+        api: ${plugin.manifest['api'] == 5 ? 5 : 4}, hostApi: $pluginHostApi, kind: ${jsonEncode(plugin.kind)}, capabilities: Object.freeze(${jsonEncode(plugin.capabilities)}),
         config: Object.freeze(${jsonEncode(config)}),
         app: Object.freeze({googleOAuth: Object.freeze(${jsonEncode({'clientId': CloudConfig.googleClientId, 'platform': Platform.operatingSystem})})}),
         secret: (name, options = {}) => ({\$secret:name, ...options}),

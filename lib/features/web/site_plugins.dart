@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 import '../../core/network/network_service.dart';
 import '../../core/plugins/plugin.dart';
+import '../../core/plugins/plugin_compatibility.dart';
 import '../../core/plugins/plugin_runtime.dart';
 import '../../core/plugins/plugin_store.dart';
 import '../../core/plugins/plugin_values.dart';
@@ -12,7 +13,7 @@ import '../../core/plugins/plugin_http.dart';
 import '../../core/plugins/plugin_parser.dart';
 import 'request_headers.dart';
 
-String sitePluginScript(OPlugin p) => !p.site || !p.supports('page')
+String sitePluginScript(OPlugin p) => !p.site || p.compatibilityIssue() != null || !p.supports('page')
     ? ''
     : '''(() => {
   const domains = ${jsonEncode(p.sites)};
@@ -24,7 +25,7 @@ String sitePluginScript(OPlugin p) => !p.site || !p.supports('page')
     const config = Object.freeze(${jsonEncode(PluginStore.instance.publicSettings(p))});
     $pluginParserFactory
     $pluginPageParser
-    const sandbox = {OPlayer:Object.freeze({api:4,kind:'browser',capabilities:Object.freeze(${jsonEncode(p.capabilities)}),config,parse:createOPlayerPageParser()})};
+    const sandbox = {OPlayer:Object.freeze({api:${p.manifest['api'] == 5 ? 5 : 4},hostApi:$pluginHostApi,kind:'browser',capabilities:Object.freeze(${jsonEncode(p.capabilities)}),config,parse:createOPlayerPageParser()})};
     (function(globalThis,OPlayer) { ${p.source}\n }).call(sandbox, sandbox, sandbox.OPlayer);
     const api = Object.freeze({
       config,

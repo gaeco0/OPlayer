@@ -63,6 +63,13 @@ void main() {
         'capabilities': ['page'],
       });
       await expectLater(store.download(wrongFeatures), throwsFormatException);
+      for (final field in ['platforms', 'requiresHost']) {
+        final wrongCompatibility = PluginListing(listings.single.repository, {
+          ...listings.single.data,
+          field: [field == 'platforms' ? 'android' : 'googlePicker'],
+        });
+        await expectLater(store.download(wrongCompatibility), throwsFormatException);
+      }
       await store.load(plugin.source);
       await store.setEnabled(plugin.id, false);
       expect(store.enabled.any((p) => p.id == plugin.id), false);
@@ -98,7 +105,8 @@ void main() {
       expect(scriptBytes.contains(13), false, reason: 'Repository JS must use LF, matching GitHub-served bytes');
       expect(sha256.convert(scriptBytes).toString(), item['sha256']);
       expect(['player', 'browser', 'resource'], contains(item['kind']));
-      expect(item['pluginApi'], 4);
+      expect([4, 5], contains(item['pluginApi']));
+      expect(item['pluginApi'], OPlugin.parse(await File('plugins/$fileName').readAsString()).manifest['api']);
       // New capabilities may be omitted from catalog hints for old-reader compatibility.
       expect(
         item['capabilities'] ?? OPlugin.parse(await File('plugins/$fileName').readAsString()).capabilities,

@@ -19,7 +19,7 @@ nPlayer의 UI/UX를 기준으로, 로컬·네트워크·클라우드 재생과 �
 
 - 현재 공개 베타: [0.1.8-beta.2](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.8-beta.2). 최근 재생 다중 선택을 포함한다. 앱의 업데이트 채널을 **beta**로 선택하면 확인할 수 있다. 정식 Latest·업데이트 확인 기본값은 stable v0.1.7로 유지한다.
 - 플랫폼별 실기기 검증을 모두 마친 베타는 아니다. 전체 플랫폼 빌드·자동 검증은 유지하며, 다양한 기기의 성능·호환성 문제는 사용자 제보를 모아 재현 후 수정한다. 설정 → **진단 정보 보내기**로 GitHub Issues에 신고할 수 있다.
-- 현재 nightly: [0.1.9-nightly.20261102.4](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.9-nightly.20261102.4). 확장앱 삭제 시 설정·인증정보·연결 계정·토큰과 미사용 모델 캐시를 정리하고 재설치 시 예전 정보가 복원되지 않도록 수정했습니다. Android Google Drive 연결은 이전 권한 토큰 캐시를 한 번 무효화해 재시도합니다. 권한 축소와 기존 기능을 포함하며 내부 빌드 번호 `+2`, 기존 Android 서명, 정식 Latest·업데이트 확인 기본값 stable v0.1.7을 유지합니다.
+- 현재 nightly: [0.1.9-nightly.20261103.1](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.9-nightly.20261103.1). Google Drive 파일 선택기를 연결하고 **Drive 파일 추가** 버튼을 제공합니다. 공식 Google Drive 확장앱 **1.5.0**과 함께 사용하며 Google Cloud에서 Google Picker API를 사용 설정해야 합니다. API 5·필수 호스트 기능·OS 지원 여부를 설치와 실행에 공통 적용했습니다. 내부 빌드 번호 `+2`, 기존 Android 서명, 정식 Latest·업데이트 확인 기본값 stable v0.1.7을 유지합니다.
 
 ## 파일·재생목록 관리 (v0.1.7)
 
@@ -293,7 +293,7 @@ Chromecast·DLNA·PiP는 실제 Android/TV 기기 검증이 필요하다. nPlaye
 
 - OneDrive: Microsoft Entra 앱 등록에서 개인 Microsoft 계정을 포함하는 계정 유형과 모바일 및 데스크톱 플랫폼을 선택한다. 권한은 Files.Read, User.Read, offline_access. 커스텀 복귀 주소 `com.oplayer.oplayer://oauth/onedrive`와 데스크톱 `http://localhost:53682/callback`을 등록한다.
 - Dropbox: Scoped access / Full Dropbox 앱을 만들고 files.metadata.read, files.content.read, account_info.read 권한을 켠다. `com.oplayer.oplayer://oauth/dropbox`와 `http://localhost:53682/callback`을 등록한다.
-- Google Drive: Google Cloud 프로젝트에서 Drive API를 사용 설정하고 OAuth 데이터 액세스에 `https://www.googleapis.com/auth/drive.file`만 등록한다. 동기화용 `drive.appdata`는 별도 유지하고 기존 `drive`·`drive.readonly`는 제거한다. 공식 Drive 확장앱 1.4.1은 앱이 만들었거나 허용받은 파일만 탐색·재생·업로드하며 전체 라이브러리는 조회하지 않는다. Google Picker API를 사용 설정하면 확장앱 1.4.1의 신규 연결에서 기존 파일을 선택할 수 있다. Android와 기존 계정의 **Drive 파일 추가** 버튼은 Picker 지원 앱 업데이트가 필요하며 현재 배포본 0.1.9-nightly.20261102.4에는 포함되지 않았다. 기존 사용자는 Google 계정의 OPlayer 서드 파티 연결을 삭제하고 앱에서도 계정을 해제한 뒤 다시 연결한다. Android는 새 권한을 지원하는 앱 업데이트도 필요하다. Windows/macOS/Linux에서는 **데스크톱 앱** 유형의 Client ID와 Client Secret을 설정에 입력한다. 직접 입력한 Secret은 기기의 보안 저장소에 Client ID별로 보관한다. 운영자 등록값의 Actions 주입은 [Google 등록 안내](docs/google-sync.md)를 따른다. 데스크톱 배포본에 포함한 Secret은 바이너리에서 추출 가능하므로 서버 비밀로 사용하지 않는다. 로그인은 시스템 브라우저와 `http://127.0.0.1:53682/callback` 루프백, PKCE로 처리한다.
+- Google Drive: Google Cloud 프로젝트에서 Drive API를 사용 설정하고 OAuth 데이터 액세스에 `https://www.googleapis.com/auth/drive.file`만 등록한다. 동기화용 `drive.appdata`는 별도 유지하고 기존 `drive`·`drive.readonly`는 제거한다. 공식 Drive 확장앱 1.5.0은 앱이 만들었거나 허용받은 파일만 탐색·재생·업로드하며 전체 라이브러리는 조회하지 않는다. Google Picker API를 사용 설정하면 확장앱 1.5.0의 신규 연결에서 기존 파일을 선택할 수 있다. Google Drive 1.5.0은 API 5 지원 앱(0.1.9-nightly.20261103.1 이상)이 필요하다. 계정 연결 후 **Drive 파일 추가**로 기존 영상·자막을 선택할 수 있다. 기존 사용자는 Google 계정의 OPlayer 서드 파티 연결을 삭제하고 앱에서도 계정을 해제한 뒤 다시 연결한다. Android는 새 권한을 지원하는 앱 업데이트도 필요하다. Windows/macOS/Linux에서는 **데스크톱 앱** 유형의 Client ID와 Client Secret을 설정에 입력한다. 직접 입력한 Secret은 기기의 보안 저장소에 Client ID별로 보관한다. 운영자 등록값의 Actions 주입은 [Google 등록 안내](docs/google-sync.md)를 따른다. 데스크톱 배포본에 포함한 Secret은 바이너리에서 추출 가능하므로 서버 비밀로 사용하지 않는다. 로그인은 시스템 브라우저와 `http://127.0.0.1:53682/callback` 루프백, PKCE로 처리한다.
 - Google Drive Android/Android TV: **Android** 유형의 OAuth 클라이언트를 만든다. 앱 등록 화면에 표시되는 현재 패키지와 서명 SHA-1을 그대로 등록하고 Client ID를 입력한다. 모바일 `com.oplayer.oplayer`와 TV `com.oplayer.oplayer.tv`, 디버그/배포 서명은 각각 등록한다. Google Play 서비스의 공식 Authorization SDK를 사용하며 Android 루프백·커스텀 스킴은 사용하지 않는다. TV도 Google Play 서비스 및 계정·동의 UI가 필요하다. iOS의 Google Drive 연결은 지원하지 않는다.
 - `drive`는 제한된 범위이므로 공개 배포 로그인에는 Google OAuth 검증이 필요하다. 외부 테스트 모드에서는 등록한 테스트 사용자만 접속할 수 있고 갱신 토큰이 7일 후 만료될 수 있다. [Google OAuth 안내](https://developers.google.com/identity/protocols/oauth2/native-app), [Android 인증 안내](https://developer.android.com/identity/authorization), [Drive 권한 안내](https://developers.google.com/workspace/drive/api/guides/api-specific-auth).
 - Android/iOS 복귀 스킴은 이미 등록되어 있다. Windows/macOS/Linux는 시스템 브라우저와 루프백 콜백을 사용한다. PKCE S256, state, 복귀 주소를 검증하고 토큰은 보안 저장소에 보관한다.
@@ -392,3 +392,5 @@ test/          홈/설정 위젯 테스트, HLS 파서·AES·프록시 단위 �
 - 실제 클라우드 계정·서버를 사용한 로그인·목록 탐색·재생·토큰 갱신과 서비스별 권한 설정. 모의 OAuth/API 테스트와 실서비스 검증을 구분한다.
 - Linux·macOS 실환경의 재생·네트워크 연결·확장앱 동작, Android 지문·Windows Hello 인증 및 캡처 방지. v0.1.4의 5개 플랫폼 CI 빌드 성공이 모든 실기기 동작 검증을 뜻하지는 않는다.
 - iOS 빌드·기기 검증과 배포 절차. 현재 GitHub Actions의 배포 대상은 Windows·Android·Android TV·Linux·macOS다.
+
+확장앱의 OS별 지원 범위·API 5 호환성 검사와 실제 기기 테스트 제한은 [호환성 검수 문서](docs/plugin-compatibility.md)를 참고하세요.

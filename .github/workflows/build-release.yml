@@ -92,6 +92,11 @@ jobs:
           OPLAYER_TEST_LIBMPV: ${{ github.workspace }}/build/windows/x64/runner/Release/libmpv-2.dll
         run: flutter test --no-pub test/subtitle_native_test.dart
       - run: python .github/scripts/verify-architecture.py windows-${{ matrix.arch }}
+      - name: Verify ARM64 extension runtime and compatibility
+        if: matrix.arch == 'arm64'
+        env:
+          LIBQUICKJSC_TEST_PATH: build/windows/arm64/runner/Release/quickjs_c_bridge_plugin.dll
+        run: flutter test --no-pub test/plugin_compatibility_test.dart test/plugin_platform_smoke_test.dart
       - name: Package complete application
         if: github.event_name != 'pull_request'
         run: python .github/scripts/package-release.py windows-${{ matrix.arch }}
@@ -245,6 +250,11 @@ jobs:
           echo "$RUNNER_TEMP/flutter-arm64/bin" >> "$GITHUB_PATH"
       - run: flutter pub get
       - run: flutter build linux --target-platform linux-${{ matrix.arch }} --release --no-pub --dart-define-from-file=.dart_tool/google-oauth-defines.json --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
+      - name: Verify extension runtime and compatibility on Linux
+        run: |
+          cmake -S packages/quickjs_engine/native -B build/plugin-runtime -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/plugin-runtime --parallel 2
+          flutter test --no-pub test/plugin_compatibility_test.dart test/plugin_platform_smoke_test.dart
       - run: python3 .github/scripts/verify-architecture.py linux-${{ matrix.arch }}
       - name: Package complete application
         if: github.event_name != 'pull_request'
@@ -282,6 +292,11 @@ jobs:
       - run: flutter config --no-enable-swift-package-manager
       - run: flutter pub get
       - run: flutter build macos --release --no-pub --dart-define-from-file=.dart_tool/google-oauth-defines.json --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
+      - name: Verify extension runtime and compatibility on macOS
+        run: |
+          cmake -S packages/quickjs_engine/native -B build/plugin-runtime -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/plugin-runtime --parallel 2
+          flutter test --no-pub test/plugin_compatibility_test.dart test/plugin_platform_smoke_test.dart
       - name: Package complete application
         if: github.event_name != 'pull_request'
         run: python .github/scripts/package-release.py macos-arm64

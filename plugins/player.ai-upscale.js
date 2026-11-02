@@ -1,4 +1,4 @@
-// @oplayer {"api":4,"id":"player.ai-upscale","name":"경량 AI 업스케일 모델","version":"1.0.0","kind":"player","capabilities":["upscaling"],"hosts":[],"description":"저사양용 CNN S 2종과 FSRCNNX 8 · 모델 계산은 플레이어 GPU가 처리"}
+// @oplayer {"api":4,"id":"player.ai-upscale","name":"경량 AI 업스케일 모델","version":"1.0.1","kind":"player","capabilities":["upscaling"],"hosts":[],"description":"저사양용 CNN S 2종과 FSRCNNX 8 · 모델 계산은 플레이어 GPU가 처리","platforms":["android","windows","linux","macos"]}
 // Upstream weights and license headers are preserved verbatim in each shader string.
 const models = [
   {
