@@ -165,6 +165,19 @@ void main() {
             as Map;
     expect(plan['protocol'], 'http-content-range');
     expect(starts, 1);
+    await expectLater(
+      callPlugin(
+        plugin,
+        'upload',
+        {'path': 'root', 'name': 'movie.mp4', 'size': 7, 'overwritePath': 'old-child-file'},
+        request: (url, opts) async {
+          expect(opts['response'], isNot('headers'));
+          expect(Uri.parse(url).queryParameters['q'], "'root' in parents and trashed=false");
+          return {'files': []};
+        },
+      ),
+      throwsStateError,
+    );
     Future<Object?> existing(String? grant) => callPlugin(
       plugin,
       'upload',

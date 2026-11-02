@@ -1,13 +1,14 @@
-// @oplayer {"api":4,"id":"cloud.gdrive","name":"Google Drive","version":"1.3.0","kind":"resource","provider":"gdrive","hosts":["www.googleapis.com"],"authHosts":["www.googleapis.com"],"root":"root","rootTitle":"내 드라이브","oauth":{"clientIdSource":"app.google","authEndpoint":"https://accounts.google.com/o/oauth2/v2/auth","tokenEndpoint":"https://oauth2.googleapis.com/token","scopes":["https://www.googleapis.com/auth/drive"],"extraAuthParams":{"access_type":"offline","prompt":"consent"},"nativeAndroid":"google","requiresClientSecret":true},"setup":{"nativeRegistration":"google","help":"배포 앱의 Google OAuth 등록값으로 계정을 연결합니다. Drive API와 전체 읽기·쓰기 범위 drive를 설정하세요. 기존 읽기 전용 계정은 확장앱 업데이트 후 다시 연결해야 업로드할 수 있습니다. 동기화 권한 drive.appdata는 별도로 사용합니다. 테스트 상태 인증은 7일 후 만료될 수 있습니다.","consoleUrl":"https://console.cloud.google.com/apis/credentials"},"settings":[{"key":"clientId","label":"OAuth Client ID","type":"text","required":true,"description":"배포 앱의 등록값을 기본으로 사용합니다. 직접 등록한 값으로 변경할 수 있습니다."},{"key":"clientSecret","label":"데스크톱 Client Secret","type":"password","required":true,"platforms":["windows","linux","macos"],"description":"배포 앱의 기본 ID를 사용하면 비워 둘 수 있습니다. 직접 발급한 데스크톱 ID에는 해당 Secret을 입력하세요."}],"platforms":["android","windows","linux","macos"],"capabilities":["storage"],"canSearch":true,"canUpload":true}
+// @oplayer {"api":4,"id":"cloud.gdrive","name":"Google Drive","version":"1.4.0","kind":"resource","provider":"gdrive","hosts":["www.googleapis.com"],"authHosts":["www.googleapis.com"],"root":"root","rootTitle":"OPlayer 파일","oauth":{"clientIdSource":"app.google","authEndpoint":"https://accounts.google.com/o/oauth2/v2/auth","tokenEndpoint":"https://oauth2.googleapis.com/token","scopes":["https://www.googleapis.com/auth/drive.file"],"extraAuthParams":{"access_type":"offline","prompt":"consent","include_granted_scopes":"false"},"nativeAndroid":"google","requiresClientSecret":true},"setup":{"nativeRegistration":"google","help":"Drive API와 drive.file 범위만 등록하세요. 전체 Drive 읽기·쓰기는 요청하지 않습니다. 현재는 OPlayer가 만들었거나 접근을 허용받은 파일만 탐색·재생·업로드합니다. Google Picker는 아직 없어 기존 파일을 추가로 선택하는 UI는 제공하지 않습니다. 기존 연결은 Google 계정의 서드 파티 연결에서 OPlayer 권한을 삭제한 뒤 앱에서도 계정을 해제·재연결하세요. 동기화는 별도 drive.appdata 권한입니다.","consoleUrl":"https://console.cloud.google.com/apis/credentials"},"settings":[{"key":"clientId","label":"OAuth Client ID","type":"text","required":true,"description":"배포 앱의 등록값을 기본으로 사용합니다. 직접 등록한 값으로 변경할 수 있습니다."},{"key":"clientSecret","label":"데스크톱 Client Secret","type":"password","required":true,"platforms":["windows","linux","macos"],"description":"배포 앱의 기본 ID를 사용하면 비워 둘 수 있습니다. 직접 발급한 데스크톱 ID에는 해당 Secret을 입력하세요."}],"platforms":["android","windows","linux","macos"],"capabilities":["storage"],"canSearch":true,"canUpload":true}
 globalThis.plugin = {
   validateSettings() { return /^[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/.test(OPlayer.config.clientId || '') ? null : '발급받은 Google Client ID를 확인해 주세요'; },
   async accountName() { const j = await OPlayer.request('https://www.googleapis.com/drive/v3/about?fields=user'); return j.user.emailAddress || 'Google Drive'; },
   _escape(value) { return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'"); },
-  list({path}) { return plugin._files("'" + plugin._escape(path) + "' in parents and trashed=false"); },
+  list({path}) { return plugin._files(plugin._folderQuery(path)); },
+  _folderQuery(path, childrenOnly = false) { return path === 'root' && !childrenOnly ? 'trashed=false' : "'" + plugin._escape(path) + "' in parents and trashed=false"; },
   search({query,path}) {
     const text = query.trim();
     if (!text) return [];
-    return plugin._files("'" + plugin._escape(path) + "' in parents and trashed=false and name contains '" + plugin._escape(text) + "'");
+    return plugin._files(plugin._folderQuery(path) + " and name contains '" + plugin._escape(text) + "'");
   },
   async _files(query) {
     const out = []; let page;
@@ -26,9 +27,10 @@ globalThis.plugin = {
     return out;
   },
   async upload({path,name,size,overwritePath}) {
-    const matches = (await plugin.list({path})).filter(f => f.name.toLowerCase() === name.toLowerCase());
+    const matches = (await plugin._files(plugin._folderQuery(path, true))).filter(f => f.name.toLowerCase() === name.toLowerCase());
     if (matches.length > 1 || matches.some(f => f.isDir)) throw Error('같은 이름의 항목이 여러 개이거나 폴더입니다. 다른 파일명을 사용하세요');
     const existing = matches[0];
+    if (overwritePath && (!existing || existing.path !== overwritePath)) throw Error('덮어쓰기 대상이 바뀌었습니다. 파일 목록을 새로고침하고 다시 확인하세요');
     if (existing && existing.path !== overwritePath) throw Error('같은 이름의 파일이 있습니다. 덮어쓰기를 확인하거나 다른 이름을 사용하세요');
     const url = 'https://www.googleapis.com/upload/drive/v3/files' + (existing ? '/' + encodeURIComponent(existing.path) : '') +
       '?uploadType=resumable&supportsAllDrives=true&fields=id';

@@ -42,11 +42,10 @@ class GoogleDriveBridge(private val activity: Activity, messenger: BinaryMesseng
             if (call.method != "authorize") { result.notImplemented(); return@setMethodCallHandler }
             if (pending != null) { result.error("BUSY", "이미 Google 로그인 중입니다", null); return@setMethodCallHandler }
             val scopes = call.argument<List<String>>("scopes")
-                ?: listOf("https://www.googleapis.com/auth/drive.readonly")
-            val allowed = setOf("https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/drive.appdata",
-                "https://www.googleapis.com/auth/drive")
+                ?: listOf("https://www.googleapis.com/auth/drive.file")
+            val allowed = setOf("https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive.appdata")
             if (scopes.isEmpty() || scopes.any { it !in allowed }) {
-                result.error("SCOPE", "지원하지 않는 Google 권한입니다", null)
+                result.error("SCOPE", "지원하지 않는 Google 권한입니다. Google Drive 확장앱을 최신 버전으로 업데이트해 주세요", null)
                 return@setMethodCallHandler
             }
             pending = result
@@ -85,7 +84,7 @@ class GoogleDriveBridge(private val activity: Activity, messenger: BinaryMesseng
     private fun complete(authorization: AuthorizationResult) {
         val token = authorization.accessToken
         if (token.isNullOrBlank()) { fail("GOOGLE_TOKEN", "Google 인증 토큰을 받지 못했습니다"); return }
-        pending?.success(mapOf("accessToken" to token))
+        pending?.success(mapOf("accessToken" to token, "grantedScopes" to authorization.grantedScopes))
         pending = null
     }
 

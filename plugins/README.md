@@ -263,7 +263,7 @@ Actions Secret 이름과 운영자 등록 절차는 [Google 등록 안내](../do
   플러그인에 토큰 문자열을 전달하지 않으며, 인증 리디렉션은 따라가지 않습니다.
 - 계정의 리소스 훅을 호출할 때 `OPlayer.config.clientId`(또는 `oauth.clientIdSetting` 이름)는 **그 계정을 연결한
   OAuth Client ID**입니다. 앱의 현재 기본 ID를 조회하는 `OPlayer.app.googleOAuth.clientId`와 구분하세요.
-  Google Drive 조회는 `drive.readonly` 범위를 매니페스트에 선언하고 사용자가 계정을 연결한 뒤
+  Google Drive는 `drive.file` 범위를 매니페스트에 선언하고 사용자가 계정을 연결한 뒤
   `OPlayer.request('https://www.googleapis.com/drive/v3/files?...')`를 호출합니다. 응답 JSON이 훅에 반환됩니다.
   기본 동기화용 `drive.appdata` 토큰은 일반 Drive 파일 조회에 재사용하지 않습니다.
 
@@ -287,8 +287,12 @@ Actions Secret 이름과 운영자 등록 절차는 [Google 등록 안내](../do
 - 업로드 지원 계정은 다운로드 저장 위치와 다운로드 항목의 **다른 저장소로 이동**에 나타납니다.
   같은 이름의 기존 파일은 사용자 덮어쓰기 확인을 유지하며, 다른 파일 ID로 바뀌면 덮어쓰기를 거절합니다.
 
-공식 Google Drive `1.3.0`은 전체 Drive 탐색과 업로드에 `https://www.googleapis.com/auth/drive`를 요청합니다.
-기존 읽기 전용 계정은 확장앱을 업데이트하고 계정을 다시 연결해야 합니다. 동기화는 별도 `drive.appdata` 권한입니다.
+공식 Google Drive `1.4.0`은 `https://www.googleapis.com/auth/drive.file`만 요청합니다.
+전체 Drive 대신 앱이 만들었거나 접근을 허용받은 파일만 탐색·검색·재생·업로드하며, 덮어쓰기도 해당 파일에 한정합니다.
+루트는 **OPlayer 파일**로 표시하고 허용된 파일 전체를 조회합니다. Google Picker UI는 아직 제공하지 않으므로 기존 임의 파일을 새로 승인하는 기능은 없습니다.
+기존 연결은 Google 계정 → 서드 파티 연결에서 OPlayer 권한을 삭제한 뒤 앱에서도 계정을 해제·재연결하세요.
+이전에 저장한 전체 접근 토큰은 새 파일 단위 연결에서 재사용하지 않습니다. Android 네이티브 인증은 `drive.file` 지원 앱 업데이트가 필요합니다.
+Cloud Console 데이터 액세스에서 `drive`·`drive.readonly`를 제거하고 `drive.file`만 남기세요. 동기화는 별도 `drive.appdata` 권한입니다.
 - 앱 0.1.7-nightly.20261024.1부터 선택적 `canRename: true`와 `async rename({path,name,newName})`를 함께 선언할 수 있습니다.
   파일 이름변경 성공을 확인한 뒤 정확히 `true`를 반환합니다. `path`는 기존 `list`가 반환한 ID이며 이름변경 후에도
   유지해야 합니다. ID나 경로가 바뀌는 공급자는 이 규약을 선언하지 마세요. 폴더·루트 이름변경은 지원하지 않습니다.

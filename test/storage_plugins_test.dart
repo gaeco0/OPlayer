@@ -59,7 +59,7 @@ void main() {
       );
       final source = cloudSourceFor(account);
       addTearDown(source.close);
-      expect(source.tokens.client.scopes, ['https://www.googleapis.com/auth/drive']);
+      expect(source.tokens.client.scopes, ['https://www.googleapis.com/auth/drive.file']);
       await source.tokens.save(
         OAuthTokens(
           accessToken: 'old-drive-token',
@@ -99,7 +99,7 @@ void main() {
             return http.Response('{"user":{"emailAddress":"drive@example.com"}}', 200);
           }
           lists++;
-          expect(request.url.queryParameters['q'], "'root' in parents and trashed=false");
+          expect(request.url.queryParameters['q'], 'trashed=false');
           if (lists == 1) {
             expect(request.headers['Authorization'], 'Bearer old-drive-token');
             return http.Response('{"error":"expired"}', 401);
@@ -120,6 +120,31 @@ void main() {
       );
     },
   );
+
+  test('scope changes invalidate the cached account holder before an old full-access token can be used', () async {
+    final script = await File('plugins/cloud.gdrive.js').readAsString();
+    await store.load(
+      script.replaceFirst(
+        '"scopes":["https://www.googleapis.com/auth/drive.file"]',
+        '"scopes":["https://www.googleapis.com/auth/drive"]',
+      ),
+    );
+    final source = cloudSourceFor(
+      CloudAccount(
+        id: 'downscope',
+        provider: CloudProvider.gdrive,
+        name: 'Drive',
+        oauthClientId: 'test.apps.googleusercontent.com',
+      ),
+    );
+    addTearDown(source.close);
+    final old = source.tokens;
+    await old.save(OAuthTokens(accessToken: 'old-full-token', expiry: DateTime.now().add(const Duration(hours: 1))));
+    await store.load(script);
+    expect(identical(source.tokens, old), isFalse);
+    expect(source.tokens.client.scopes, [googleDriveFileScope]);
+    await expectLater(source.tokens.accessToken(), throwsA(contains('권한이 축소')));
+  });
 
   test('official Google Drive search filters the current folder, escapes input and paginates', () async {
     final plugin = OPlugin.parse(await File('plugins/cloud.gdrive.js').readAsString());

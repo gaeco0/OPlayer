@@ -125,6 +125,10 @@ class CloudSource extends MediaSource {
   CloudSource(this.account);
   TokenHolder? _tokens;
   TokenHolder get tokens {
+    if (_tokens != null && !_closed && jsonEncode(_tokens!.client.scopes) != jsonEncode(definition.oauth['scopes'])) {
+      _tokens!.close();
+      _tokens = null;
+    }
     if (_tokens != null) return _tokens!;
     if (_closed) throw StateError('계정 연결이 해제되었습니다');
     return _tokens ??= TokenHolder(

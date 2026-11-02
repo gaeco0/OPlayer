@@ -99,12 +99,12 @@ void main() {
     expect(refs.resolve(cloudKey), 'gdrive://another-account/file-id');
   });
 
-  test('Android appdata authorization is separate from the readonly cloud scope', () async {
+  test('Android appdata authorization is separate from the per-file cloud scope', () async {
     const channel = MethodChannel('oplayer/google-drive');
     final calls = <Map>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
       calls.add(call.arguments as Map);
-      return {'accessToken': 'native-token'};
+      return {'accessToken': 'native-token', 'grantedScopes': (call.arguments as Map)['scopes']};
     });
     addTearDown(
       () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, null),
@@ -118,7 +118,7 @@ void main() {
     expect(calls.last['scopes'], [googleSyncScope]);
     expect(calls.last['email'], 'a@example.com');
     await GoogleAndroidOAuthClient(clientId: 'cloud').authorize();
-    expect(calls.last['scopes'], ['https://www.googleapis.com/auth/drive.readonly']);
+    expect(calls.last['scopes'], ['https://www.googleapis.com/auth/drive.file']);
   });
 
   test('Drive appdata transport refreshes once, paginates and creates or updates only private app files', () async {

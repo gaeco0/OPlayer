@@ -272,7 +272,7 @@ void main() {
     final calls = <MethodCall>[];
     messenger.setMockMethodCallHandler(GoogleAndroidOAuthClient.channel, (call) async {
       calls.add(call);
-      return {'accessToken': 'native-token'};
+      return {'accessToken': 'native-token', 'grantedScopes': (call.arguments as Map)['scopes']};
     });
     addTearDown(() => messenger.setMockMethodCallHandler(GoogleAndroidOAuthClient.channel, null));
     final client = GoogleAndroidOAuthClient(clientId: 'android-id', accountEmail: 'selected@example.com');

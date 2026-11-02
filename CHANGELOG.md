@@ -5,6 +5,7 @@
 
 ## [Unreleased]
 
+- Google Drive 확장앱 1.4.0의 권한을 전체 `drive`에서 파일 단위 `drive.file`로 축소했습니다. 동기화 `drive.appdata`는 별도 유지합니다. 전체 Drive 탐색 대신 허용된 OPlayer 파일을 조회·재생·업로드하며 현재 Google Picker UI는 없습니다. 기존 전체 접근 토큰 재사용을 차단하고 Google 계정의 기존 OPlayer 연결 삭제 후 재연결을 안내합니다. Android 기본 요청·허용 범위와 실제 승인 범위 검증도 맞췄습니다.
 ## [0.1.9-nightly.20261102.1]
 
 MKV 출력과 HLS 병합·출력 통합을 포함한 개발 빌드입니다. 내부 빌드 번호 `+2`와 기존 Android 서명을 유지합니다.
