@@ -35,7 +35,7 @@ iOS는 Google 로그인 콜백 등록·네이티브 설정을 추가한 뒤 지�
    공개 사용은 Cloud 콘솔에서 프로덕션으로 전환하고 해당 앱 정보·요청 권한에 필요한 검증을 진행한다.
    OAuth 프로덕션 전환은 Play 스토어 출시와 별개이며 GitHub APK 배포를 유지할 수 있다.
 
-동기화 권한·토큰은 Drive 리소스와 분리한다. 공식 Drive 확장앱 1.6.0은 일반 폴더 탐색용 `https://www.googleapis.com/auth/drive.readonly`와 앱 전용 업로드용 `https://www.googleapis.com/auth/drive.file`을 요청한다. 같은 Cloud 프로젝트 데이터 액세스에 두 범위를 등록하고 전체 `drive`는 제거한다. 동기화의 `drive.appdata`는 유지한다. `drive.readonly`는 제한된 범위 심사 대상이며, API 5의 `oauthScopes`·`fixedUploadRoot` 지원 앱이 필요하다(현재 배포본 0.1.9-nightly.20261103.2에는 미포함). 기존 연결은 앱에서 범위 차이만으로 거부하지 않으며, 추가 권한이 필요한 기능은 확장앱이 안내한다. Picker는 사용하지 않는다.
+동기화 권한·토큰은 Drive 리소스와 분리한다. 공식 Drive 확장앱 1.6.0은 일반 폴더 탐색용 `https://www.googleapis.com/auth/drive.readonly`와 앱 전용 업로드용 `https://www.googleapis.com/auth/drive.file`을 요청한다. 같은 Cloud 프로젝트 데이터 액세스에 두 범위를 등록하고 전체 `drive`는 제거한다. 동기화의 `drive.appdata`는 유지한다. `drive.readonly`는 제한된 범위 심사 대상이며, API 5의 `oauthScopes`·`fixedUploadRoot` 지원 앱이 필요하다(0.1.9-nightly.20261103.3부터 지원). 기존 연결은 앱에서 범위 차이만으로 거부하지 않으며, 추가 권한이 필요한 기능은 확장앱이 안내한다. Picker는 사용하지 않는다.
 등록 정보가 없는 배포본은 직접 등록이 필요하다. 실제 공통 배포용 OAuth 프로젝트·클라이언트는 운영자가 별도로 준비해야 한다.
 
 ## 운영자 등록값을 Actions에서 주입하기

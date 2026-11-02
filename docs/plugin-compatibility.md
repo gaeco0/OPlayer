@@ -32,9 +32,9 @@ Google 계정 로그인·Picker 화면, 외부 클라우드의 실제 계정 권
 Google Cloud에서 Google Picker API 활성화가 필요하며, `drive.file`은 선택한 파일·앱 생성 파일만 허용합니다.
 폴더 선택은 하위 파일 전체에 대한 재귀 권한을 의미하지 않습니다.
 
-## 개발본 1.6.0
+## Google Drive 1.6.0
 
-Drive의 일반 로그인은 readonly+file을 함께 요청하고 Picker는 호출하지 않습니다. Android에서도 readonly를 명시적으로 허용·검증합니다. 기존 Picker/file-only 확장앱은 계속 지원합니다. 고정 업로드 루트 SDK는 Android·Windows·Linux·macOS에 공통 구현합니다. 현재 배포본 .20261103.2에는 새 호스트 기능이 포함되지 않았습니다.
+Drive의 일반 로그인은 readonly+file을 함께 요청하고 Picker는 호출하지 않습니다. 요청 권한은 확장앱이 선언하고 기능별 승인 여부도 확장앱이 검사합니다. 앱에는 Drive 권한별 허용/차단 목록을 두지 않습니다. 기존 Picker/file-only 확장앱은 계속 지원합니다. 고정 업로드 루트 SDK는 Android·Windows·Linux·macOS에 공통 구현합니다. 0.1.9-nightly.20261103.3부터 새 호스트 기능을 지원합니다.
 
 ### OAuth 권한 정책
 
