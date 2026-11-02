@@ -123,12 +123,14 @@ void main() {
 
   test('scope changes invalidate the cached account holder before an old full-access token can be used', () async {
     final script = await File('plugins/cloud.gdrive.js').readAsString();
-    await store.load(
-      script.replaceFirst(
-        '"scopes":["https://www.googleapis.com/auth/drive.file"]',
-        '"scopes":["https://www.googleapis.com/auth/drive"]',
-      ),
-    );
+    // The legacy full-drive grant predated Picker, which requires drive.file.
+    final metadata = jsonDecode(script.split('\n').first.substring(12)) as Map<String, dynamic>;
+    final oauth = metadata['oauth'] as Map;
+    oauth['scopes'] = ['https://www.googleapis.com/auth/drive'];
+    (oauth['extraAuthParams'] as Map).remove('trigger_onepick');
+    metadata.remove('requiresHost');
+    metadata['api'] = 4;
+    await store.load('// @oplayer ${jsonEncode(metadata)}\n${script.substring(script.indexOf('\n') + 1)}');
     final source = cloudSourceFor(
       CloudAccount(
         id: 'downscope',

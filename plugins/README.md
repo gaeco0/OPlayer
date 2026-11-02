@@ -298,7 +298,7 @@ Actions Secret 이름과 운영자 등록 절차는 [Google 등록 안내](../do
 전체 Drive 대신 앱이 만들었거나 접근을 허용받은 파일만 탐색·검색·재생·업로드하며, 덮어쓰기도 해당 파일에 한정합니다.
 루트는 **OPlayer 파일**로 표시하고 허용된 파일 전체를 조회합니다. 확장앱의 OAuth `extraAuthParams`에 `trigger_onepick=true`, `allow_multiple=true`를 지정하면 연결할 때 Google 파일 선택기를 띄웁니다. 기존 계정에서는 Picker 지원 앱의 **Drive 파일 추가**로 영상과 자막을 함께 선택합니다. 폴더 전체의 재귀 접근이나 전체 라이브러리 권한은 부여하지 않습니다.
 기존 연결은 Google 계정 → 서드 파티 연결에서 OPlayer 권한을 삭제한 뒤 앱에서도 계정을 해제·재연결하세요.
-이전에 저장한 전체 접근 토큰은 새 파일 단위 연결에서 재사용하지 않습니다. Android 네이티브 파일 선택과 기존 계정의 추가 선택 버튼은 0.1.9-nightly.20261103.1 이상 앱이 필요합니다. Google Drive 1.5.0은 API 5·googlePicker를 요구하므로 모든 OS에서 API 5 지원 앱이 필요합니다. 1.4.1의 데스크톱 신규 연결은 기존 앱에서도 지원합니다. Google Cloud 프로젝트에서 Drive API와 **Google Picker API**를 사용 설정하세요. 별도 API Key 없이 플랫폼별 기존 OAuth Client ID를 사용합니다. 백그라운드 갱신에서는 선택기를 띄우지 않습니다.
+이전에 저장한 전체 접근 토큰은 새 파일 단위 연결에서 재사용하지 않습니다. Android 네이티브 파일 선택과 기존 계정의 추가 선택 버튼은 0.1.9-nightly.20261103.2 이상 앱이 필요합니다. Google Drive 1.5.0은 API 5·googlePicker를 요구하므로 모든 OS에서 API 5 지원 앱이 필요합니다. 1.4.1의 데스크톱 신규 연결은 기존 앱에서도 지원합니다. Google Cloud 프로젝트에서 Drive API와 **Google Picker API**를 사용 설정하세요. 별도 API Key 없이 플랫폼별 기존 OAuth Client ID를 사용합니다. 백그라운드 갱신에서는 선택기를 띄우지 않습니다.
 기술 기준: [Google 공식 네이티브 Picker 안내](https://developers.google.com/workspace/drive/picker/guides/desktop-mobile-picker).
 Cloud Console 데이터 액세스에서 `drive`·`drive.readonly`를 제거하고 `drive.file`만 남기세요. 동기화는 별도 `drive.appdata` 권한입니다.
 - 앱 0.1.7-nightly.20261024.1부터 선택적 `canRename: true`와 `async rename({path,name,newName})`를 함께 선언할 수 있습니다.
