@@ -106,4 +106,29 @@ void main() {
     );
     expect(count, 1);
   });
+  test('Android Picker is interactive only; silent refresh never opens selection', () async {
+    const channel = MethodChannel('oplayer/google-drive');
+    final calls = <Map>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call.arguments as Map);
+      return {
+        'accessToken': 'token',
+        'grantedScopes': [googleDriveFileScope],
+      };
+    });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, null),
+    );
+    final client = GoogleAndroidOAuthClient(
+      clientId: 'test',
+      accountEmail: 'same@example.com',
+      extraAuthParams: const {'trigger_onepick': 'true', 'allow_multiple': 'true'},
+    );
+    final tokens = await client.authorize();
+    await client.refresh(tokens);
+    expect(calls.first['pickFiles'], true);
+    expect(calls.first['email'], 'same@example.com');
+    expect(calls.last['pickFiles'], false);
+    expect(calls.last['interactive'], false);
+  });
 }

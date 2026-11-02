@@ -251,6 +251,7 @@ class GoogleAndroidOAuthClient extends OAuthClient {
   GoogleAndroidOAuthClient({
     required super.clientId,
     this.accountEmail,
+    super.extraAuthParams,
     List<String> requestedScopes = const [googleDriveFileScope],
   }) : super(
          authEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
@@ -265,6 +266,7 @@ class GoogleAndroidOAuthClient extends OAuthClient {
   Future<OAuthTokens> _authorizeNative(bool interactive, [String? invalidateToken]) async {
     final result = await channel.invokeMapMethod<String, dynamic>('authorize', {
       'interactive': interactive,
+      'pickFiles': interactive && extraAuthParams['trigger_onepick'] == 'true',
       'email': accountEmail,
       'invalidateToken': invalidateToken,
       'scopes': scopes,

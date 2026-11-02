@@ -36,6 +36,7 @@ OAuthClient oauthClientFor(CloudProvider provider, {String? clientId, String? ac
               : CloudConfig.googleAndroidClientId),
       accountEmail: accountEmail,
       requestedScopes: (oauth['scopes'] as List).cast<String>(),
+      extraAuthParams: (oauth['extraAuthParams'] as Map? ?? {}).cast<String, String>(),
     );
   }
   final id =
@@ -69,7 +70,11 @@ OAuthClient oauthClientFor(CloudProvider provider, {String? clientId, String? ac
       CloudProvider.onedrive => CloudConfig.oneDriveRedirect,
       _ => oauth['mobileRedirectUri'] as String?,
     },
-    extraAuthParams: (oauth['extraAuthParams'] as Map? ?? {}).cast<String, String>(),
+    extraAuthParams: {
+      ...(oauth['extraAuthParams'] as Map? ?? {}).cast<String, String>(),
+      if (accountEmail != null && oauth['authEndpoint'] == 'https://accounts.google.com/o/oauth2/v2/auth')
+        'login_hint': accountEmail,
+    },
     loopbackHost: oauth['loopbackHost'] as String? ?? '127.0.0.1',
     usePkce: oauth['pkce'] != false,
     loopbackOnMobile: oauth['loopbackOnMobile'] == true,
@@ -291,6 +296,46 @@ class CloudSource extends MediaSource {
   @override
   Future<List<RemoteEntry>> list(String path) async {
     return _entries(await _call('list', {'path': path}));
+  }
+
+  @override
+  bool get canSelectFiles =>
+      definition.authType == 'oauth' &&
+      definition.oauth['authEndpoint'] == 'https://accounts.google.com/o/oauth2/v2/auth' &&
+      definition.oauth['tokenEndpoint'] == 'https://oauth2.googleapis.com/token' &&
+      jsonEncode(definition.oauth['scopes']) == jsonEncode([googleDriveFileScope]) &&
+      (definition.oauth['extraAuthParams'] as Map?)?['trigger_onepick'] == 'true';
+
+  @override
+  Future<void> selectFiles() async {
+    if (!canSelectFiles) throw UnsupportedError('이 저장소는 파일 선택을 지원하지 않습니다');
+    final expected = await accountName();
+    final client = oauthClientFor(
+      account.provider,
+      pluginId: account.pluginId,
+      clientId: account.oauthClientId,
+      accountEmail: expected,
+    );
+    final selected = await client.authorize();
+    // A desktop browser can switch Google accounts despite login_hint. Verify
+    // before replacing this resource's token or changing its file permissions.
+    final about = await _request(
+      'https://www.googleapis.com/drive/v3/about?fields=user',
+      'GET',
+      options: {
+        'authenticated': false,
+        'headers': {'Authorization': 'Bearer ${selected.accessToken}'},
+      },
+    );
+    final email = (about as Map)['user']?['emailAddress'];
+    if (email is! String || email.toLowerCase() != expected.toLowerCase()) {
+      throw StateError('현재 리소스와 같은 Google 계정으로 파일을 선택해 주세요');
+    }
+    final saved = await SecureStore.instance.readRequired(account.tokenKey);
+    if (saved != null) {
+      selected.refreshToken ??= OAuthTokens.fromJson((jsonDecode(saved) as Map).cast<String, dynamic>()).refreshToken;
+    }
+    await tokens.save(selected);
   }
 
   @override

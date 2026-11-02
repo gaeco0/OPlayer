@@ -113,6 +113,13 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
     });
   }
 
+  Future<void> _selectFiles() => _run(() async {
+    await ResourceLocks.instance.requireAccess(widget.source.keyFor(_stack.last.path));
+    await widget.source.selectFiles();
+    _cache.clear();
+    if (mounted) await _load(force: true);
+  });
+
   Future<void> _rename(RemoteEntry entry) async {
     final name = await askName(context, '파일 이름변경', initial: entry.name);
     if (name == null || name == entry.name || !mounted) return;
@@ -443,6 +450,12 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
                   onPressed: () => setState(() => _grid = !_grid),
                 ),
               ],
+              if (widget.source.canSelectFiles)
+                IconButton(
+                  tooltip: 'Drive 파일 추가',
+                  icon: const Icon(Icons.add_to_drive),
+                  onPressed: _busy ? null : _selectFiles,
+                ),
               IconButton(tooltip: '새로고침', icon: const Icon(Icons.refresh), onPressed: () => _load(force: true)),
               ...widget.actions,
             ],
@@ -498,9 +511,23 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
     if (_items.isEmpty) {
       return ScrollablePlaceholder(
         child: Center(
-          child: Text(
-            _query.isEmpty ? '항목이 없습니다' : '검색 결과가 없습니다',
-            style: TextStyle(color: OColors.of(context).textSecondary),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _query.isEmpty ? '항목이 없습니다' : '검색 결과가 없습니다',
+                style: TextStyle(color: OColors.of(context).textSecondary),
+              ),
+              if (_query.isEmpty && widget.source.canSelectFiles) ...[
+                const SizedBox(height: 12),
+                const Text('Google 파일 선택기에서 영상과 자막을 선택해 주세요.'),
+                TextButton.icon(
+                  onPressed: _busy ? null : _selectFiles,
+                  icon: const Icon(Icons.add_to_drive),
+                  label: const Text('Drive 파일 추가'),
+                ),
+              ],
+            ],
           ),
         ),
       );

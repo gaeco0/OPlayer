@@ -52,8 +52,21 @@ class GoogleDriveBridge(private val activity: Activity, messenger: BinaryMesseng
             val email = call.argument<String>("email")
             val interactive = call.argument<Boolean>("interactive") == true
             val oldToken = call.argument<String>("invalidateToken")
+            val pickFiles = interactive && call.argument<Boolean>("pickFiles") == true
+            if (pickFiles && scopes != listOf("https://www.googleapis.com/auth/drive.file")) {
+                fail("SCOPE", "파일 선택은 drive.file 단독 권한으로만 가능합니다")
+                return@setMethodCallHandler
+            }
             val request = AuthorizationRequest.builder()
                 .setRequestedScopes(scopes.map { Scope(it) })
+                .setOptOutIncludingGrantedScopes(true)
+                .apply {
+                    if (pickFiles) {
+                        setPrompt(AuthorizationRequest.Prompt.CONSENT)
+                        addResourceParameter(AuthorizationRequest.ResourceParameter.PICKER_OAUTH_TRIGGER, "true")
+                        addResourceParameter(AuthorizationRequest.ResourceParameter.PICKER_ALLOW_MULTIPLE, "true")
+                    }
+                }
                 .apply { if (!email.isNullOrBlank()) setAccount(Account(email, "com.google")) }
                 .build()
             fun authorize() {

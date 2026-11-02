@@ -284,4 +284,94 @@ void main() {
     expect((calls.last.arguments as Map)['email'], 'selected@example.com');
     expect((calls.last.arguments as Map)['invalidateToken'], 'native-token');
   });
+  test('Drive Picker is supplied by the extension and binds desktop selection to the account hint', () {
+    final client = oauthClientFor(
+      CloudProvider.gdrive,
+      clientId: 'test.apps.googleusercontent.com',
+      accountEmail: 'same@example.com',
+    );
+    expect(client.scopes, [googleDriveFileScope]);
+    expect(client.extraAuthParams['trigger_onepick'], 'true');
+    expect(client.extraAuthParams['allow_multiple'], 'true');
+    expect(client.extraAuthParams['login_hint'], 'same@example.com');
+    final source = GoogleDriveSource(
+      CloudAccount(id: 'picker', provider: CloudProvider.gdrive, name: 'same@example.com'),
+    );
+    expect(source.canSelectFiles, true);
+    final dropbox = DropboxSource(CloudAccount(id: 'dropbox', provider: CloudProvider.dropbox, name: 'other'));
+    expect(dropbox.canSelectFiles, false);
+  });
+  test('adding Drive files verifies account before replacing token and preserves the refresh grant', () async {
+    final account = CloudAccount(
+      id: 'picker-same',
+      provider: CloudProvider.gdrive,
+      name: 'same@example.com',
+      oauthClientId: 'test.apps.googleusercontent.com',
+    );
+    final source = GoogleDriveSource(account);
+    await source.tokens.save(
+      OAuthTokens(
+        accessToken: 'old',
+        refreshToken: 'refresh-old',
+        expiry: DateTime.now().add(const Duration(hours: 1)),
+      ),
+    );
+    var pickedEmail = 'other@example.com';
+    const channel = MethodChannel('plugins.flutter.io/url_launcher');
+    final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'canLaunch') return true;
+      final url = Uri.parse((call.arguments as Map)['url'] as String);
+      expect(url.queryParameters['trigger_onepick'], 'true');
+      expect(url.queryParameters['login_hint'], 'same@example.com');
+      unawaited(
+        Future<void>(() async {
+          final httpClient = HttpClient()..findProxy = (_) => 'DIRECT';
+          try {
+            final callback = Uri.parse(
+              url.queryParameters['redirect_uri']!,
+            ).replace(queryParameters: {'state': url.queryParameters['state']!, 'code': 'pick-code'});
+            final response = await (await httpClient.getUrl(callback)).close();
+            await response.drain<void>();
+          } finally {
+            httpClient.close(force: true);
+          }
+        }),
+      );
+      return true;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    addTearDown(source.close);
+    await http.runWithClient(
+      () async {
+        await expectLater(source.selectFiles(), throwsA(isA<StateError>()));
+        var saved = jsonDecode((await SecureStore.instance.readRequired(account.tokenKey))!) as Map;
+        expect(saved['a'], 'old');
+        pickedEmail = 'same@example.com';
+        await source.selectFiles();
+        saved = jsonDecode((await SecureStore.instance.readRequired(account.tokenKey))!) as Map;
+        expect(saved['a'], 'picked');
+        expect(saved['r'], 'refresh-old');
+      },
+      () => MockClient((request) async {
+        if (request.url.path == '/token') {
+          expect(request.bodyFields['code'], 'pick-code');
+          return http.Response(
+            jsonEncode({'access_token': 'picked', 'expires_in': 3600, 'scope': googleDriveFileScope}),
+            200,
+          );
+        }
+        expect(request.url.host, 'www.googleapis.com');
+        expect(request.followRedirects, false);
+        return http.Response(
+          jsonEncode({
+            'user': {
+              'emailAddress': request.headers['Authorization'] == 'Bearer picked' ? pickedEmail : 'same@example.com',
+            },
+          }),
+          200,
+        );
+      }),
+    );
+  });
 }

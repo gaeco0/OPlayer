@@ -55,6 +55,9 @@ abstract class MediaSource {
 
   Future<List<RemoteEntry>> list(String path);
 
+  bool get canSelectFiles => false;
+  Future<void> selectFiles() => throw UnsupportedError('이 저장소는 파일 선택을 지원하지 않습니다');
+
   bool get canSearch => false;
   Future<List<RemoteEntry>> search(String query, {required String path}) =>
       throw UnsupportedError('이 저장소는 검색을 지원하지 않습니다');
