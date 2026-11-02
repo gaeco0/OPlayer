@@ -31,6 +31,11 @@ void main() {
       expect(entry['platforms'], plugin.manifest['platforms'], reason: plugin.id);
       expect(entry['requiresHost'], plugin.manifest['requiresHost'], reason: plugin.id);
       expect(entry['pluginApi'], plugin.manifest['api']);
+      if ((plugin.oauth['extraAuthParams'] as Map?)?['trigger_onepick'] == 'true') {
+        expect(entry['pluginApi'], 5, reason: 'Picker must be rejected by old API-4-only apps');
+        expect(entry['requiresHost'], contains('googlePicker'), reason: plugin.id);
+      }
+
       for (final platform in pluginPlatforms) {
         expect(
           pluginCompatibilityIssue(entry.cast<String, dynamic>(), platform: platform),
