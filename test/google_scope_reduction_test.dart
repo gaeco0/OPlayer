@@ -63,4 +63,47 @@ void main() {
     granted = [googleDriveFileScope, broad];
     await expectLater(native.authorize(), throwsA(contains('기존 전체 Drive')));
   });
+  test('Android retries a stale cached grant once with token invalidation', () async {
+    const channel = MethodChannel('oplayer/google-drive');
+    final calls = <Map>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call.arguments as Map);
+      return {
+        'accessToken': calls.length == 1 ? 'stale' : 'fresh',
+        'grantedScopes': calls.length == 1 ? [googleDriveFileScope, broad] : [googleDriveFileScope],
+      };
+    });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, null),
+    );
+    expect((await GoogleAndroidOAuthClient(clientId: 'test').authorize()).accessToken, 'fresh');
+    expect(calls, hasLength(2));
+    expect(calls.last['invalidateToken'], 'stale');
+    expect(calls.last['interactive'], true);
+    expect(calls.last['scopes'], [googleDriveFileScope]);
+  });
+
+  test('Android persistent broad grants stop after one retry; refresh never loops consent', () async {
+    const channel = MethodChannel('oplayer/google-drive');
+    var count = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+      count++;
+      return {
+        'accessToken': 'stale',
+        'grantedScopes': [googleDriveFileScope, broad],
+      };
+    });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, null),
+    );
+    final native = GoogleAndroidOAuthClient(clientId: 'test');
+    await expectLater(native.authorize(), throwsA(contains('기존 전체 Drive')));
+    expect(count, 2);
+    count = 0;
+    await expectLater(
+      native.refresh(OAuthTokens(accessToken: 'old', expiry: DateTime.now())),
+      throwsA(contains('기존 전체 Drive')),
+    );
+    expect(count, 1);
+  });
 }

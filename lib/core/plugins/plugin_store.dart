@@ -1,4 +1,7 @@
 import 'dart:convert';
+import '../../sources/server_store.dart';
+import '../../sources/source_registry.dart';
+import 'upscale_models.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -7,6 +10,7 @@ import 'package:http/io_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../network/network_service.dart';
 import '../secure_store.dart';
+import '../settings.dart';
 import 'plugin.dart';
 import 'plugin_runtime.dart';
 import 'plugin_legacy_settings.dart';
@@ -41,14 +45,17 @@ class PluginStore extends ChangeNotifier {
   static final instance = PluginStore._();
   final Map<String, OPlugin> installed = {};
   final Set<String> disabled = {};
+  final Set<String> _removing = {};
   final List<String> repositories = [];
   final Map<String, String> errors = {};
   final Map<String, String> repositoryNames = {};
   SharedPreferences? _prefs;
-  Iterable<OPlugin> get enabled => installed.values.where((p) => !disabled.contains(p.id));
+  Iterable<OPlugin> get enabled => installed.values.where((p) => !disabled.contains(p.id) && !_removing.contains(p.id));
   OPlugin require(String id) {
     final p = installed[id];
-    if (p == null || disabled.contains(id)) throw StateError('$id 확장앱을 설치하고 켜 주세요 (설정 → 확장앱)');
+    if (p == null || disabled.contains(id) || _removing.contains(id)) {
+      throw StateError('$id 확장앱을 설치하고 켜 주세요 (설정 → 확장앱)');
+    }
     return p;
   }
 
@@ -76,7 +83,7 @@ class PluginStore extends ChangeNotifier {
     final defaults = {
       if (plugin?.oauth['clientIdSource'] == 'app.google')
         plugin!.oauth['clientIdSetting'] as String? ?? 'clientId': oauthClientId(plugin),
-      ...await legacyPluginSettings(id),
+      if (!(_prefs?.getBool('pluginDataDeleted:$id') ?? false)) ...await legacyPluginSettings(id),
     };
     if (!hasCredentials(id)) return defaults;
     final raw = await SecureStore.instance.readRequired('pluginCredentials:$id');
@@ -158,10 +165,49 @@ class PluginStore extends ChangeNotifier {
   }
 
   Future<void> remove(String id) async {
-    installed.remove(id);
-    disabled.remove(id);
-    errors.remove(id);
-    await _save();
+    if (!_removing.add(id)) throw StateError('확장앱을 삭제하고 있습니다');
+    try {
+      // Keep the definition visible on cleanup failure, so deletion can be retried.
+      final accounts = ServerStore.instance.accounts
+          .where((a) => (a.pluginId ?? 'cloud.${a.provider.name}') == id)
+          .toList();
+      for (final account in accounts) {
+        await SourceRegistry.instance.invalidate(account.id);
+        await ServerStore.instance.removeAccount(account);
+      }
+      await SecureStore.instance.deleteMatchingRequired(
+        (key) => key == 'pluginCredentials:$id' || key.startsWith('pluginOAuthSecret:$id:'),
+      );
+      for (final key in ['pluginOAuthClientId:$id', 'pluginSettings:$id', 'pluginConfigured:$id']) {
+        if (!await _prefs!.remove(key)) throw StateError('확장앱 데이터를 삭제하지 못했습니다');
+      }
+      // Do not resurrect pre-extension registrations after a reinstall.
+      if (!await _prefs!.setBool('pluginDataDeleted:$id', true)) throw StateError('확장앱 데이터 삭제 기록 저장 실패');
+      final models = identical(this, PluginStore.instance) ? UpscaleModels.instance : UpscaleModels(store: this);
+      if (installed[id]?.supports('upscaling') == true) await models.removeProviderCache(id);
+      final settings = AppSettings.instance;
+      if (settings.upscalingModel.startsWith('$id/') ||
+          settings.interpolationModel.startsWith('$id/') ||
+          id == 'cloud.dropbox' && settings.dropboxAppKey.isNotEmpty ||
+          id == 'cloud.onedrive' && settings.oneDriveClientId.isNotEmpty) {
+        settings.update((s) {
+          if (s.upscalingModel.startsWith('$id/')) s.upscalingModel = 'lanczos';
+          if (s.interpolationModel.startsWith('$id/')) {
+            s.interpolationModel = '';
+            s.interpolationMode = 'blend';
+          }
+          if (id == 'cloud.dropbox') s.dropboxAppKey = '';
+          if (id == 'cloud.onedrive') s.oneDriveClientId = '';
+        });
+      }
+      installed.remove(id);
+      disabled.remove(id);
+      errors.remove(id);
+      await _save();
+    } finally {
+      _removing.remove(id);
+      notifyListeners();
+    }
   }
 
   Future<void> addRepository(String url) async {

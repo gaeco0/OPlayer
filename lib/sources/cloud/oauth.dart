@@ -274,6 +274,12 @@ class GoogleAndroidOAuthClient extends OAuthClient {
     if (scopes.contains(googleDriveFileScope)) {
       final granted = result?['grantedScopes'];
       if (granted is! List) throw 'Google 권한 확인을 지원하는 앱 버전으로 업데이트한 뒤 다시 연결해 주세요.';
+      final oldGrant =
+          granted.contains('https://www.googleapis.com/auth/drive') ||
+          granted.contains('https://www.googleapis.com/auth/drive.readonly');
+      // Play Services may still return a cached token after web revocation.
+      // Refresh that token once; never bypass scope validation or loop consent.
+      if (interactive && invalidateToken == null && oldGrant) return _authorizeNative(true, access);
       validateGoogleFileGrant(scopes, granted.cast<String>());
     }
     return OAuthTokens(accessToken: access, expiry: DateTime.now().add(const Duration(minutes: 50)));

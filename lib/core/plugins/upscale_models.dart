@@ -102,6 +102,7 @@ class UpscaleModels {
   final http.Client Function() _clientFactory;
   final errors = <String, String>{};
   final _pending = <String, Future<File>>{};
+  final _networks = <Future<String?>>{};
   Future<Directory> _directory() async =>
       directory ?? Directory('${(await getApplicationSupportDirectory()).path}/ai-upscale');
   bool get available => store.enabled.any((p) => p.supports('upscaling'));
@@ -173,10 +174,50 @@ class UpscaleModels {
     return result;
   }
 
+  /// Cache files are shared by digest. Keep URL models and other providers' copies.
+  Future<void> removeProviderCache(String id) async {
+    for (final job in [..._pending.values, ..._networks]) {
+      try {
+        await job;
+      } catch (_) {
+        /* Failed preparations have no usable cache. */
+      }
+    }
+    final prefs = await SharedPreferences.getInstance();
+    final owned = prefs.getStringList('pluginModelCache:$id') ?? <String>[];
+    final retained = <String>{};
+    for (final key in prefs.getKeys().where((k) => k.startsWith('pluginModelCache:') && k != 'pluginModelCache:$id')) {
+      retained.addAll(prefs.getStringList(key) ?? <String>[]);
+    }
+    for (final entry in prefs.getStringList('upscaleUrlModels') ?? <String>[]) {
+      retained.add((jsonDecode(entry) as Map)['sha256'] as String);
+    }
+    final dir = await _directory();
+    if (await dir.exists()) {
+      // Older versions did not record owners. Once the last provider is removed,
+      // all non-URL shader cache files are unreferenced.
+      final last = !store.installed.values.any((p) => p.id != id && p.supports('upscaling'));
+      await for (final entry in dir.list()) {
+        final name = entry.uri.pathSegments.last;
+        final match = RegExp(r'^([a-f0-9]{64})\.glsl(?:\.ous)?$').firstMatch(name);
+        if (entry is File && match != null && !retained.contains(match[1]) && (last || owned.contains(match[1]))) {
+          await entry.delete();
+        }
+      }
+    }
+    if (!await prefs.remove('pluginModelCache:$id')) throw StateError('모델 캐시 삭제 기록 저장 실패');
+  }
+
   Future<File> _file(String digest) async => File('${(await _directory()).path}/$digest.glsl');
   Future<File> materialize(UpscaleModel model) async {
     _requireProvider();
-    if (model.provider != null) store.require(model.provider!.id);
+    if (model.provider != null) {
+      store.require(model.provider!.id);
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'pluginModelCache:${model.provider!.id}';
+      final hashes = {...?prefs.getStringList(key), model.digest};
+      if (!await prefs.setStringList(key, hashes.toList())) throw StateError('모델 캐시 정보 저장 실패');
+    }
     final job = _pending[model.digest] ?? _materialize(model);
     _pending[model.digest] = job;
     try {
@@ -221,6 +262,16 @@ class UpscaleModels {
   }
 
   Future<String?> network(String key) async {
+    final job = _network(key);
+    _networks.add(job);
+    try {
+      return await job;
+    } finally {
+      _networks.remove(job);
+    }
+  }
+
+  Future<String?> _network(String key) async {
     final model = (await catalog()).where((m) => m.key == key).firstOrNull;
     if (model == null) throw StateError('모델 확장앱을 켜 주세요');
     final shader = await materialize(model);

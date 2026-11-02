@@ -155,7 +155,7 @@ class _PluginsPageState extends State<PluginsPage> {
               children: [
                 const ListTile(
                   title: Text('설치됨'),
-                  subtitle: Text('사이트 변경은 페이지를 새로고침한 뒤 적용됩니다. 클라우드를 끄거나 삭제하면 계정 정보는 보관됩니다.'),
+                  subtitle: Text('사이트 변경은 페이지를 새로고침한 뒤 적용됩니다. 끄면 설정을 보관하고, 삭제하면 설정·인증정보·연결 계정을 함께 삭제합니다.'),
                 ),
                 for (final p in store.installed.values.where((p) => category.isEmpty || p.kind == category))
                   ListTile(
@@ -193,7 +193,7 @@ class _PluginsPageState extends State<PluginsPage> {
                                     context: context,
                                     builder: (c) => AlertDialog(
                                       title: Text('${p.name} 삭제'),
-                                      content: const Text('확장앱을 삭제합니다. 기존 클라우드 계정은 유지되며 다시 설치하면 사용할 수 있습니다.'),
+                                      content: const Text('확장앱과 설정·인증정보·연결 계정을 삭제합니다. 원격 저장소의 파일은 삭제하지 않습니다.'),
                                       actions: [
                                         TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('취소')),
                                         FilledButton(onPressed: () => Navigator.pop(c, true), child: const Text('삭제')),

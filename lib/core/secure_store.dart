@@ -7,6 +7,13 @@ class SecureStore {
 
   final _s = const FlutterSecureStorage();
 
+  Future<void> deleteMatchingRequired(bool Function(String) matches) async {
+    final values = await _s.readAll();
+    for (final key in values.keys.where(matches).toList()) {
+      await _s.delete(key: key);
+    }
+  }
+
   Future<String?> readRequired(String key) => _s.read(key: key);
 
   Future<String?> read(String key) async {
