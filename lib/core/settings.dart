@@ -21,6 +21,7 @@ enum AppThemeMode { system, light, dark }
 
 enum OutputQuality {
   original('원본화질'),
+  mkv('MKV · 원본화질'),
   high('고화질 · 최대 1080p'),
   medium('중화질 · 최대 720p'),
   low('저화질 · 최대 480p'),
@@ -28,6 +29,11 @@ enum OutputQuality {
 
   const OutputQuality(this.label);
   final String label;
+  String get extension => switch (this) {
+    OutputQuality.mkv => '.mkv',
+    OutputQuality.audio => '.m4a',
+    _ => '.mp4',
+  };
 }
 
 /// 앱 설정. 모든 화면이 AppSettings.instance를 듣는다.

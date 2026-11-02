@@ -63,7 +63,16 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(ffmpeg, (call) async {
       if (call.method == 'version') return 'test';
       final args = List<String>.from((call.arguments as Map)['arguments'] as List);
-      await File(args[args.indexOf('-i') + 1]).copy(args.last);
+      final input = args[args.indexOf('-i') + 1];
+      expect(input, startsWith('concatf:'));
+      final manifest = File(input.substring('concatf:'.length));
+      expect(await manifest.parent.list().where((f) => f.path.contains('_joined')).isEmpty, isTrue);
+      final sink = File(args.last).openWrite();
+      for (final line in await manifest.readAsLines()) {
+        if (line.isEmpty) continue;
+        await sink.addStream(File(line.substring(1, line.length - 1).replaceAll("'\\''", "'")).openRead());
+      }
+      await sink.close();
       return {'code': 0, 'error': ''};
     });
     requests.clear();
@@ -97,6 +106,21 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
     Ffmpeg.reset();
     HttpOverrides.global = overrides;
+  });
+
+  test('fMP4 init and pieces feed MKV output directly without a joined intermediate', () async {
+    AppSettings.instance.outputQuality = OutputQuality.mkv;
+    final task = add(
+      cookie: 'fresh',
+      name: 'movie.mkv',
+      text: playlist().replaceFirst('#EXTM3U', '#EXTM3U\n#EXT-X-MAP:URI="init.mp4"'),
+    );
+    await settled(task);
+    expect(task.status, DownloadStatus.done, reason: task.error);
+    expect(task.outputDone, isTrue);
+    expect(task.fileName, 'movie.mkv');
+    expect(await File(task.savePath!).readAsBytes(), [2, 1, 2]);
+    expect(requests.where((r) => r.startsWith('/init.mp4:')), hasLength(1));
   });
 
   test('fresh cookies resume the same segments after task persistence without fetching completed ones', () async {

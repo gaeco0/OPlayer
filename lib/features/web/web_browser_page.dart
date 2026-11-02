@@ -1373,7 +1373,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                                                   final quality = await showDialog<OutputQuality>(
                                                     context: context,
                                                     builder: (dialog) => SimpleDialog(
-                                                      title: const Text('MP4 생성 옵션'),
+                                                      title: const Text('출력 형식·화질'),
                                                       children: [
                                                         for (final q in OutputQuality.values)
                                                           SimpleDialogOption(

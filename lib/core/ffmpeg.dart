@@ -7,7 +7,7 @@ import 'package:path/path.dart' as p;
 
 import 'settings.dart';
 
-/// 시스템에 설치된 ffmpeg 찾기 + 스트림 복사(재인코딩 없음)로 MP4 만들기.
+/// 시스템에 설치된 ffmpeg 찾기 + MP4/MKV 생성.
 /// HLS(MPEG-TS) 조각을 이어붙인 결과를 .mp4로 바꾸거나, 분리된 영상/음성을 합칠 때 사용.
 class Ffmpeg {
   Ffmpeg._();
@@ -72,15 +72,52 @@ class Ffmpeg {
 
   /// 영상(+선택적 음성)을 MP4로 스트림 복사. 성공하면 true.
   static Future<(bool, String)> remuxToMp4({required String video, String? audio, required String output}) async {
+    return _remux(video: video, audio: audio, output: output);
+  }
+
+  /// FFmpeg reads downloaded segments as one seekable input without writing a
+  /// second copy of the entire stream. A file list avoids command-line limits.
+  static Future<String> concatInput({required Iterable<String> files, required String listPath}) async {
+    final lines = files
+        .map((file) {
+          final path = p.absolute(file).replaceAll('\\', '/');
+          if (path.contains('\n') || path.contains('\r')) throw ArgumentError('Invalid segment path');
+          return "'${path.replaceAll("'", "'\\''")}'";
+        })
+        .join('\n');
+    await File(listPath).writeAsString('$lines\n', flush: true);
+    return 'concatf:${p.absolute(listPath).replaceAll('\\', '/')}';
+  }
+
+  static List<String> _input(String path) => [
+    if (path.startsWith('concatf:')) ...['-protocol_whitelist', 'file,concatf'],
+    '-i',
+    path,
+  ];
+
+  static Future<(bool, String)> _remux({
+    required String video,
+    String? audio,
+    required String output,
+    bool mkv = false,
+  }) async {
     final bin = await locate();
     if (bin == null) return (false, 'ffmpeg 없음');
-    final args = <String>['-y', '-hide_banner', '-loglevel', 'error', '-i', video];
+    final args = <String>['-y', '-hide_banner', '-loglevel', 'error', ..._input(video)];
     if (audio != null) {
-      args.addAll(['-i', audio, '-map', '0:v:0', '-map', '1:a:0']);
+      args.addAll([..._input(audio), '-map', '0:v:0', '-map', '1:a:0']);
     } else {
       args.addAll(['-map', '0:v?', '-map', '0:a?']);
     }
-    args.addAll(['-c', 'copy', '-bsf:a', 'aac_adtstoasc', '-movflags', '+faststart', output]);
+    if (mkv) args.addAll(['-map', '0:s?', '-map', '0:t?']);
+    args.addAll([
+      '-c',
+      'copy',
+      '-bsf:a',
+      'aac_adtstoasc',
+      if (mkv) ...['-f', 'matroska'] else ...['-movflags', '+faststart'],
+      output,
+    ]);
     try {
       var (code, error) = await _execute(bin, args);
       if (code != 0) {
@@ -169,13 +206,14 @@ class Ffmpeg {
 
   /// MPEG-4/AAC encoders are included in the LGPL Android FFmpeg build.
   /// Presets cap resolution without upscaling; original uses stream copy.
-  static Future<(bool, String)> createMp4({
+  static Future<(bool, String)> createOutput({
     required String video,
     String? audio,
     required String output,
     required OutputQuality quality,
   }) async {
     if (quality == OutputQuality.original) return remuxToMp4(video: video, audio: audio, output: output);
+    if (quality == OutputQuality.mkv) return _remux(video: video, audio: audio, output: output, mkv: true);
     final bin = await locate();
     if (bin == null) return (false, 'ffmpeg 없음');
     // Leave CPU capacity for playback/UI during download output conversion.
@@ -187,10 +225,9 @@ class Ffmpeg {
       '-loglevel',
       'error',
       if (setting != 0) ...['-filter_threads', setting < 0 ? '1' : threads, '-threads', threads],
-      '-i',
-      video,
+      ..._input(video),
     ];
-    if (audio != null) args.addAll(['-i', audio]);
+    if (audio != null) args.addAll(_input(audio));
     if (quality == OutputQuality.audio) {
       args.addAll(['-map', audio == null ? '0:a:0' : '1:a:0', '-vn', '-c:a', 'aac', '-b:a', '192k']);
     } else {

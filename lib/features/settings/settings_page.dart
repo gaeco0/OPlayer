@@ -266,7 +266,7 @@ class SettingsPage extends StatelessWidget {
             const _Header('다운로드'),
             _choice<OutputQuality>(
               context,
-              title: 'MP4 생성 옵션',
+              title: '출력 형식·화질',
               value: s.outputQuality,
               options: {for (final q in OutputQuality.values) q: q.label},
               onChanged: (v) => s.update((x) => x.outputQuality = v),
@@ -275,7 +275,7 @@ class SettingsPage extends StatelessWidget {
             FutureBuilder<String?>(
               future: Ffmpeg.locate(),
               builder: (_, snap) => ListTile(
-                title: const Text('ffmpeg (MP4 생성·화질 변환)'),
+                title: const Text('ffmpeg (MP4·MKV 생성·화질 변환)'),
                 subtitle: Text(
                   snap.data ??
                       (Ffmpeg.embedded ? '내장 FFmpeg를 확인하지 못했습니다' : '찾지 못함 — HLS는 .ts로 저장됩니다. 탭해서 ffmpeg 실행 파일 위치 지정'),

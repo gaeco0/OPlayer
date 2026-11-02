@@ -201,7 +201,7 @@ void main() {
     }
   });
 
-  test('audio conversion keeps the entered filename without a quality suffix or duplicate extension', () async {
+  test('audio and MKV conversion keep the entered filename without a quality suffix or duplicate extension', () async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     Ffmpeg.reset();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -219,16 +219,18 @@ void main() {
       await request.response.close();
     });
     try {
-      final task = manager.add(
-        url: 'http://127.0.0.1:${server.port}/video.mp4',
-        title: 'page title',
-        fileName: 'my music.m4a',
-        outputQuality: OutputQuality.audio,
-      );
-      await settled(task);
-      expect(task.status, DownloadStatus.done, reason: task.error);
-      expect(task.fileName, 'my music.m4a');
-      expect(await File(task.savePath!).readAsBytes(), [3, 4]);
+      for (final quality in [OutputQuality.audio, OutputQuality.mkv]) {
+        final task = manager.add(
+          url: 'http://127.0.0.1:${server.port}/video.mp4',
+          title: 'page title',
+          fileName: 'my media${quality.extension}',
+          outputQuality: quality,
+        );
+        await settled(task);
+        expect(task.status, DownloadStatus.done, reason: task.error);
+        expect(task.fileName, 'my media${quality.extension}');
+        expect(await File(task.savePath!).readAsBytes(), [3, 4]);
+      }
     } finally {
       await server.close(force: true);
     }

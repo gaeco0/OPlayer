@@ -9,7 +9,7 @@ import 'package:oplayer/core/settings.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  test('real FFmpeg generates capped video and audio-only MP4 containers', () async {
+  test('real FFmpeg generates MP4 profiles and MKV with original audio/video/subtitles', () async {
     SharedPreferences.setMockInitialValues({});
     await AppSettings.instance.init();
     debugDefaultTargetPlatformOverride = Platform.isWindows
@@ -52,15 +52,54 @@ void main() {
       input,
     ]);
     expect(generated.exitCode, 0, reason: '${generated.stderr}');
+    final subtitle = File(p.join(dir.path, 'sample.srt'));
+    await subtitle.writeAsString('1\n00:00:00,000 --> 00:00:00,500\nSubtitle test\n');
+    final mkvInput = p.join(dir.path, 'source.mkv');
+    final subtitled = await Process.run(bin, [
+      '-y',
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-i',
+      input,
+      '-i',
+      subtitle.path,
+      '-map',
+      '0',
+      '-map',
+      '1:s',
+      '-c',
+      'copy',
+      mkvInput,
+    ]);
+    expect(subtitled.exitCode, 0, reason: '${subtitled.stderr}');
+    Future<String> splitInput(String path, String prefix) async {
+      final bytes = await File(path).readAsBytes();
+      final parts = <String>[];
+      final step = (bytes.length / 3).ceil();
+      for (var offset = 0; offset < bytes.length; offset += step) {
+        final file = File(p.join(dir.path, "$prefix part '${parts.length}.seg"));
+        await file.writeAsBytes(bytes.sublist(offset, (offset + step).clamp(0, bytes.length)));
+        parts.add(file.path);
+      }
+      return Ffmpeg.concatInput(files: parts, listPath: p.join(dir.path, '$prefix list.txt'));
+    }
+
+    final videoInput = await splitInput(input, 'mp4');
+    final subtitleInput = await splitInput(mkvInput, 'mkv');
     final ffprobe = p.join(
       p.dirname(File(bin).resolveSymbolicLinksSync()),
       Platform.isWindows ? 'ffprobe.exe' : 'ffprobe',
     );
     for (final quality in OutputQuality.values) {
-      final output = p.join(dir.path, '${quality.name}${quality == OutputQuality.audio ? '.m4a' : '.mp4'}');
-      final result = await Ffmpeg.createMp4(video: input, output: output, quality: quality);
+      final output = p.join(dir.path, '${quality.name}${quality.extension}');
+      final result = await Ffmpeg.createOutput(
+        video: quality == OutputQuality.mkv ? subtitleInput : videoInput,
+        output: output,
+        quality: quality,
+      );
       expect(result.$1, true, reason: result.$2);
-      final probe = await Process.run(ffprobe, ['-v', 'error', '-show_streams', '-of', 'json', output]);
+      final probe = await Process.run(ffprobe, ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', output]);
       expect(probe.exitCode, 0);
       final streams = (jsonDecode('${probe.stdout}')['streams'] as List).cast<Map>();
       if (quality == OutputQuality.audio) {
@@ -69,6 +108,13 @@ void main() {
         final video = streams.firstWhere((s) => s['codec_type'] == 'video');
         expect(video['height'], quality == OutputQuality.low ? 480 : 720);
         expect(streams.any((s) => s['codec_type'] == 'audio'), true);
+        if (quality == OutputQuality.mkv) {
+          expect(jsonDecode('${probe.stdout}')['format']['format_name'], contains('matroska'));
+          expect(video['codec_name'], 'mpeg4');
+          expect(streams.firstWhere((s) => s['codec_type'] == 'audio')['codec_name'], 'aac');
+          expect(streams.any((s) => s['codec_type'] == 'subtitle' && s['codec_name'] == 'subrip'), isTrue);
+          expect(await File(mkvInput).exists(), isTrue);
+        }
       }
     }
   });

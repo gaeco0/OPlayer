@@ -828,12 +828,12 @@ class DownloadManager extends ChangeNotifier {
     t.phase = '${t.outputQuality.label} 생성 중';
     _changed(immediate: true);
     final input = t.savePath!;
-    final ext = t.outputQuality == OutputQuality.audio ? '.m4a' : '.mp4';
+    final ext = t.outputQuality.extension;
     final output = await _uniquePath(
       File(input).parent,
       '${p.basenameWithoutExtension(input)} (${t.outputQuality.name})$ext',
     );
-    final (ok, error) = await Ffmpeg.createMp4(video: input, output: output, quality: t.outputQuality);
+    final (ok, error) = await Ffmpeg.createOutput(video: input, output: output, quality: t.outputQuality);
     if (!ok) {
       if (await File(output).exists()) await File(output).delete();
       if (t.outputQuality == OutputQuality.original) {
@@ -888,7 +888,7 @@ class DownloadManager extends ChangeNotifier {
       await iter.cancel();
       if (await part.exists()) await part.delete();
       t.kind = DownloadKind.hls;
-      final ext = t.outputQuality == OutputQuality.audio ? '.m4a' : '.mp4';
+      final ext = t.outputQuality.extension;
       t.savePath = await _uniquePath(File(t.savePath!).parent, '${p.basenameWithoutExtension(t.savePath!)}$ext');
       t.fileName = p.basename(t.savePath!);
       t.received = 0;
@@ -1243,17 +1243,29 @@ class DownloadManager extends ChangeNotifier {
     await Future.wait(List.generate(par, (_) => worker()));
     _check(t);
 
-    // ---- 트랙별로 조각 이어붙이기
-    t.phase = '조각 합치는 중';
+    // Feed the segment list directly to FFmpeg, including fMP4 initialization.
+    // Materialize a joined stream only as the original-format fallback.
+    t.phase = '조각 병합·${t.outputQuality.label} 생성 중';
     t.speed = 0;
     _changed(immediate: true);
+    final inputs = <String>[];
+    for (var k = 0; k < tracks.length; k++) {
+      final files = <String>[];
+      if (tracks[k].initSegment != null) {
+        final init = File(p.join(tmp.path, '${names[k]}_init.seg'));
+        await init.writeAsBytes(await _get(client, tracks[k].initSegment!, t.headers));
+        files.add(init.path);
+      }
+      files.addAll([for (var i = 0; i < tracks[k].segments.length; i++) segPath(names[k], i)]);
+      inputs.add(await Ffmpeg.concatInput(files: files, listPath: p.join(tmp.path, '${names[k]}_segments.txt')));
+    }
     Future<String> joinTrack(int k) async {
       final pl = tracks[k];
       final ext = pl.isFmp4 ? '.mp4' : '.ts';
       final out = p.join(tmp.path, '${names[k]}_joined$ext');
       final sink = File(out).openWrite();
       try {
-        if (pl.initSegment != null) sink.add(await _get(client, pl.initSegment!, t.headers));
+        if (pl.initSegment != null) await sink.addStream(File(p.join(tmp.path, '${names[k]}_init.seg')).openRead());
         for (var i = 0; i < pl.segments.length; i++) {
           _check(t);
           await sink.addStream(
@@ -1269,47 +1281,48 @@ class DownloadManager extends ChangeNotifier {
       return out;
     }
 
-    final joinedVideo = await joinTrack(0);
-    final joinedAudio = audio == null ? null : await joinTrack(1);
-
-    // ---- MP4로 완성 (ffmpeg 스트림 복사, 재인코딩 없음)
-    t.phase = 'MP4로 변환 중';
-    _changed(immediate: true);
-    final extension = t.outputQuality == OutputQuality.audio ? '.m4a' : '.mp4';
+    final extension = t.outputQuality.extension;
     final target = '${p.withoutExtension(t.savePath!)}$extension';
-    final (ok, err) = await Ffmpeg.createMp4(
-      video: joinedVideo,
-      audio: joinedAudio,
+    final (ok, err) = await Ffmpeg.createOutput(
+      video: inputs[0],
+      audio: inputs.length > 1 ? inputs[1] : null,
       output: target,
       quality: t.outputQuality,
     );
+    _check(t);
     if (!ok && t.outputQuality != OutputQuality.original) throw '변환 실패 (받은 조각은 보관됨): $err';
     if (ok) {
       t.savePath = target;
       t.note = null;
       t.outputDone = true;
-    } else if (joinedAudio == null && video.isFmp4) {
-      // fMP4는 이어붙인 것 자체가 MP4
-      await _move(joinedVideo, target);
-      t.savePath = target;
     } else {
-      // ffmpeg 없음/실패 → 이어붙인 원본 형식 그대로 저장
-      final tsPath = await _uniquePath(
-        File(target).parent,
-        '${p.basenameWithoutExtension(target)}${p.extension(joinedVideo)}',
-      );
-      await _move(joinedVideo, tsPath);
-      t.savePath = tsPath;
-      if (joinedAudio != null) {
-        final aPath = await _uniquePath(
+      t.phase = '변환 실패 · 원본 조각 합치는 중';
+      _changed(immediate: true);
+      final joinedVideo = await joinTrack(0);
+      final joinedAudio = audio == null ? null : await joinTrack(1);
+      if (joinedAudio == null && video.isFmp4) {
+        // fMP4는 이어붙인 것 자체가 MP4
+        await _move(joinedVideo, target);
+        t.savePath = target;
+      } else {
+        // ffmpeg 없음/실패 → 이어붙인 원본 형식 그대로 저장
+        final tsPath = await _uniquePath(
           File(target).parent,
-          '${p.basenameWithoutExtension(target)} (음성)${p.extension(joinedAudio)}',
+          '${p.basenameWithoutExtension(target)}${p.extension(joinedVideo)}',
         );
-        await _move(joinedAudio, aPath);
+        await _move(joinedVideo, tsPath);
+        t.savePath = tsPath;
+        if (joinedAudio != null) {
+          final aPath = await _uniquePath(
+            File(target).parent,
+            '${p.basenameWithoutExtension(target)} (음성)${p.extension(joinedAudio)}',
+          );
+          await _move(joinedAudio, aPath);
+        }
+        t.note = err == 'ffmpeg 없음'
+            ? 'ffmpeg가 없어 ${p.extension(tsPath)}로 저장했습니다 (설정 → 다운로드 → ffmpeg)'
+            : 'MP4 변환 실패로 ${p.extension(tsPath)}로 저장: $err';
       }
-      t.note = err == 'ffmpeg 없음'
-          ? 'ffmpeg가 없어 ${p.extension(tsPath)}로 저장했습니다 (설정 → 다운로드 → ffmpeg)'
-          : 'MP4 변환 실패로 ${p.extension(tsPath)}로 저장: $err';
     }
     t.fileName = p.basename(t.savePath!);
     t.received = await File(t.savePath!).length();
@@ -1354,8 +1367,8 @@ class DownloadManager extends ChangeNotifier {
     required bool hls,
     required OutputQuality outputQuality,
   }) {
-    final extension = outputQuality == OutputQuality.audio
-        ? '.m4a'
+    final extension = outputQuality == OutputQuality.audio || outputQuality == OutputQuality.mkv
+        ? outputQuality.extension
         : hls || outputQuality != OutputQuality.original
         ? '.mp4'
         : _extOf(url);

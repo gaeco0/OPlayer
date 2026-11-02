@@ -46,6 +46,33 @@ void main() {
     final old = task.toJson()..remove('quality');
     expect(DownloadTask.fromJson(old).outputQuality, OutputQuality.original);
   });
+  test('MKV settings, queued tasks and direct/HLS suggested names preserve the chosen format', () async {
+    final settings = AppSettings.instance;
+    settings.update((s) => s.outputQuality = OutputQuality.mkv);
+    await Future<void>.delayed(Duration.zero);
+    settings.outputQuality = OutputQuality.original;
+    await settings.init();
+    expect(settings.outputQuality, OutputQuality.mkv);
+    final task = DownloadTask(
+      id: 'mkv',
+      url: 'https://example.com/video',
+      fileName: 'video.mkv',
+      kind: DownloadKind.hls,
+      outputQuality: OutputQuality.mkv,
+    );
+    expect(DownloadTask.fromJson(task.toJson()).outputQuality, OutputQuality.mkv);
+    for (final hls in [false, true]) {
+      expect(
+        DownloadManager.suggestedFileName(
+          url: 'https://example.com/video.mp4',
+          title: 'chosen.mp4',
+          hls: hls,
+          outputQuality: OutputQuality.mkv,
+        ),
+        'chosen.mkv',
+      );
+    }
+  });
   testWidgets('semantic colors update with light/dark and primary/secondary', (t) async {
     Future<void> render(Brightness brightness) => t.pumpWidget(
       MaterialApp(

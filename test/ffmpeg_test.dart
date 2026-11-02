@@ -79,9 +79,9 @@ void main() {
       return {'code': 0, 'error': ''};
     });
     for (final q in OutputQuality.values) {
-      final path = '${dir.path}/${q.name}${q == OutputQuality.audio ? '.m4a' : '.mp4'}';
+      final path = '${dir.path}/${q.name}${q.extension}';
       expect(
-        (await Ffmpeg.createMp4(
+        (await Ffmpeg.createOutput(
           video: input.path,
           audio: q == OutputQuality.audio ? 'audio.aac' : null,
           output: path,
@@ -92,21 +92,26 @@ void main() {
     }
     expect(executions.first, containsAllInOrder(['-c', 'copy']));
     expect(executions.first, isNot(contains('-threads')));
-    for (final args in executions.skip(1)) {
+    expect(executions[1], containsAllInOrder(['-c', 'copy']));
+    expect(executions[1], containsAllInOrder(['-map', '0:s?', '-map', '0:t?']));
+    expect(executions[1], containsAllInOrder(['-f', 'matroska']));
+    expect(executions[1], isNot(contains('-movflags')));
+    expect(executions[1], isNot(contains('-threads')));
+    for (final args in executions.skip(2)) {
       expect(args, containsAllInOrder(['-filter_threads', '1', '-threads']));
       final threads = int.parse(args[args.indexOf('-threads') + 1]);
       expect(threads, inInclusiveRange(1, 4));
       expect(args.lastIndexOf('-threads'), greaterThan(args.indexOf('-i')));
     }
-    expect(executions[1], contains("scale=-2:'trunc(min(1080,ih)/2)*2'"));
-    expect(executions[2], contains("scale=-2:'trunc(min(720,ih)/2)*2'"));
-    expect(executions[3], contains("scale=-2:'trunc(min(480,ih)/2)*2'"));
+    expect(executions[2], contains("scale=-2:'trunc(min(1080,ih)/2)*2'"));
+    expect(executions[3], contains("scale=-2:'trunc(min(720,ih)/2)*2'"));
+    expect(executions[4], contains("scale=-2:'trunc(min(480,ih)/2)*2'"));
     expect(executions.last, containsAllInOrder(['-map', '1:a:0', '-vn', '-c:a', 'aac']));
     expect(input.readAsBytesSync(), [1, 2, 3]);
     try {
       for (final limit in [1, 8, 0]) {
         AppSettings.instance.downloadConversionThreads = limit;
-        final result = await Ffmpeg.createMp4(
+        final result = await Ffmpeg.createOutput(
           video: input.path,
           output: '${dir.path}/limit-$limit.mp4',
           quality: OutputQuality.medium,
