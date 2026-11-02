@@ -117,7 +117,7 @@ void main() {
     await sync.authorize();
     expect(calls.last['scopes'], [googleSyncScope]);
     expect(calls.last['email'], 'a@example.com');
-    await GoogleAndroidOAuthClient(clientId: 'cloud').authorize();
+    await GoogleAndroidOAuthClient(clientId: 'cloud', requestedScopes: const [googleDriveFileScope]).authorize();
     expect(calls.last['scopes'], ['https://www.googleapis.com/auth/drive.file']);
   });
 

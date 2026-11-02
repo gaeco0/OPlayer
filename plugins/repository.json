@@ -73,7 +73,7 @@
       ],
       "description": "기존 Drive 읽기 전용 탐색·재생과 OPlayer 전용 폴더 업로드",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.gdrive.js",
-      "sha256": "c14bc8eefe0ec752abb857046390062ae67db7d43744cf2c5aca1ff47dccf40b",
+      "sha256": "d02a0ff0532488840696a8f949a009506e732d4cae1cf5cb60616ff1345c2035",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
       "platforms": [
         "android",
@@ -82,7 +82,7 @@
         "macos"
       ],
       "requiresHost": [
-        "googleDriveReadUpload",
+        "oauthScopes",
         "fixedUploadRoot"
       ]
     },

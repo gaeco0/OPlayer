@@ -5,9 +5,11 @@
 
 ## [Unreleased]
 
+- OAuth 권한 목록의 앱 내 허용/차단 정책을 제거했습니다. 요청 범위는 확장앱이 선언하며 승인 정보는 `OPlayer.auth`로 전달합니다. Drive 기능별 권한 검사는 확장앱이 담당하고 기존 승인 토큰을 범위 변경만으로 거부하지 않습니다.
+
 - Google Drive 확장앱 1.6.0을 `drive.readonly + drive.file` 일반 인증으로 변경했습니다. Picker 없이 기존 폴더·영상·자막을 읽고, 전체 `drive` 관리 권한은 요청하지 않습니다. readonly 제한된 범위 심사는 필요합니다.
 - 업로드 위치 선택 시 내 드라이브에 앱 전용 **OPlayer** 폴더를 만들거나 재사용합니다. 이름이 같은 사용자 폴더는 채택하지 않고, 앱 표시·쓰기 권한을 확인한 폴더 및 파일만 업로드·덮어쓰기 대상으로 사용합니다. 기존 임의 파일의 수정·삭제는 제공하지 않습니다.
-- API 5 고정 업로드 루트 SDK와 Android의 두 권한 검증을 추가했습니다. 새 확장앱은 `googleDriveReadUpload`·`fixedUploadRoot` 지원 앱 및 계정 재연결이 필요합니다. 구형 앱은 설치 전에 차단하며 동기화 `drive.appdata`는 분리 유지합니다.
+- API 5 고정 업로드 루트 SDK와 범용 OAuth 승인 권한 전달을 추가했습니다. 새 확장앱은 `oauthScopes`·`fixedUploadRoot` 지원 앱이 필요합니다. 구형 앱은 설치 전에 차단하며 동기화 `drive.appdata`는 분리 유지합니다.
 
 ## [0.1.9-nightly.20261103.2]
 

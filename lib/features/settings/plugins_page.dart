@@ -71,6 +71,7 @@ class _PluginsPageState extends State<PluginsPage> {
             '사이트: ${p.sites.contains('*') ? '모든 웹사이트' : p.sites.join(', ')}\n네트워크: ${p.hosts.join(', ')}\n인증: ${p.authHosts.join(', ')}\n'
             '${(p.manifest['networkSettings'] as List? ?? []).isEmpty ? '' : '사용자 지정 서버 설정: ${(p.manifest['networkSettings'] as List).join(', ')}\n'}'
             '${p.cloud && p.authType == 'oauth' ? '로그인 서버: ${p.oauth['authEndpoint']}\n토큰 서버: ${p.oauth['tokenEndpoint']}\n' : ''}'
+            '${p.cloud && p.authType == 'oauth' ? '요청 권한: ${(p.oauth['scopes'] as List).join(', ')}\n' : ''}'
             '${p.authType == 's3' ? '등록할 S3 Endpoint·버킷에 대한 서명된 읽기 요청\n' : ''}\n'
             '신뢰하는 개발자의 확장앱만 설치하세요. 같은 ID의 확장앱은 교체되며 기존 계정에도 적용됩니다.',
           ),

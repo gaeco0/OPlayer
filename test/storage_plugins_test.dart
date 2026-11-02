@@ -121,7 +121,7 @@ void main() {
     },
   );
 
-  test('scope changes invalidate the cached account holder before an old full-access token can be used', () async {
+  test('scope changes update the OAuth client without rejecting an existing approved token', () async {
     final script = await File('plugins/cloud.gdrive.js').readAsString();
     // The legacy full-drive grant predated Picker, which requires drive.file.
     final metadata = jsonDecode(script.split('\n').first.substring(12)) as Map<String, dynamic>;
@@ -144,7 +144,7 @@ void main() {
     await store.load(script);
     expect(identical(source.tokens, old), isFalse);
     expect(source.tokens.client.scopes, [googleDriveReadonlyScope, googleDriveFileScope]);
-    await expectLater(source.tokens.accessToken(), throwsA(contains('권한 구성이 변경')));
+    expect(await source.tokens.accessToken(), 'old-full-token');
   });
 
   test('official Google Drive search filters the current folder, escapes input and paginates', () async {

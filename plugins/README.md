@@ -305,8 +305,8 @@ Actions Secret 이름과 운영자 등록 절차는 [Google 등록 안내](../do
 기존 root 저장 위치는 첫 업로드 시 전용 폴더로 연결합니다. 다른 폴더 ID로 저장했던 설정은 전용 폴더를 다시 선택해야 합니다.
 동시에 최초 설정하는 여러 기기가 각각 전용 폴더를 만들 수 있으며, 앱은 표식이 있는 앱 소유 폴더 중 먼저 생성된 것을 재사용합니다.
 
-API 5·`requiresHost: ["googleDriveReadUpload", "fixedUploadRoot"]` 지원 앱이 필요합니다.
-0.1.9-nightly.20261103.2에는 이 호스트 기능이 없어 확장앱 1.6.0을 설치할 수 없습니다. 앱 업데이트와 계정 재연결이 필요합니다.
+API 5·`requiresHost: ["oauthScopes", "fixedUploadRoot"]` 지원 앱이 필요합니다.
+0.1.9-nightly.20261103.2에는 이 호스트 기능이 없어 확장앱 1.6.0을 설치할 수 없습니다. 새 SDK를 사용하는 앱 업데이트가 필요합니다. 기존 연결은 승인 권한에 따라 사용할 수 있으며 추가 승인이 필요할 때 확장앱에서 안내합니다.
 Cloud Console 데이터 액세스에 위 두 범위를 등록하고 전체 `drive`는 제거하세요. `drive.readonly`는 제한된 범위 검증 대상입니다.
 동기화는 별도 `drive.appdata` 권한·토큰을 유지합니다.
 
@@ -623,3 +623,7 @@ ID는 `^[a-z][a-z0-9_-]{0,63}$`, 이름은 1~100자이며 `공급자ID/모델ID`
 
 배포 JS는 `.gitattributes` 규칙대로 UTF-8·LF 줄바꿈으로 저장한 뒤 SHA-256을 계산해야 합니다.
 Windows CRLF 원본의 해시를 등록하면 GitHub가 제공하는 LF 파일과 달라 설치 검증에 실패합니다.
+
+### OAuth 권한 정책
+
+앱은 확장앱의 `oauth.scopes`로 인증을 요청하며 특정 Drive 범위의 허용 목록이나 기존 연결 차단 정책을 두지 않습니다. `requiresHost: ["oauthScopes"]`로 승인 정보 전달 지원을 확인할 수 있습니다. JS의 `OPlayer.auth.requestedScopes`는 요청 목록, `OPlayer.auth.grantedScopes`는 실제 승인 목록입니다. 두 목록은 읽기 전용이며 토큰은 노출하지 않습니다. 이전 저장 토큰이나 응답에 승인 정보가 없으면 `grantedScopes`는 null입니다. 필요한 권한과 기능별 동작, 재승인 안내는 확장앱이 판단하고 서비스의 API 권한 검증은 유지됩니다. Google Drive 공식 확장앱은 조회와 업로드에 필요한 권한 및 전용 폴더 쓰기 제한을 자체 검사합니다.

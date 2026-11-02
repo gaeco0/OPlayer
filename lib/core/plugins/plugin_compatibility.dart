@@ -5,7 +5,7 @@ const pluginPlatforms = ['android', 'ios', 'windows', 'linux', 'macos'];
 
 Set<String> pluginHostFeatures(String platform) => {
   if (['android', 'windows', 'linux', 'macos'].contains(platform)) 'googlePicker',
-  if (['android', 'windows', 'linux', 'macos'].contains(platform)) ...['googleDriveReadUpload', 'fixedUploadRoot'],
+  if (['android', 'windows', 'linux', 'macos'].contains(platform)) ...['oauthScopes', 'fixedUploadRoot'],
   if (['android', 'ios', 'windows', 'macos'].contains(platform)) 'webBrowser',
 };
 

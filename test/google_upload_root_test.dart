@@ -42,6 +42,68 @@ class UploadSource extends MediaSource {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   OPlugin plugin() => OPlugin.parse(File('plugins/cloud.gdrive.js').readAsStringSync());
+  test('Drive extension owns partial-grant policy while full grants remain usable', () async {
+    var requests = 0;
+    Future<Object?> request(String url, Map<String, dynamic> options) async {
+      requests++;
+      return {
+        'files': [ownedFolder],
+      };
+    }
+
+    const readonly = 'https://www.googleapis.com/auth/drive.readonly';
+    const file = 'https://www.googleapis.com/auth/drive.file';
+    await expectLater(
+      callPlugin(
+        plugin(),
+        'uploadRoot',
+        {},
+        auth: const {
+          'grantedScopes': [readonly],
+        },
+        request: request,
+      ),
+      throwsA(isA<StateError>().having((e) => e.message, 'plugin error', contains(file))),
+    );
+    await expectLater(
+      callPlugin(
+        plugin(),
+        'list',
+        {'path': 'root'},
+        auth: const {
+          'grantedScopes': [file],
+        },
+        request: request,
+      ),
+      throwsA(isA<StateError>().having((e) => e.message, 'plugin error', contains(readonly))),
+    );
+    expect(requests, 0);
+    expect(
+      await callPlugin(
+        plugin(),
+        'uploadRoot',
+        {},
+        auth: const {
+          'grantedScopes': [file],
+        },
+        request: request,
+      ),
+      'owned-folder',
+    );
+    expect(
+      await callPlugin(
+        plugin(),
+        'uploadRoot',
+        {},
+        auth: const {
+          'grantedScopes': ['https://www.googleapis.com/auth/drive'],
+        },
+        request: request,
+      ),
+      'owned-folder',
+    );
+  });
+
   test('creates a marked app folder and reuses it without adopting a same-name folder', () async {
     var created = false, creates = 0;
     Future<Object?> request(String url, Map<String, dynamic> options) async {

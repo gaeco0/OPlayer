@@ -15,31 +15,26 @@ import 'cloud_config.dart';
 const googleDriveFileScope = 'https://www.googleapis.com/auth/drive.file';
 const googleDriveReadonlyScope = 'https://www.googleapis.com/auth/drive.readonly';
 
-void validateGoogleFileGrant(List<String> requested, Iterable<String> granted) {
-  for (final scope in [googleDriveFileScope, googleDriveReadonlyScope]) {
-    if (requested.contains(scope) && !granted.contains(scope)) {
-      throw '요청한 Google Drive 읽기·업로드 권한을 모두 승인해 주세요.';
-    }
-  }
-  if (granted.contains('https://www.googleapis.com/auth/drive') ||
-      !requested.contains(googleDriveReadonlyScope) && granted.contains(googleDriveReadonlyScope)) {
-    throw '기존 전체 Drive 권한이 남아 있습니다. Google 계정의 서드 파티 연결에서 OPlayer 연결을 삭제한 뒤 다시 연결해 주세요.';
-  }
-}
-
 class OAuthTokens {
-  OAuthTokens({required this.accessToken, this.refreshToken, required this.expiry});
+  OAuthTokens({required this.accessToken, this.refreshToken, required this.expiry, this.grantedScopes});
   String accessToken;
   String? refreshToken;
   DateTime expiry;
+  List<String>? grantedScopes;
 
   bool get expired => DateTime.now().isAfter(expiry.subtract(const Duration(minutes: 2)));
 
-  Map<String, dynamic> toJson() => {'a': accessToken, 'r': refreshToken, 'e': expiry.millisecondsSinceEpoch};
+  Map<String, dynamic> toJson() => {
+    'a': accessToken,
+    'r': refreshToken,
+    'e': expiry.millisecondsSinceEpoch,
+    'grantedScopes': grantedScopes,
+  };
   static OAuthTokens fromJson(Map<String, dynamic> j) => OAuthTokens(
     accessToken: j['a'] as String,
     refreshToken: j['r'] as String?,
     expiry: DateTime.fromMillisecondsSinceEpoch(j['e'] as int),
+    grantedScopes: (j['grantedScopes'] as List?)?.cast<String>(),
   );
 }
 
@@ -195,6 +190,7 @@ class OAuthClient {
   Future<OAuthTokens> refresh(OAuthTokens t) async {
     if (t.refreshToken == null) throw '다시 로그인이 필요합니다';
     final n = await _token({'grant_type': 'refresh_token', 'refresh_token': t.refreshToken!});
+    n.grantedScopes ??= t.grantedScopes;
     n.refreshToken ??= t.refreshToken; // 일부 서비스는 refresh_token을 다시 주지 않음
     return n;
   }
@@ -231,14 +227,16 @@ class OAuthClient {
       throw '토큰 발급 실패: ${j['error_description'] ?? j['error'] ?? res.statusCode}';
     }
     if (j['access_token'] is! String || (j['access_token'] as String).isEmpty) throw '발급된 액세스 토큰이 비어 있습니다';
-    if (tokenEndpoint == 'https://oauth2.googleapis.com/token' && scopes.contains(googleDriveFileScope)) {
-      final granted = (j['scope'] as String?)?.split(RegExp(r'\s+'));
-      if (granted == null && params['grant_type'] != 'refresh_token') throw 'Google 권한을 확인하지 못했습니다. 계정을 다시 연결해 주세요.';
-      if (granted != null) validateGoogleFileGrant(scopes, granted);
-    }
+    final scope = j['scope'];
+    final grantedScopes = scope is String
+        ? scope.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList()
+        : scope is List
+        ? scope.cast<String>()
+        : null;
     return OAuthTokens(
       accessToken: j['access_token'] as String,
       refreshToken: j['refresh_token'] as String?,
+      grantedScopes: grantedScopes,
       expiry: DateTime.now().add(Duration(seconds: int.tryParse('${j['expires_in']}') ?? 3600)),
     );
   }
@@ -250,7 +248,7 @@ class GoogleAndroidOAuthClient extends OAuthClient {
     required super.clientId,
     this.accountEmail,
     super.extraAuthParams,
-    List<String> requestedScopes = const [googleDriveFileScope],
+    required List<String> requestedScopes,
   }) : super(
          authEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
          tokenEndpoint: 'https://oauth2.googleapis.com/token',
@@ -264,6 +262,8 @@ class GoogleAndroidOAuthClient extends OAuthClient {
   Future<OAuthTokens> _authorizeNative(bool interactive, [String? invalidateToken]) async {
     final result = await channel.invokeMapMethod<String, dynamic>('authorize', {
       'interactive': interactive,
+      if (extraAuthParams.containsKey('include_granted_scopes'))
+        'includeGrantedScopes': extraAuthParams['include_granted_scopes'] == 'true',
       'pickFiles': interactive && extraAuthParams['trigger_onepick'] == 'true',
       if (interactive)
         'pickerOptions': {
@@ -276,18 +276,12 @@ class GoogleAndroidOAuthClient extends OAuthClient {
     });
     final access = result?['accessToken'];
     if (access is! String || access.isEmpty) throw 'Google Drive 인증 응답이 비어 있습니다';
-    if (scopes.contains(googleDriveFileScope) || scopes.contains(googleDriveReadonlyScope)) {
-      final granted = result?['grantedScopes'];
-      if (granted is! List) throw 'Google 권한 확인을 지원하는 앱 버전으로 업데이트한 뒤 다시 연결해 주세요.';
-      final oldGrant =
-          granted.contains('https://www.googleapis.com/auth/drive') ||
-          !scopes.contains(googleDriveReadonlyScope) && granted.contains(googleDriveReadonlyScope);
-      // Play Services may still return a cached token after web revocation.
-      // Refresh that token once; never bypass scope validation or loop consent.
-      if (interactive && invalidateToken == null && oldGrant) return _authorizeNative(true, access);
-      validateGoogleFileGrant(scopes, granted.cast<String>());
-    }
-    return OAuthTokens(accessToken: access, expiry: DateTime.now().add(const Duration(minutes: 50)));
+    final granted = result?['grantedScopes'];
+    return OAuthTokens(
+      accessToken: access,
+      expiry: DateTime.now().add(const Duration(minutes: 50)),
+      grantedScopes: (granted as List?)?.cast<String>(),
+    );
   }
 
   @override
@@ -327,15 +321,6 @@ class TokenHolder {
       final raw = await SecureStore.instance.read(storageKey);
       if (raw == null) throw '다시 로그인이 필요합니다';
       final saved = jsonDecode(raw) as Map<String, dynamic>;
-      if (client.scopes.contains(googleDriveFileScope) || client.scopes.contains(googleDriveReadonlyScope)) {
-        final scopes = saved['requestedScopes'];
-        if (scopes is! List || scopes.length != client.scopes.length || !client.scopes.every(scopes.contains)) {
-          if (client.scopes.contains(googleDriveReadonlyScope)) {
-            throw 'Google Drive 읽기·업로드 권한 구성이 변경되었습니다. 앱에서 계정을 다시 연결해 주세요.';
-          }
-          throw 'Drive 권한이 축소되었습니다. Google 계정에서 기존 OPlayer 연결을 삭제한 뒤 앱의 계정을 다시 연결해 주세요.';
-        }
-      }
       _t = OAuthTokens.fromJson(saved);
     }
     if (forceRefresh || _t!.expired) {
@@ -349,6 +334,11 @@ class TokenHolder {
       await _refreshing;
     }
     return _t!.accessToken;
+  }
+
+  Future<List<String>?> grantedScopes() async {
+    await accessToken();
+    return _t!.grantedScopes;
   }
 
   Future<Map<String, String>> authHeader({bool forceRefresh = false}) async => {

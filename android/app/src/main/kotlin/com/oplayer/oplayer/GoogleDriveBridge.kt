@@ -41,11 +41,9 @@ class GoogleDriveBridge(private val activity: Activity, messenger: BinaryMesseng
             }
             if (call.method != "authorize") { result.notImplemented(); return@setMethodCallHandler }
             if (pending != null) { result.error("BUSY", "이미 Google 로그인 중입니다", null); return@setMethodCallHandler }
-            val scopes = call.argument<List<String>>("scopes")
-                ?: listOf("https://www.googleapis.com/auth/drive.file")
-            val allowed = setOf("https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/drive.readonly", "https://www.googleapis.com/auth/drive.appdata")
-            if (scopes.isEmpty() || scopes.any { it !in allowed }) {
-                result.error("SCOPE", "지원하지 않는 Google 권한입니다. Google Drive 확장앱을 최신 버전으로 업데이트해 주세요", null)
+            val scopes = call.argument<List<String>>("scopes") ?: emptyList()
+            if (scopes.isEmpty() || scopes.any { it.isBlank() }) {
+                result.error("SCOPE", "확장앱의 OAuth 권한 선언이 비어 있습니다", null)
                 return@setMethodCallHandler
             }
             pending = result
@@ -54,13 +52,11 @@ class GoogleDriveBridge(private val activity: Activity, messenger: BinaryMesseng
             val oldToken = call.argument<String>("invalidateToken")
             val pickerOptions = call.argument<Map<String, String>>("pickerOptions") ?: emptyMap()
             val pickFiles = interactive && call.argument<Boolean>("pickFiles") == true
-            if (pickFiles && scopes != listOf("https://www.googleapis.com/auth/drive.file")) {
-                fail("SCOPE", "파일 선택은 drive.file 단독 권한으로만 가능합니다")
-                return@setMethodCallHandler
-            }
             val request = AuthorizationRequest.builder()
                 .setRequestedScopes(scopes.map { Scope(it) })
-                .setOptOutIncludingGrantedScopes(true)
+                .apply {
+                    call.argument<Boolean>("includeGrantedScopes")?.let { setOptOutIncludingGrantedScopes(!it) }
+                }
                 .apply {
                     if (pickFiles) {
                         setPrompt(AuthorizationRequest.Prompt.CONSENT)

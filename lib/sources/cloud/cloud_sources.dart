@@ -263,6 +263,9 @@ class CloudSource extends MediaSource {
         input,
         config: config,
         credentials: values,
+        auth: plugin.authType == 'oauth'
+            ? {'grantedScopes': await tokens.grantedScopes(), 'requestedScopes': tokens.client.scopes}
+            : const {},
         allowsRequest: s3?.allows ?? (url) => plugin.allowsConfigured(url, config),
         request: (url, options) async {
           final verb = options['method'] as String? ?? 'GET';
@@ -306,7 +309,6 @@ class CloudSource extends MediaSource {
       definition.authType == 'oauth' &&
       definition.oauth['authEndpoint'] == 'https://accounts.google.com/o/oauth2/v2/auth' &&
       definition.oauth['tokenEndpoint'] == 'https://oauth2.googleapis.com/token' &&
-      jsonEncode(definition.oauth['scopes']) == jsonEncode([googleDriveFileScope]) &&
       (definition.oauth['extraAuthParams'] as Map?)?['trigger_onepick'] == 'true';
 
   @override

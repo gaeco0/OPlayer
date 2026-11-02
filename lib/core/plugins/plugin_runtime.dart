@@ -19,6 +19,7 @@ Future<Object?> callPlugin(
   PluginRequest? request,
   Map<String, dynamic> config = const {},
   Map<String, dynamic> credentials = const {},
+  Map<String, dynamic> auth = const {},
   bool Function(String)? allowsRequest,
   bool validateOnly = false,
 }) async {
@@ -47,8 +48,12 @@ Future<Object?> callPlugin(
         const id = ++__seq; __waiting[id] = {resolve, reject}; __queue.push({id,op,...args});
       });
       $pluginParserFactory
+      const auth = ${jsonEncode(auth)};
+      if (Array.isArray(auth.grantedScopes)) Object.freeze(auth.grantedScopes);
+      if (Array.isArray(auth.requestedScopes)) Object.freeze(auth.requestedScopes);
       globalThis.OPlayer = Object.freeze({
         api: ${plugin.manifest['api'] == 5 ? 5 : 4}, hostApi: $pluginHostApi, kind: ${jsonEncode(plugin.kind)}, capabilities: Object.freeze(${jsonEncode(plugin.capabilities)}),
+        auth: Object.freeze(auth),
         config: Object.freeze(${jsonEncode(config)}),
         app: Object.freeze({googleOAuth: Object.freeze(${jsonEncode({'clientId': CloudConfig.googleClientId, 'platform': Platform.operatingSystem})})}),
         secret: (name, options = {}) => ({\$secret:name, ...options}),

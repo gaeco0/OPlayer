@@ -33,7 +33,7 @@ void main() {
       expect(entry['pluginApi'], plugin.manifest['api']);
       if ((plugin.oauth['scopes'] as List? ?? []).contains('https://www.googleapis.com/auth/drive.readonly') &&
           plugin.id == 'cloud.gdrive') {
-        expect(entry['requiresHost'], contains('googleDriveReadUpload'));
+        expect(entry['requiresHost'], contains('oauthScopes'));
         expect(entry['requiresHost'], contains('fixedUploadRoot'));
         expect(plugin.manifest['uploadRoot'], isNotNull);
       }

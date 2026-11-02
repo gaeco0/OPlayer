@@ -286,7 +286,6 @@ class OPlugin {
             throw const FormatException('Google 인증 선택 옵션은 true/false여야 합니다');
           }
         }
-        if (extra['include_granted_scopes'] == 'true') throw const FormatException('Android Google 인증은 요청한 권한만 사용합니다');
       }
       if (native == 'google' &&
           extra is Map &&
@@ -303,11 +302,6 @@ class OPlugin {
             }.contains(key),
           )) {
         throw const FormatException('지원하지 않는 Android Google 인증 옵션');
-      }
-      if (extra is Map &&
-          extra['trigger_onepick'] == 'true' &&
-          jsonEncode(plugin.oauth['scopes']) != jsonEncode(['https://www.googleapis.com/auth/drive.file'])) {
-        throw const FormatException('Google Picker는 drive.file 단독 권한이 필요합니다');
       }
       if (plugin.oauth['scopes'] is! List || (plugin.oauth['scopes'] as List).any((v) => v is! String)) {
         throw const FormatException('OAuth scopes 형식 오류');

@@ -275,7 +275,11 @@ void main() {
       return {'accessToken': 'native-token', 'grantedScopes': (call.arguments as Map)['scopes']};
     });
     addTearDown(() => messenger.setMockMethodCallHandler(GoogleAndroidOAuthClient.channel, null));
-    final client = GoogleAndroidOAuthClient(clientId: 'android-id', accountEmail: 'selected@example.com');
+    final client = GoogleAndroidOAuthClient(
+      clientId: 'android-id',
+      accountEmail: 'selected@example.com',
+      requestedScopes: const [googleDriveFileScope],
+    );
     final token = await client.authorize();
     expect(token.refreshToken, null);
     await client.refresh(token);
