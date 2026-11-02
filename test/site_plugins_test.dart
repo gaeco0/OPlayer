@@ -9,6 +9,7 @@ import 'package:oplayer/features/web/site_plugins.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() => FlutterSecureStorage.setMockInitialValues({}));
   test('all-sites page permission blocks across domains without granting network access', () async {
     final source = await File('plugins/site.disable-devtool.js').readAsString();
     final plugin = OPlugin.parse(source);

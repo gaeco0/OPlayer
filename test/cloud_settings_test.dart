@@ -111,7 +111,7 @@ void main() {
     expect(find.text('앱 등록 정보'), findsNothing);
     store.installed[plugin.id] = plugin;
     await store.setEnabled(plugin.id, true);
-    expect(cloudPluginConfigured(plugin), true);
+    expect(cloudPluginConfigured(plugin), false);
   });
 
   testWidgets('custom cloud registration persists per extension and is used by OAuth', (tester) async {
@@ -155,7 +155,8 @@ void main() {
     expect(() => oauthClientFor(CloudProvider.plugin, pluginId: first.id), throwsStateError);
     await store.remove(first.id);
     store.installed[first.id] = first;
-    expect(store.oauthClientId(first), 'first-client');
+    expect(store.oauthClientId(first), 'manifest-default');
+    expect((await SharedPreferences.getInstance()).getString('pluginOAuthClientId:${first.id}'), isNull);
     await store.remove(first.id);
     await store.remove(second.id);
   });
