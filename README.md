@@ -19,7 +19,7 @@ nPlayer의 UI/UX를 기준으로, 로컬·네트워크·클라우드 재생과 �
 
 - 현재 공개 베타: [0.1.8-beta.2](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.8-beta.2). 최근 재생 다중 선택을 포함한다. 앱의 업데이트 채널을 **beta**로 선택하면 확인할 수 있다. 정식 Latest·업데이트 확인 기본값은 stable v0.1.7로 유지한다.
 - 플랫폼별 실기기 검증을 모두 마친 베타는 아니다. 전체 플랫폼 빌드·자동 검증은 유지하며, 다양한 기기의 성능·호환성 문제는 사용자 제보를 모아 재현 후 수정한다. 설정 → **진단 정보 보내기**로 GitHub Issues에 신고할 수 있다.
-- 현재 nightly: [0.1.9-nightly.20261102.2](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.9-nightly.20261102.2). Google Drive 확장앱 1.4.0을 **drive.file** 파일 단위 권한으로 축소했다. 앱·확장앱 업데이트 후 Google 계정의 기존 OPlayer 권한 삭제와 앱 계정 재연결이 필요하다. 전체 라이브러리는 조회하지 않으며 현재 Picker UI는 없어 주로 앱이 업로드한 파일을 다룬다. MKV 원본화질·HLS 직접 병합과 기존 브라우저·최근 재생·업데이트 채널 수정도 포함한다. 정식 Latest·업데이트 확인 기본값은 stable v0.1.7이다.
+- 현재 nightly: [0.1.9-nightly.20261102.3](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.9-nightly.20261102.3). 확장앱 삭제 시 설정·인증정보·연결 계정·토큰과 미사용 모델 캐시를 정리하고 재설치 시 예전 정보가 복원되지 않도록 수정했습니다. Android Google Drive 연결은 이전 권한 토큰 캐시를 한 번 무효화해 재시도합니다. 권한 축소와 기존 기능을 포함하며 내부 빌드 번호 `+2`, 기존 Android 서명, 정식 Latest·업데이트 확인 기본값 stable v0.1.7을 유지합니다.
 
 ## 파일·재생목록 관리 (v0.1.7)
 
