@@ -59,6 +59,12 @@ Future<void> main(List<String> args) async {
   await NetworkService.instance.init();
   await PluginStore.instance.init();
   await ResourceLocks.instance.init();
+  try {
+    await ResourceLocks.instance.pruneDisconnectedConnections();
+  } catch (_) {
+    // A cleanup failure must not remove existing protection or prevent startup.
+    debugPrint('Disconnected resource lock cleanup could not be saved.');
+  }
   await ResourceLocks.instance.syncNativePrivacy();
   await PlaybackSync.instance.init();
   if (ResourceLocks.supportsSystemAuthentication) {

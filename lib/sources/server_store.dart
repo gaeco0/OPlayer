@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/secure_store.dart';
+import '../core/resource_locks.dart';
 
 enum ServerType { smb, ftp, sftp, webdav }
 
@@ -163,6 +164,7 @@ class ServerStore extends ChangeNotifier {
     await SecureStore.instance.delete(c.passwordKey);
     await SecureStore.instance.delete('sshkey_${c.id}');
     await _persist();
+    await ResourceLocks.instance.forgetConnection(serverResourceKey(c));
   }
 
   Future<void> saveAccount(CloudAccount a) async {
@@ -179,13 +181,16 @@ class ServerStore extends ChangeNotifier {
     await SecureStore.instance.writeRequired(a.tokenKey, null);
     accounts.removeWhere((s) => s.id == a.id);
     await _persist();
+    await ResourceLocks.instance.forgetConnection('${a.provider.name}://${a.id}');
   }
 
   Future<String> password(ServerConfig c) async => await SecureStore.instance.read(c.passwordKey) ?? '';
 
   Future<void> _persist() async {
-    await _prefs.setStringList(_kServers, servers.map((e) => jsonEncode(e.toJson())).toList());
-    await _prefs.setStringList(_kAccounts, accounts.map((e) => jsonEncode(e.toJson())).toList());
+    if (!await _prefs.setStringList(_kServers, servers.map((e) => jsonEncode(e.toJson())).toList()) ||
+        !await _prefs.setStringList(_kAccounts, accounts.map((e) => jsonEncode(e.toJson())).toList())) {
+      throw StateError('저장소 연결 정보를 저장하지 못했습니다');
+    }
     notifyListeners();
   }
 }

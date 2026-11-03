@@ -503,6 +503,45 @@ class ResourceLocks extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// A removed connection owns an unreachable namespace, including nested locks.
+  Future<void> forgetConnection(String root) {
+    final key = resourceKey(root);
+    return _removeResources((entry) => entry == key || entry.startsWith('$key/'));
+  }
+
+  /// Repair locks left by older versions after the connection registry is loaded.
+  /// Local files and app/menu locks have an independent lifetime and are retained.
+  Future<void> pruneDisconnectedConnections() {
+    final store = ServerStore.instance;
+    final connected = {
+      for (final server in store.servers) resourceKey(serverResourceKey(server)),
+      for (final account in store.accounts) resourceKey('${account.provider.name}://${account.id}'),
+    };
+    final managedSchemes = {...ServerType.values.map((v) => v.name), ...CloudProvider.values.map((v) => v.name)};
+    return _removeResources((key) {
+      final uri = Uri.tryParse(key);
+      if (uri == null || !managedSchemes.contains(uri.scheme) || !uri.hasAuthority) return false;
+      return !connected.contains(resourceKey('${uri.scheme}://${uri.authority}'));
+    });
+  }
+
+  Future<void> _removeResources(bool Function(String) remove) async {
+    if (unavailable) throw StateError('잠금 정보를 읽을 수 없어 정리하지 못했습니다');
+    final removed = _resources.keys.where(remove).toSet();
+    if (removed.isEmpty) return;
+    final previous = _resources;
+    _resources = Map.of(previous)..removeWhere((key, _) => removed.contains(key));
+    try {
+      await _save();
+    } catch (_) {
+      _resources = previous;
+      rethrow;
+    }
+    _unlockedResources.removeWhere(removed.contains);
+    _generation++;
+    notifyListeners();
+  }
+
   void relock() {
     _playbackGeneration++;
     _lockInterface();
