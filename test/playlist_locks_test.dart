@@ -49,6 +49,11 @@ void main() {
     await t.tap(find.text('Movies'));
     await t.pumpAndSettle();
     expect(find.text('Private track'), findsOneWidget);
+    await t.tap(find.byTooltip('새로고침').last);
+    await t.pumpAndSettle();
+    expect(find.text('Private track'), findsOneWidget);
+    expect(find.text('동기화 계정이 연결되지 않았습니다. 기기의 재생목록을 표시합니다.'), findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(locks.isLocked(playlistResourceKey(b)), true);
     expect(locks.isLocked(file), true);
     locks.background(true);
@@ -56,6 +61,7 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('Private track'), findsNothing);
     expect(find.byTooltip('선택모드'), findsNothing);
+    expect(find.byTooltip('새로고침'), findsNothing);
     await t.runAsync(() => locks.requireAccess(playlistResourceKey(a)));
     await t.pumpAndSettle();
     expect(find.text('Private track'), findsOneWidget);

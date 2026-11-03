@@ -5,11 +5,22 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:oplayer/core/diagnostic_report.dart';
 import 'package:oplayer/features/settings/issue_report_page.dart';
+import 'package:oplayer/core/playlist_store.dart';
+import 'package:oplayer/core/sync_references.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('diagnostic collection excludes URLs, file names and credentials, even in unexpected native fields', () async {
+    SharedPreferences.setMockInitialValues({});
+    await SyncReferences.instance.init();
+    await SyncReferences.instance.bind('webdav://mapped', 'private-alias');
+    await PlaylistStore.instance.init();
+    await PlaylistStore.instance.create('private-playlist', [
+      const PlaylistTrack('webdav://mapped/private/movie.mp4', 'movie.mp4'),
+      const PlaylistTrack('webdav://unmapped/private/secret.mp4', 'secret.mp4'),
+    ]);
     final text = await DiagnosticReport.collect(
       orientation: {
         'sdk': 37,
@@ -32,6 +43,13 @@ void main() {
     expect(text, isNot(contains('private')));
     expect(text, isNot(contains('secret')));
     expect(text, isNot(contains('movie.mp4')));
+    final playlist = data['playlistSync']['playlists'][0] as Map;
+    expect(playlist['tracks'], 2);
+    expect(playlist['portable'], 1);
+    expect(playlist['excluded'][0]['count'], 1);
+    expect(playlist['excluded'][0]['binding'], false);
+    expect(text, isNot(contains('webdav://')));
+    expect(text, isNot(contains('unmapped')));
   });
 
   testWidgets('issue form validates, previews optional diagnostics and opens a prefilled GitHub issue', (tester) async {

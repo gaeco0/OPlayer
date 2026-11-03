@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../core/media_item.dart';
 import '../../core/playlist_store.dart';
 import '../../core/resource_locks.dart';
+import '../../core/playback_sync.dart';
+import '../../core/sync_references.dart';
 import '../settings/privacy_settings.dart';
 import '../settings/resource_access_view.dart';
 import '../../sources/source_registry.dart';
@@ -19,6 +21,35 @@ Future<bool> _playlistAccess(String id) async {
   } on ResourceLockedException {
     return false;
   }
+}
+
+Future<void> _refreshPlaylists(BuildContext context, {String? id}) async {
+  await ResourceLocks.instance.requireAccess(playlistsResourceKey);
+  if (id != null) {
+    await ResourceLocks.instance.requireAccess(playlistResourceKey(id));
+  }
+  final sync = PlaybackSync.instance;
+  if (sync.connected) {
+    await ResourceLocks.instance.requireAccess(recentResourceKey);
+    await sync.syncNow();
+  }
+  if (!context.mounted) return;
+  final lists = PlaylistStore.instance.lists.where((p) => id == null || p.id == id);
+  final excluded = lists.fold<int>(
+    0,
+    (count, p) => count + p.tracks.where((t) => SyncReferences.instance.portable(t.key) == null).length,
+  );
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text(
+        !sync.connected
+            ? '동기화 계정이 연결되지 않았습니다. 기기의 재생목록을 표시합니다.'
+            : excluded > 0
+            ? '새로고침 완료 · 리소스 동기화 연결이 없는 $excluded개 파일은 이 기기에만 있습니다.'
+            : '재생목록을 새로고침했습니다',
+      ),
+    ),
+  );
 }
 
 Future<void> addToPlaylist(BuildContext context, List<PlaylistTrack> tracks, {String? exclude}) async {
@@ -64,6 +95,17 @@ class PlaylistsPage extends StatefulWidget {
 
 class _PlaylistsPageState extends State<PlaylistsPage> {
   final store = PlaylistStore.instance;
+  bool _refreshing = false;
+  Future<void> _refresh() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      await runFileAction(context, () => _refreshPlaylists(context));
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -98,6 +140,7 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
             : null,
         automaticallyImplyLeading: false,
         actions: [
+          IconButton(tooltip: '새로고침', icon: const Icon(Icons.refresh), onPressed: _refreshing ? null : _refresh),
           IconButton(tooltip: '새 재생목록', icon: const Icon(Icons.playlist_add), onPressed: _create),
           IconButton(
             tooltip: '재생목록 메뉴 잠금 설정',
@@ -108,70 +151,74 @@ class _PlaylistsPageState extends State<PlaylistsPage> {
       ),
       body: ResourceAccessView(
         resources: const [playlistsResourceKey],
-        child: store.lists.isEmpty
-            ? const Center(child: Text('재생목록을 만들어 파일을 추가하세요'))
-            : ListView(
-                children: [
-                  for (final list in store.lists)
-                    ListTile(
-                      leading: Icon(
-                        ResourceLocks.instance.isLocked(playlistResourceKey(list.id))
-                            ? Icons.lock_outline
-                            : Icons.playlist_play,
-                      ),
-                      title: Text(list.name),
-                      subtitle: Text(
-                        ResourceLocks.instance.isLocked(playlistResourceKey(list.id)) ? '잠김' : '${list.tracks.length}개',
-                      ),
-                      onTap: () async {
-                        if (!await _playlistAccess(list.id) || !context.mounted) return;
-                        await Navigator.of(
-                          context,
-                        ).push(MaterialPageRoute<void>(builder: (_) => PlaylistPage(id: list.id)));
-                      },
-                      trailing: PopupMenuButton<String>(
-                        onSelected: (action) async {
-                          if (action == 'lock') {
-                            await toggleResourceLock(context, playlistResourceKey(list.id), list.name);
-                            return;
-                          }
-                          if (!await _playlistAccess(list.id) || !context.mounted) return;
-                          if (action == 'rename') {
-                            final name = await askName(context, '재생목록 이름변경', initial: list.name);
-                            if (name != null && context.mounted) {
-                              await runFileAction(context, () => store.rename(list.id, name));
-                            }
-                          } else {
-                            final confirmed = await showDialog<bool>(
-                              context: context,
-                              builder: (c) => AlertDialog(
-                                title: const Text('재생목록 삭제'),
-                                content: Text('${list.name} 목록을 삭제합니다. 원본 파일은 유지됩니다.'),
-                                actions: [
-                                  TextButton(onPressed: () => Navigator.pop(c), child: const Text('취소')),
-                                  TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('삭제')),
-                                ],
-                              ),
-                            );
-                            if (confirmed == true && context.mounted) {
-                              await runFileAction(context, () => store.delete(list.id));
-                            }
-                          }
-                        },
-                        itemBuilder: (_) => [
-                          PopupMenuItem(
-                            value: 'lock',
-                            child: Text(
-                              ResourceLocks.instance.hasExact(playlistResourceKey(list.id)) ? '잠금 설정 해제' : '이 재생목록 잠금',
-                            ),
+        child: RefreshIndicator(
+          onRefresh: _refresh,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              if (_refreshing) const LinearProgressIndicator(),
+              if (store.lists.isEmpty) const ListTile(title: Text('재생목록을 만들어 파일을 추가하세요')),
+              for (final list in store.lists)
+                ListTile(
+                  leading: Icon(
+                    ResourceLocks.instance.isLocked(playlistResourceKey(list.id))
+                        ? Icons.lock_outline
+                        : Icons.playlist_play,
+                  ),
+                  title: Text(list.name),
+                  subtitle: Text(
+                    ResourceLocks.instance.isLocked(playlistResourceKey(list.id)) ? '잠김' : '${list.tracks.length}개',
+                  ),
+                  onTap: () async {
+                    if (!await _playlistAccess(list.id) || !context.mounted) return;
+                    await Navigator.of(
+                      context,
+                    ).push(MaterialPageRoute<void>(builder: (_) => PlaylistPage(id: list.id)));
+                  },
+                  trailing: PopupMenuButton<String>(
+                    onSelected: (action) async {
+                      if (action == 'lock') {
+                        await toggleResourceLock(context, playlistResourceKey(list.id), list.name);
+                        return;
+                      }
+                      if (!await _playlistAccess(list.id) || !context.mounted) return;
+                      if (action == 'rename') {
+                        final name = await askName(context, '재생목록 이름변경', initial: list.name);
+                        if (name != null && context.mounted) {
+                          await runFileAction(context, () => store.rename(list.id, name));
+                        }
+                      } else {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (c) => AlertDialog(
+                            title: const Text('재생목록 삭제'),
+                            content: Text('${list.name} 목록을 삭제합니다. 원본 파일은 유지됩니다.'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(c), child: const Text('취소')),
+                              TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('삭제')),
+                            ],
                           ),
-                          const PopupMenuItem(value: 'rename', child: Text('이름변경')),
-                          const PopupMenuItem(value: 'delete', child: Text('재생목록 삭제')),
-                        ],
+                        );
+                        if (confirmed == true && context.mounted) {
+                          await runFileAction(context, () => store.delete(list.id));
+                        }
+                      }
+                    },
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        value: 'lock',
+                        child: Text(
+                          ResourceLocks.instance.hasExact(playlistResourceKey(list.id)) ? '잠금 설정 해제' : '이 재생목록 잠금',
+                        ),
                       ),
-                    ),
-                ],
-              ),
+                      const PopupMenuItem(value: 'rename', child: Text('이름변경')),
+                      const PopupMenuItem(value: 'delete', child: Text('재생목록 삭제')),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
       ),
     ),
   );
@@ -188,6 +235,23 @@ class _PlaylistPageState extends State<PlaylistPage> {
   final store = PlaylistStore.instance;
   final selected = <String>{};
   bool selecting = false;
+  bool _refreshing = false;
+  Future<void> _refresh() async {
+    if (_refreshing) return;
+    setState(() => _refreshing = true);
+    try {
+      await runFileAction(context, () => _refreshPlaylists(context, id: widget.id));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _refreshing = false;
+          final keys = store.find(widget.id)?.tracks.map((t) => t.key).toSet() ?? <String>{};
+          selected.retainAll(keys);
+        });
+      }
+    }
+  }
+
   void toggle(String key) => setState(() {
     if (!selected.add(key)) selected.remove(key);
   });
@@ -243,6 +307,8 @@ class _PlaylistPageState extends State<PlaylistPage> {
                   )
                 : null,
             actions: [
+              if (!selecting && !locked)
+                IconButton(tooltip: '새로고침', icon: const Icon(Icons.refresh), onPressed: _refreshing ? null : _refresh),
               if (selecting && !locked)
                 FileSelectionActions(
                   onSelectAll: () => setState(() {
@@ -289,52 +355,68 @@ class _PlaylistPageState extends State<PlaylistPage> {
           ),
           body: ResourceAccessView(
             resources: [playlistsResourceKey, playlistResourceKey(widget.id)],
-            child: tracks.isEmpty
-                ? const Center(child: Text('재생목록이 비어 있습니다'))
-                : ReorderableListView.builder(
-                    buildDefaultDragHandles: false,
-                    itemCount: tracks.length,
-                    onReorderItem: (a, b) => runFileAction(context, () => store.reorder(widget.id, a, b)),
-                    itemBuilder: (_, i) {
-                      final t = tracks[i];
-                      final local = !t.key.contains('://') && File(t.key).existsSync();
-                      return FileSelectionTile(
-                        key: ValueKey(t.key),
-                        active: selecting,
-                        selected: selected.contains(t.key),
-                        onToggle: () => toggle(t.key),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: VideoListTile(
-                                resumeKey: t.key,
-                                name: t.title,
-                                localPath: local ? t.key : null,
-                                onTap: () => play(list!, i),
-                                onChanged: () => setState(() {}),
-                                onAddToPlaylist: () =>
-                                    runFileAction(context, () => addToPlaylist(context, [t], exclude: widget.id)),
-                                onSelect: () => setState(() {
-                                  selecting = true;
-                                  selected.add(t.key);
-                                }),
-                                onRemoveFromPlaylist: () =>
-                                    runFileAction(context, () => store.remove(widget.id, {t.key})),
-                              ),
-                            ),
-                            if (!selecting)
-                              ReorderableDragStartListener(
-                                index: i,
-                                child: const Padding(
-                                  padding: EdgeInsets.all(12),
-                                  child: Tooltip(message: '순서 변경', child: Icon(Icons.drag_handle)),
+            child: Column(
+              children: [
+                if (_refreshing) const LinearProgressIndicator(),
+                Expanded(
+                  child: RefreshIndicator(
+                    onRefresh: _refresh,
+                    child: tracks.isEmpty
+                        ? ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            children: const [ListTile(title: Text('재생목록이 비어 있습니다'))],
+                          )
+                        : ReorderableListView.builder(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            buildDefaultDragHandles: false,
+                            itemCount: tracks.length,
+                            onReorderItem: (a, b) => runFileAction(context, () => store.reorder(widget.id, a, b)),
+                            itemBuilder: (_, i) {
+                              final t = tracks[i];
+                              final local = !t.key.contains('://') && File(t.key).existsSync();
+                              return FileSelectionTile(
+                                key: ValueKey(t.key),
+                                active: selecting,
+                                selected: selected.contains(t.key),
+                                onToggle: () => toggle(t.key),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: VideoListTile(
+                                        resumeKey: t.key,
+                                        name: t.title,
+                                        localPath: local ? t.key : null,
+                                        onTap: () => play(list!, i),
+                                        onChanged: () => setState(() {}),
+                                        onAddToPlaylist: () => runFileAction(
+                                          context,
+                                          () => addToPlaylist(context, [t], exclude: widget.id),
+                                        ),
+                                        onSelect: () => setState(() {
+                                          selecting = true;
+                                          selected.add(t.key);
+                                        }),
+                                        onRemoveFromPlaylist: () =>
+                                            runFileAction(context, () => store.remove(widget.id, {t.key})),
+                                      ),
+                                    ),
+                                    if (!selecting)
+                                      ReorderableDragStartListener(
+                                        index: i,
+                                        child: const Padding(
+                                          padding: EdgeInsets.all(12),
+                                          child: Tooltip(message: '순서 변경', child: Icon(Icons.drag_handle)),
+                                        ),
+                                      ),
+                                  ],
                                 ),
-                              ),
-                          ],
-                        ),
-                      );
-                    },
+                              );
+                            },
+                          ),
                   ),
+                ),
+              ],
+            ),
           ),
         ),
       );

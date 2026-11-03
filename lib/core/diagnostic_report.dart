@@ -3,9 +3,14 @@ import 'dart:ffi';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:crypto/crypto.dart';
 
 import '../features/player/player_orientation.dart';
 import 'settings.dart';
+import 'playlist_store.dart';
+import 'resource_locks.dart';
+import 'sync_references.dart';
+import '../sources/server_store.dart';
 
 class DiagnosticReport {
   static Future<String> collect({Map<String, dynamic>? orientation}) async {
@@ -28,6 +33,7 @@ class DiagnosticReport {
       'resources': settings.networkForResources,
     };
     data['selectedOrientation'] = settings.playbackOrientation.name;
+    data['playlistSync'] = playlistSync();
     try {
       final values = orientation ?? await PlayerOrientation.diagnostics().timeout(const Duration(seconds: 3));
       // Explicit allowlist: never export arbitrary native fields, settings,
@@ -67,6 +73,62 @@ class DiagnosticReport {
       data['screen'] = 'unavailable';
     }
     return const JsonEncoder.withIndent('  ').convert(data);
+  }
+
+  static Map<String, dynamic> playlistSync() {
+    final locks = ResourceLocks.instance;
+    if (locks.shielded || locks.isLocked(playlistsResourceKey)) return {'locked': true};
+    final refs = SyncReferences.instance;
+    String fingerprint(String value) => sha256.convert(utf8.encode(value)).toString().substring(0, 16);
+    final registered = {
+      for (final s in ServerStore.instance.servers) '${s.type.name}://${s.id}',
+      for (final a in ServerStore.instance.accounts) '${a.provider.name}://${a.id}',
+    };
+    final lists = PlaylistStore.instance.lists;
+    return {
+      'bindings': [
+        for (final entry in refs.bindings.entries)
+          {'resource': fingerprint(entry.key), 'alias': fingerprint(entry.value)},
+      ],
+      'playlists': [
+        for (var i = 0; i < lists.length; i++)
+          if (locks.isLocked(playlistResourceKey(lists[i].id)))
+            {'index': i + 1, 'locked': true}
+          else
+            (() {
+              final excluded = <String, int>{};
+              var portable = 0;
+              for (final track in lists[i].tracks) {
+                if (refs.portable(track.key) != null) {
+                  portable++;
+                  continue;
+                }
+                final separator = track.key.indexOf('://');
+                final slash = separator < 0 ? -1 : track.key.indexOf('/', separator + 3);
+                final root = separator < 0
+                    ? 'local'
+                    : slash < 0
+                    ? track.key
+                    : track.key.substring(0, slash);
+                excluded.update(root, (count) => count + 1, ifAbsent: () => 1);
+              }
+              return {
+                'index': i + 1,
+                'tracks': lists[i].tracks.length,
+                'portable': portable,
+                'excluded': [
+                  for (final entry in excluded.entries)
+                    {
+                      'resource': fingerprint(entry.key),
+                      'registered': registered.contains(entry.key),
+                      'binding': refs.bindings.containsKey(entry.key),
+                      'count': entry.value,
+                    },
+                ],
+              };
+            })(),
+      ],
+    };
   }
 
   static String body(String description, String steps, {String? diagnostics}) =>
