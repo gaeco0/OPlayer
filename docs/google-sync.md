@@ -1,5 +1,7 @@
 # Google 계정 동기화
 
+Google 제출용 촬영 순서·영문 자막·답장 초안은 [권한 심사 동영상 시나리오](google-oauth-review-video.md)를 참고하세요.
+
 Google Drive의 숨겨진 `appDataFolder`에 재생목록·최근 재생·이어보기 위치를 저장한다.
 별도 OPlayer 서버나 Apple·삼성 계정 연동은 사용하지 않는다. 일반 파일 탐색용 Google Drive 확장앱과
 별개의 `Google Drive 동기화` 리소스 확장앱(`sync.gdrive`)으로 제공된다. 앱의 병합·이어보기 엔진은 저장소 제공자와 독립적이다.
