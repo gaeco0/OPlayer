@@ -79,7 +79,7 @@ class _PlaybackSyncPageState extends State<PlaybackSyncPage> {
               ),
             if (sync.legacyConnection && !sync.connected)
               const ListTile(subtitle: Text('이전 동기화 연결 정보가 남아 있습니다. 해당 확장앱을 설치·선택하고 같은 계정에 연결하면 대기 기록을 이전합니다.')),
-            if (sync.available)
+            if (sync.available && PluginStore.instance.require(sync.providerId!).settings.isNotEmpty)
               ListTile(
                 title: const Text('선택한 확장앱 설정'),
                 trailing: const Icon(Icons.settings),

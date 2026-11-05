@@ -172,7 +172,7 @@ class _PluginsPageState extends State<PluginsPage> {
                           ? null
                           : (v) => _guard(() => store.setEnabled(p.id, v)),
                     ),
-                    onTap: (p.cloud || p.settings.isNotEmpty) && !busy
+                    onTap: p.settings.isNotEmpty && !busy
                         ? () => Navigator.of(
                             context,
                           ).push(MaterialPageRoute<void>(builder: (_) => CloudPluginSettingsPage(pluginId: p.id)))
@@ -180,7 +180,7 @@ class _PluginsPageState extends State<PluginsPage> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (p.cloud || p.settings.isNotEmpty)
+                        if (p.settings.isNotEmpty)
                           IconButton(
                             icon: const Icon(Icons.settings_outlined),
                             tooltip: '${p.name} 설정',

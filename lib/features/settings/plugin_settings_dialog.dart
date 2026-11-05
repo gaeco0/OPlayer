@@ -10,6 +10,7 @@ import '../../sources/cloud/cloud_config.dart';
 
 /// The extension owns the schema; the app only renders standard controls.
 Future<bool> showPluginSettingsDialog(BuildContext context, OPlugin plugin) async {
+  if (plugin.settings.isEmpty) return false;
   final store = PluginStore.instance;
   final values = <String, dynamic>{
     for (final f in plugin.settings)

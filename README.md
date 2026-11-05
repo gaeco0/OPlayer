@@ -44,9 +44,9 @@ nPlayer의 UI/UX를 기준으로, 로컬·네트워크·클라우드 재생과 �
 
 ## 재생 기록 동기화 (v0.1.7)
 
-- 설정 → **재생 동기화**에서 Google Drive 앱 전용 저장소에 재생목록·최근 재생·이어보기 위치를 동기화합니다. 별도 서버나 Google Drive 확장앱 설치가 필요하지 않으며 Apple·삼성 계정 연동은 제공하지 않습니다.
+- 설정 → **재생 동기화**에서 설치·활성화한 동기화 확장앱을 선택해 재생목록·최근 재생·이어보기 위치를 동기화합니다. Google Drive 동기화는 파일 탐색용 Google Drive 확장앱과 별도로 설치합니다. Apple·삼성 계정 연동은 제공하지 않습니다.
 - 기기별 폴더·서버·클라우드 계정에 공통 동기화 이름을 지정해 파일을 연결합니다. 파일 내용·비밀번호·사이트 세션·잠금 정보는 전송하지 않습니다. 연결되지 않은 파일과 URL은 기기에만 남습니다.
-- Android/Android TV와 Windows·Linux·macOS를 지원합니다. 운영자의 같은 Cloud 프로젝트 OAuth 등록값을 Actions Secret으로 빌드에 포함할 수 있으며 미등록 자체 빌드는 입력·등록 안내를 제공합니다. iOS는 별도 로그인 설정이 필요해 현재 지원하지 않습니다.
+- Android/Android TV와 Windows·Linux·macOS를 지원합니다. Google 등록값은 운영자가 같은 Cloud 프로젝트의 OAuth 정보를 Actions Secret으로 빌드에 포함합니다. 공식 Google 확장앱은 사용자에게 Client ID·Secret 입력을 요구하지 않습니다. iOS는 별도 로그인 설정이 필요해 현재 지원하지 않습니다.
 - 자동·수동 동기화, 오프라인 변경 보관, 삭제 병합을 지원하며 동일 재생목록의 동시 편집은 마지막 수정본을 사용합니다. 자세한 [설정·등록·동작 안내](docs/google-sync.md)를 참고하세요.
 
 ## 고화질 업스케일 (v0.1.6)
@@ -291,7 +291,7 @@ Chromecast·DLNA·PiP는 실제 Android/TV 기기 검증이 필요하다. nPlaye
 
 ## 클라우드 설정 (필수)
 
-설정 → 확장앱 → 해당 확장앱의 설정(톱니바퀴)에서 앱 등록·접속 정보를 입력한다. 첫 연결 시에도 해당 확장앱의 등록 안내가 열린다. 처음 시작할 때 설치된 확장앱은 없으며 Google Drive·Dropbox·OneDrive·S3 호환 스토리지·Box·네이버 MYBOX 모두 공식 저장소에서 선택 설치한다. 확장앱별 설정·검증·인증 흐름은 JS가 정의하며 비밀값은 기기 보안 저장소에 보관한다. 확장앱을 꺼도 연결 정보는 보관한다. 아래 등록 정보와 [확장앱별 안내](plugins/README.md)를 참고한다.
+설정이 필요한 확장앱은 설정 → 확장앱 → 해당 확장앱의 설정(톱니바퀴)에서 등록·접속 정보를 입력한다. 공식 Google Drive 1.6.1·Google Drive 동기화 1.0.1은 앱에 포함된 등록값으로 로그인하며 Client ID·Secret 입력이나 발급 안내가 없다. 처음 시작할 때 설치된 확장앱은 없으며 Google Drive·Dropbox·OneDrive·S3 호환 스토리지·Box·네이버 MYBOX 모두 공식 저장소에서 선택 설치한다. 확장앱별 설정·검증·인증 흐름은 JS가 정의하며 비밀값은 기기 보안 저장소에 보관한다. 확장앱을 꺼도 연결 정보는 보관한다. 아래 등록 정보와 [확장앱별 안내](plugins/README.md)를 참고한다.
 
 - OneDrive: Microsoft Entra 앱 등록에서 개인 Microsoft 계정을 포함하는 계정 유형과 모바일 및 데스크톱 플랫폼을 선택한다. 권한은 Files.Read, User.Read, offline_access. 커스텀 복귀 주소 `com.oplayer.oplayer://oauth/onedrive`와 데스크톱 `http://localhost:53682/callback`을 등록한다.
 - Dropbox: Scoped access / Full Dropbox 앱을 만들고 files.metadata.read, files.content.read, account_info.read 권한을 켠다. `com.oplayer.oplayer://oauth/dropbox`와 `http://localhost:53682/callback`을 등록한다.

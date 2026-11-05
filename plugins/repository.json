@@ -58,7 +58,7 @@
     {
       "id": "cloud.gdrive",
       "name": "Google Drive",
-      "version": "1.6.0",
+      "version": "1.6.1",
       "kind": "resource",
       "capabilities": [
         "storage"
@@ -71,9 +71,9 @@
         "OPlayer 전용 폴더 자동 생성",
         "업로드·권한 있는 파일 덮어쓰기"
       ],
-      "description": "기존 Drive 읽기 전용 탐색·재생과 OPlayer 전용 폴더 업로드",
+      "description": "Google 계정에 로그인해 기존 파일을 탐색·재생하고 OPlayer 폴더에 업로드합니다. 앱에 포함된 Google 등록 정보를 사용하므로 Client ID나 Secret 입력은 필요하지 않습니다.",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/cloud.gdrive.js",
-      "sha256": "d02a0ff0532488840696a8f949a009506e732d4cae1cf5cb60616ff1345c2035",
+      "sha256": "abbe7674d959d5bc5d0aebb33ff5b830979c808e6b6674a3f5f139479f712fb6",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
       "platforms": [
         "android",
@@ -343,7 +343,7 @@
     {
       "id": "sync.gdrive",
       "name": "Google Drive 동기화",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "kind": "resource",
       "capabilities": [
         "sync"
@@ -354,9 +354,9 @@
         "재생목록 동기화",
         "최근 재생·이어보기 동기화"
       ],
-      "description": "Google Drive API와 drive.appdata 범위를 등록하세요. 재생 기록 JSON만 비공개 앱 데이터 저장소에 저장합니다. 파일 탐색용 Drive 확장앱과 별도 인증입니다.",
+      "description": "Google 계정에 로그인해 재생목록·최근 재생·이어보기를 비공개 앱 데이터 저장소에 동기화합니다. 앱에 포함된 Google 등록 정보를 사용하므로 Client ID나 Secret 입력은 필요하지 않습니다.",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/sync.gdrive.js",
-      "sha256": "45e003468162c1d3b8c2be43d78559c139eb4ad777da44b7efb30164d120928f",
+      "sha256": "861c722bc705bccdb267d7e3c7c3e917d570e631c4b13420c8fe794de4b27eb7",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
       "platforms": [
         "android",

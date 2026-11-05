@@ -25,9 +25,10 @@ void main() {
     for (final id in ['gdrive', 'dropbox', 'onedrive', 'box', 'mybox', 's3']) {
       await PluginStore.instance.load(await File('plugins/cloud.$id.js').readAsString());
     }
+    await PluginStore.instance.load(await File('plugins/sync.gdrive.js').readAsString());
   });
 
-  testWidgets('cloud setup validates and saves provider IDs and securely stores Google desktop secret', (tester) async {
+  testWidgets('cloud setup validates and saves registrations required by their extensions', (tester) async {
     AppSettings.instance.dropboxAppKey = '';
     AppSettings.instance.oneDriveClientId = '';
     Future<void> open(String id) async {
@@ -57,20 +58,30 @@ void main() {
     await AppSettings.instance.init();
     expect(PluginStore.instance.oauthClientId(PluginStore.instance.installed['cloud.onedrive']!), id);
     expect(PluginStore.instance.oauthClientId(PluginStore.instance.installed['cloud.dropbox']!), 'testappkey123');
-    await open('gdrive');
-    const googleId = '123-test.apps.googleusercontent.com';
-    await tester.enterText(find.byType(TextFormField).first, googleId);
-    await tester.enterText(find.byType(TextFormField).last, 'desktop-secret');
-    await tester.tap(find.text('저장'));
+  });
+
+  testWidgets('official Google extensions use app registration without exposing registration settings', (tester) async {
+    final settings = AppSettings.instance;
+    final previousId = settings.googleDesktopClientId;
+    settings.googleDesktopClientId = 'bundled-test.apps.googleusercontent.com';
+    addTearDown(() => settings.googleDesktopClientId = previousId);
+    final store = PluginStore.instance;
+    for (final id in ['cloud.gdrive', 'sync.gdrive']) {
+      final plugin = store.installed[id]!;
+      expect(plugin.settings, isEmpty); // Explicit [] must not generate legacy registration fields.
+      expect(plugin.oauth['clientIdSource'], 'app.google');
+      expect(oauthClientFor(CloudProvider.plugin, pluginId: id).clientId, settings.googleDesktopClientId);
+      await tester.pumpWidget(MaterialApp(home: CloudPluginSettingsPage(pluginId: id)));
+      await tester.pumpAndSettle();
+      expect(find.text('앱 등록 정보'), findsNothing);
+      expect(find.byType(TextFormField), findsNothing);
+      expect(find.text('발급·등록 안내'), findsNothing);
+    }
+    await tester.pumpWidget(const MaterialApp(home: PluginsPage()));
     await tester.pumpAndSettle();
-    expect(PluginStore.instance.oauthClientId(PluginStore.instance.installed['cloud.gdrive']!), googleId);
-    expect(
-      await SecureStore.instance.readRequired(PluginStore.oauthSecretKey('cloud.gdrive', googleId)),
-      'desktop-secret',
-    );
-    await AppSettings.instance.init();
-    expect(PluginStore.instance.oauthClientId(PluginStore.instance.installed['cloud.gdrive']!), googleId);
-    expect((await SharedPreferences.getInstance()).getString('settings_v1'), isNot(contains('desktop-secret')));
+    expect(find.byTooltip('Google Drive 설정'), findsNothing);
+    expect(find.byTooltip('Google Drive 동기화 설정'), findsNothing);
+    expect(find.byTooltip('Dropbox 설정'), findsOneWidget);
   });
 
   testWidgets('cloud registration belongs only to its extension, including when disabled', (tester) async {

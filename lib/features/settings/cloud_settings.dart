@@ -65,16 +65,19 @@ class CloudPluginSettingsPage extends StatelessWidget {
             if (compatibility != null) ListTile(subtitle: Text(compatibility)),
             if (store.disabled.contains(pluginId))
               const ListTile(subtitle: Text('꺼진 확장앱입니다. 설정은 보관되며, 사용하려면 확장앱을 켜 주세요.')),
-            ListTile(
-              title: Text(plugin.cloud ? (plugin.authType == 'oauth' ? '앱 등록 정보' : '연결 설정') : '확장앱 설정'),
-              subtitle: Text(configured ? '설정됨' : '설정 필요'),
-              trailing: const Icon(Icons.edit_outlined),
-              enabled: supported && plugin.settings.isNotEmpty,
-              onTap: () => _configure(context, plugin),
-            ),
+            if (plugin.settings.isNotEmpty)
+              ListTile(
+                title: Text(plugin.cloud ? (plugin.authType == 'oauth' ? '앱 등록 정보' : '연결 설정') : '확장앱 설정'),
+                subtitle: Text(configured ? '설정됨' : '설정 필요'),
+                trailing: const Icon(Icons.edit_outlined),
+                enabled: supported && plugin.settings.isNotEmpty,
+                onTap: () => _configure(context, plugin),
+              ),
             ListTile(
               subtitle: Text(
-                plugin.cloud
+                plugin.settings.isEmpty
+                    ? (configured ? '별도로 입력할 설정이 없습니다. 사이드바의 클라우드 연결에서 계정을 추가하세요.' : '이 빌드에는 계정 연결에 필요한 앱 등록 정보가 없습니다.')
+                    : plugin.cloud
                     ? '설정을 저장한 뒤 사이드바의 클라우드 연결에서 계정을 추가하세요. 기존 연결 계정은 유지됩니다.'
                     : plugin.subtitle
                     ? '설정을 저장한 뒤 플레이어의 자막 메뉴에서 온라인 자막을 검색하세요.'
