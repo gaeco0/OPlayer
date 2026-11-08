@@ -485,6 +485,35 @@ class VideoGridTile extends StatelessWidget {
   }
 }
 
+class _FolderMenu extends StatelessWidget {
+  const _FolderMenu({required this.name, this.resource, this.onAdd, this.onSelect, this.onRemove});
+  final String name;
+  final String? resource;
+  final VoidCallback? onAdd, onSelect, onRemove;
+  @override
+  Widget build(BuildContext context) => PopupMenuButton<String>(
+    tooltip: '폴더 메뉴',
+    onSelected: (value) {
+      switch (value) {
+        case 'add':
+          onAdd?.call();
+        case 'select':
+          onSelect?.call();
+        case 'remove':
+          onRemove?.call();
+        case 'lock':
+          toggleResourceLock(context, resource!, name);
+      }
+    },
+    itemBuilder: (_) => [
+      if (onAdd != null) const PopupMenuItem(value: 'add', child: Text('재생목록에 추가')),
+      if (onSelect != null) const PopupMenuItem(value: 'select', child: Text('선택모드')),
+      if (onRemove != null) const PopupMenuItem(value: 'remove', child: Text('재생목록에서 삭제')),
+      if (resource != null) const PopupMenuItem(value: 'lock', child: Text('폴더 잠금 설정')),
+    ],
+  );
+}
+
 class FolderListTile extends StatelessWidget {
   const FolderListTile({
     super.key,
@@ -493,12 +522,16 @@ class FolderListTile extends StatelessWidget {
     this.subtitle,
     this.resource,
     this.lastPlayed = false,
+    this.onAddToPlaylist,
+    this.onSelect,
+    this.onRemoveFromPlaylist,
   });
   final bool lastPlayed;
   final String name;
   final String? resource;
   final String? subtitle;
   final VoidCallback onTap;
+  final VoidCallback? onAddToPlaylist, onSelect, onRemoveFromPlaylist;
 
   @override
   Widget build(BuildContext context) => ListTile(
@@ -512,18 +545,35 @@ class FolderListTile extends StatelessWidget {
     subtitle: subtitle == null
         ? null
         : Text(subtitle!, style: TextStyle(fontSize: 12, color: OColors.of(context).textSecondary)),
-    trailing: Icon(Icons.chevron_right, color: OColors.of(context).textSecondary),
+    trailing: onAddToPlaylist == null && onSelect == null && onRemoveFromPlaylist == null
+        ? Icon(Icons.chevron_right, color: OColors.of(context).textSecondary)
+        : _FolderMenu(
+            name: name,
+            resource: resource,
+            onAdd: onAddToPlaylist,
+            onSelect: onSelect,
+            onRemove: onRemoveFromPlaylist,
+          ),
     onTap: onTap,
     onLongPress: resource == null ? null : () => toggleResourceLock(context, resource!, name),
   );
 }
 
 class FolderGridTile extends StatelessWidget {
-  const FolderGridTile({super.key, required this.name, required this.onTap, this.resource, this.lastPlayed = false});
+  const FolderGridTile({
+    super.key,
+    required this.name,
+    required this.onTap,
+    this.resource,
+    this.lastPlayed = false,
+    this.onAddToPlaylist,
+    this.onSelect,
+  });
   final bool lastPlayed;
   final String name;
   final String? resource;
   final VoidCallback onTap;
+  final VoidCallback? onAddToPlaylist, onSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -538,7 +588,17 @@ class FolderGridTile extends StatelessWidget {
             aspectRatio: 16 / 9,
             child: Container(
               decoration: BoxDecoration(color: OColors.of(context).surfaceHigh, borderRadius: BorderRadius.circular(4)),
-              child: const Icon(Icons.folder_rounded, color: Color(0xFFF2B84B), size: 44),
+              child: Stack(
+                children: [
+                  const Center(child: Icon(Icons.folder_rounded, color: Color(0xFFF2B84B), size: 44)),
+                  if (onAddToPlaylist != null || onSelect != null)
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      child: _FolderMenu(name: name, resource: resource, onAdd: onAddToPlaylist, onSelect: onSelect),
+                    ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 6),

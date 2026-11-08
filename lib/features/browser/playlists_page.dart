@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../core/media_item.dart';
 import '../../core/playlist_store.dart';
 import '../../core/resource_locks.dart';
@@ -9,6 +10,8 @@ import '../settings/privacy_settings.dart';
 import '../settings/resource_access_view.dart';
 import '../../sources/source_registry.dart';
 import '../player/player_screen.dart';
+import '../network/remote_browser_page.dart';
+import 'local_browser_page.dart';
 import 'file_actions.dart';
 import 'home_screen.dart';
 import 'video_tile.dart';
@@ -257,7 +260,41 @@ class _PlaylistPageState extends State<PlaylistPage> {
   });
   Future<void> play(SavedPlaylist list, int index) async {
     if (!await _playlistAccess(widget.id) || !mounted) return;
-    final items = list.tracks
+    final track = list.tracks[index];
+    if (track.isFolder) {
+      await runFileAction(context, () async {
+        final key = track.key.startsWith(SyncReferences.prefix)
+            ? SyncReferences.instance.resolve(track.key) ?? (throw StateError('폴더의 저장소 연결을 찾을 수 없습니다'))
+            : track.key;
+        await ResourceLocks.instance.requireAccess(key);
+        Widget page;
+        if (!key.contains('://')) {
+          page = LocalBrowserPage(
+            rootPath: key,
+            rootTitle: track.title,
+            showBackButton: true,
+            ensurePermission: () async {
+              if (!Platform.isAndroid) return true;
+              if (await Permission.manageExternalStorage.isGranted ||
+                  await Permission.manageExternalStorage.request().isGranted) {
+                return true;
+              }
+              return await Permission.storage.request().isGranted || await Permission.videos.request().isGranted;
+            },
+            onOpenDrawer: () => Navigator.of(context).pop(),
+          );
+        } else {
+          final folder = await SourceRegistry.instance.folderFromKey(key);
+          page = RemoteBrowserPage(source: folder.source, initialPath: folder.path, initialTitle: track.title);
+        }
+        if (mounted && await _playlistAccess(widget.id) && mounted) {
+          await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => page));
+        }
+      });
+      return;
+    }
+    final files = list.tracks.where((t) => !t.isFolder).toList();
+    final items = files
         .map(
           (t) => MediaItem(
             key: t.key,
@@ -271,7 +308,7 @@ class _PlaylistPageState extends State<PlaylistPage> {
           ),
         )
         .toList();
-    await Navigator.of(context).push(PlayerScreen.route(items, index));
+    await Navigator.of(context).push(PlayerScreen.route(items, files.indexOf(track)));
     if (mounted) setState(() {});
   }
 
@@ -382,23 +419,39 @@ class _PlaylistPageState extends State<PlaylistPage> {
                                 child: Row(
                                   children: [
                                     Expanded(
-                                      child: VideoListTile(
-                                        resumeKey: t.key,
-                                        name: t.title,
-                                        localPath: local ? t.key : null,
-                                        onTap: () => play(list!, i),
-                                        onChanged: () => setState(() {}),
-                                        onAddToPlaylist: () => runFileAction(
-                                          context,
-                                          () => addToPlaylist(context, [t], exclude: widget.id),
-                                        ),
-                                        onSelect: () => setState(() {
-                                          selecting = true;
-                                          selected.add(t.key);
-                                        }),
-                                        onRemoveFromPlaylist: () =>
-                                            runFileAction(context, () => store.remove(widget.id, {t.key})),
-                                      ),
+                                      child: t.isFolder
+                                          ? FolderListTile(
+                                              name: t.title,
+                                              resource: t.key,
+                                              onTap: () => play(list!, i),
+                                              onAddToPlaylist: () => runFileAction(
+                                                context,
+                                                () => addToPlaylist(context, [t], exclude: widget.id),
+                                              ),
+                                              onSelect: () => setState(() {
+                                                selecting = true;
+                                                selected.add(t.key);
+                                              }),
+                                              onRemoveFromPlaylist: () =>
+                                                  runFileAction(context, () => store.remove(widget.id, {t.key})),
+                                            )
+                                          : VideoListTile(
+                                              resumeKey: t.key,
+                                              name: t.title,
+                                              localPath: local ? t.key : null,
+                                              onTap: () => play(list!, i),
+                                              onChanged: () => setState(() {}),
+                                              onAddToPlaylist: () => runFileAction(
+                                                context,
+                                                () => addToPlaylist(context, [t], exclude: widget.id),
+                                              ),
+                                              onSelect: () => setState(() {
+                                                selecting = true;
+                                                selected.add(t.key);
+                                              }),
+                                              onRemoveFromPlaylist: () =>
+                                                  runFileAction(context, () => store.remove(widget.id, {t.key})),
+                                            ),
                                     ),
                                     if (!selecting)
                                       ReorderableDragStartListener(

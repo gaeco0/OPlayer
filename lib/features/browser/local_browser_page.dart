@@ -38,12 +38,14 @@ class LocalBrowserPage extends StatefulWidget {
     required this.rootTitle,
     required this.ensurePermission,
     required this.onOpenDrawer,
+    this.showBackButton = false,
   });
 
   final String rootPath;
   final String rootTitle;
   final Future<bool> Function() ensurePermission;
   final VoidCallback onOpenDrawer;
+  final bool showBackButton;
 
   @override
   State<LocalBrowserPage> createState() => _LocalBrowserPageState();
@@ -67,6 +69,7 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
   bool _busy = false;
   final _selected = <String>{};
   List<FsItem> get _selectedFiles => _items.where((e) => !e.isDir && _selected.contains(e.path)).toList();
+  List<FsItem> get _selectedItems => _items.where((e) => _selected.contains(e.path)).toList();
   void _toggle(String path) => setState(() {
     if (!_selected.add(path)) _selected.remove(path);
   });
@@ -88,7 +91,10 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
     context,
     () => addToPlaylist(
       context,
-      _selectedFiles.where((e) => isPlayable(e.path)).map((e) => PlaylistTrack(e.path, e.name)).toList(),
+      _selectedItems
+          .where((e) => e.isDir || isPlayable(e.path))
+          .map((e) => PlaylistTrack(e.path, e.name, isFolder: e.isDir))
+          .toList(),
     ),
   );
   Future<void> _deleteSelected() async {
@@ -126,7 +132,7 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
   }
 
   Widget _wrap(FsItem item, Widget tile) => FileSelectionTile(
-    active: _selecting && !item.isDir,
+    active: _selecting,
     selected: _selected.contains(item.path),
     onToggle: () => _toggle(item.path),
     child: SwipeDeleteTile(
@@ -234,7 +240,7 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
       if (!mounted || generation != _loadGeneration) return;
       _allFiles = files;
       _items = items;
-      _selected.removeWhere((path) => !items.any((e) => !e.isDir && e.path == path));
+      _selected.removeWhere((path) => !items.any((e) => e.path == path));
       _applySort();
     } catch (e) {
       if (!mounted || generation != _loadGeneration) return;
@@ -318,6 +324,8 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
               ? IconButton(tooltip: '선택 취소', icon: const Icon(Icons.close), onPressed: _busy ? null : _closeSelection)
               : _stack.length > 1
               ? IconButton(icon: const Icon(Icons.arrow_back), onPressed: _up)
+              : widget.showBackButton
+              ? const BackButton()
               : (shouldShowDrawerButton(context)
                     ? IconButton(icon: const Icon(Icons.menu), onPressed: widget.onOpenDrawer)
                     : null),
@@ -351,15 +359,15 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
             if (_selecting)
               FileSelectionActions(
                 onSelectAll: () => setState(() {
-                  final files = _items.where((e) => !e.isDir).map((e) => e.path).toSet();
+                  final files = _items.map((e) => e.path).toSet();
                   if (_selected.containsAll(files)) {
                     _selected.clear();
                   } else {
                     _selected.addAll(files);
                   }
                 }),
-                onAdd: !_busy && _selectedFiles.any((e) => isPlayable(e.path)) ? _addSelected : null,
-                onDelete: !_busy && _selected.isNotEmpty ? _deleteSelected : null,
+                onAdd: !_busy && _selectedItems.any((e) => e.isDir || isPlayable(e.path)) ? _addSelected : null,
+                onDelete: !_busy && _selectedFiles.isNotEmpty ? _deleteSelected : null,
               )
             else ...[
               IconButton(
@@ -458,6 +466,14 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
                   resource: it.path,
                   lastPlayed: _highlighted(it.path, folder: true),
                   onTap: () => _enter(it.path),
+                  onAddToPlaylist: () => runFileAction(
+                    context,
+                    () => addToPlaylist(context, [PlaylistTrack(it.path, it.name, isFolder: true)]),
+                  ),
+                  onSelect: () => setState(() {
+                    _selecting = true;
+                    _selected.add(it.path);
+                  }),
                 )
               : VideoGridTile(
                   resumeKey: it.path,
@@ -496,6 +512,14 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
                 resource: it.path,
                 lastPlayed: _highlighted(it.path, folder: true),
                 onTap: () => _enter(it.path),
+                onAddToPlaylist: () => runFileAction(
+                  context,
+                  () => addToPlaylist(context, [PlaylistTrack(it.path, it.name, isFolder: true)]),
+                ),
+                onSelect: () => setState(() {
+                  _selecting = true;
+                  _selected.add(it.path);
+                }),
               )
             : VideoListTile(
                 resumeKey: it.path,

@@ -6,6 +6,7 @@ import '../core/resume_store.dart';
 import '../core/sync_references.dart';
 import '../features/web/browser_playback_proxy.dart';
 import 'cloud/cloud_sources.dart';
+import 'dlna_source.dart';
 import 'ftp_source.dart';
 import 'media_source.dart';
 import 'server_store.dart';
@@ -59,6 +60,27 @@ class SourceRegistry {
   /// 설정이 바뀌거나 삭제되면 연결을 버린다.
   Future<void> invalidate(String id) async {
     await _cache.remove(id)?.close();
+  }
+
+  /// Resolve a saved folder using the current storage connection.
+  Future<({MediaSource source, String path})> folderFromKey(String key) async {
+    if (key.startsWith(SyncReferences.prefix)) {
+      key = SyncReferences.instance.resolve(key) ?? (throw StateError('폴더의 저장소 연결을 찾을 수 없습니다'));
+    }
+    await ResourceLocks.instance.requireAccess(key);
+    if (key.startsWith('dlna://')) {
+      await for (final device in DlnaDiscovery.discover()) {
+        final source = DlnaSource(device);
+        final prefix = source.keyFor('');
+        if (key.startsWith(prefix)) return (source: source, path: key.substring(prefix.length));
+      }
+    } else {
+      final uri = Uri.parse(key);
+      final source = await forDestination(uri.host);
+      final prefix = source.keyFor('');
+      if (key.startsWith(prefix)) return (source: source, path: key.substring(prefix.length));
+    }
+    throw StateError('폴더 또는 저장소를 찾을 수 없습니다');
   }
 
   /// 최근 재생 키 → 재생 항목

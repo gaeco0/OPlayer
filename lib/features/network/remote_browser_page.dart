@@ -25,8 +25,16 @@ import '../web/download_name_dialog.dart';
 
 /// SMB / FTP / WebDAV / DLNA / 클라우드 공용 폴더 브라우저
 class RemoteBrowserPage extends StatefulWidget {
-  const RemoteBrowserPage({super.key, required this.source, this.onOpenDrawer, this.actions = const []});
+  const RemoteBrowserPage({
+    super.key,
+    required this.source,
+    this.onOpenDrawer,
+    this.actions = const [],
+    this.initialPath,
+    this.initialTitle,
+  });
   final MediaSource source;
+  final String? initialPath, initialTitle;
   final VoidCallback? onOpenDrawer;
   final List<Widget> actions;
 
@@ -48,10 +56,12 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
     if (mounted) setState(() {});
   }
 
-  late final List<_Crumb> _stack = [_Crumb(widget.source.rootPath, widget.source.rootTitle)];
+  late final List<_Crumb> _stack = [
+    _Crumb(widget.initialPath ?? widget.source.rootPath, widget.initialTitle ?? widget.source.rootTitle),
+  ];
   PageStorageBucket? _navigationStorage;
   bool _navigationRestored = false;
-  Object get _navigationKey => ('remote-navigation', widget.source);
+  Object get _navigationKey => ('remote-navigation', widget.source, widget.initialPath);
   final _cache = <String, List<RemoteEntry>>{};
   List<RemoteEntry> _all = [];
   List<RemoteEntry> _items = [];
@@ -71,6 +81,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
   bool _busy = false;
   final _selected = <String>{};
   List<RemoteEntry> get _selectedFiles => _items.where((e) => !e.isDir && _selected.contains(e.path)).toList();
+  List<RemoteEntry> get _selectedItems => _items.where((e) => _selected.contains(e.path)).toList();
   void _toggle(String path) => setState(() {
     if (!_selected.add(path)) _selected.remove(path);
   });
@@ -88,10 +99,14 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
     }
   }
 
-  PlaylistTrack _track(RemoteEntry e) => PlaylistTrack(e.directUrl ?? widget.source.keyFor(e.path), e.name);
+  PlaylistTrack _track(RemoteEntry e) => PlaylistTrack(
+    e.isDir ? widget.source.keyFor(e.path) : e.directUrl ?? widget.source.keyFor(e.path),
+    e.name,
+    isFolder: e.isDir,
+  );
   Future<void> _addSelected() => runFileAction(
     context,
-    () => addToPlaylist(context, _selectedFiles.where((e) => e.isPlayableMedia).map(_track).toList()),
+    () => addToPlaylist(context, _selectedItems.where((e) => e.isDir || e.isPlayableMedia).map(_track).toList()),
   );
   Future<void> _deleteSelected() async {
     final files = _selectedFiles;
@@ -149,7 +164,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
   }
 
   Widget _wrap(RemoteEntry entry, Widget tile) => FileSelectionTile(
-    active: _selecting && !entry.isDir,
+    active: _selecting,
     selected: _selected.contains(entry.path),
     onToggle: () => _toggle(entry.path),
     child: SwipeDeleteTile(
@@ -259,7 +274,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
       if (query.isEmpty) _cache[path] = list;
       _all = list;
       _apply();
-      _selected.removeWhere((path) => !_items.any((e) => !e.isDir && e.path == path));
+      _selected.removeWhere((path) => !_items.any((e) => e.path == path));
     } catch (e) {
       if (!mounted || generation != _loadGeneration) return;
       _error = '불러오지 못했습니다\n$e';
@@ -367,7 +382,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
                       _selecting
                           ? '${_selected.length}개 선택'
                           : _stack.length == 1
-                          ? widget.source.displayName
+                          ? widget.initialTitle ?? widget.source.displayName
                           : _stack.last.title,
                       style: !_selecting && _highlighted(widget.source.keyFor(_stack.last.path), folder: true)
                           ? TextStyle(color: lastPlayedColor(context))
@@ -393,14 +408,14 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
             if (_selecting)
               FileSelectionActions(
                 onSelectAll: () => setState(() {
-                  final files = _items.where((e) => !e.isDir).map((e) => e.path).toSet();
+                  final files = _items.map((e) => e.path).toSet();
                   if (_selected.containsAll(files)) {
                     _selected.clear();
                   } else {
                     _selected.addAll(files);
                   }
                 }),
-                onAdd: !_busy && _selectedFiles.any((e) => e.isPlayableMedia) ? _addSelected : null,
+                onAdd: !_busy && _selectedItems.any((e) => e.isDir || e.isPlayableMedia) ? _addSelected : null,
                 onDelete: !_busy && _selectedFiles.isNotEmpty && _selectedFiles.every(widget.source.canDeleteEntry)
                     ? _deleteSelected
                     : null,
@@ -636,6 +651,11 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
                   resource: src.keyFor(e.path),
                   lastPlayed: _highlighted(src.keyFor(e.path), folder: true),
                   onTap: () => _enter(e),
+                  onAddToPlaylist: () => runFileAction(context, () => addToPlaylist(context, [_track(e)])),
+                  onSelect: () => setState(() {
+                    _selecting = true;
+                    _selected.add(e.path);
+                  }),
                 )
               : fileTile(e, grid: true);
           return _wrap(e, tile);
@@ -656,6 +676,11 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
                 resource: src.keyFor(e.path),
                 lastPlayed: _highlighted(src.keyFor(e.path), folder: true),
                 onTap: () => _enter(e),
+                onAddToPlaylist: () => runFileAction(context, () => addToPlaylist(context, [_track(e)])),
+                onSelect: () => setState(() {
+                  _selecting = true;
+                  _selected.add(e.path);
+                }),
               )
             : fileTile(e, grid: false);
         return _wrap(e, tile);

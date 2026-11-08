@@ -212,7 +212,7 @@ class PlaybackSync extends ChangeNotifier with WidgetsBindingObserver {
     'name': p.name,
     'tracks': [
       for (final t in p.tracks)
-        if (SyncReferences.instance.portable(t.key) case final String key) {'key': key, 'title': t.title},
+        if (SyncReferences.instance.portable(t.key) case final String key) {...t.toJson(), 'key': key},
     ],
   };
 
@@ -322,7 +322,7 @@ class PlaybackSync extends ChangeNotifier with WidgetsBindingObserver {
       for (final p in PlaylistStore.instance.lists) {
         final additions = [
           for (final t in localTracks[p.id] ?? <PlaylistTrack>[])
-            if (refs.portable(t.key) case final String key) {'key': key, 'title': t.title},
+            if (refs.portable(t.key) case final String key) {...t.toJson(), 'key': key},
         ];
         if (additions.isEmpty) continue;
         final value = _document!.values['playlist:${p.id}'] ?? _playlist(p);
@@ -360,6 +360,7 @@ class PlaybackSync extends ChangeNotifier with WidgetsBindingObserver {
           if (track is! Map ||
               track['key'] is! String ||
               track['title'] is! String ||
+              (track['isFolder'] != null && track['isFolder'] is! bool) ||
               SyncReferences.instance.decode(track['key'] as String) == null) {
             throw const FormatException('잘못된 동기화 파일 참조');
           }
@@ -389,6 +390,7 @@ class PlaybackSync extends ChangeNotifier with WidgetsBindingObserver {
                   PlaylistTrack(
                     SyncReferences.instance.resolve(t['key'] as String) ?? t['key'] as String,
                     t['title'] as String,
+                    isFolder: t['isFolder'] == true,
                   ),
               ]);
       } else {

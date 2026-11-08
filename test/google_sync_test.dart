@@ -280,6 +280,13 @@ void main() {
           {'key': key, 'title': 'episode.mp4'},
         ],
       });
+      remote.change('playlist:folder', {
+        'id': 'folder',
+        'name': 'Folder',
+        'tracks': [
+          {'key': key, 'title': 'Shared folder', 'isFolder': true},
+        ],
+      });
       remote.change('resume:$key', {
         'p': 100000,
         'd': 900000,
@@ -293,14 +300,19 @@ void main() {
       await sync.syncNow();
       expect(PlaylistStore.instance.find(local), isNotNull);
       expect(PlaylistStore.instance.find('remote')!.tracks.single.key, file);
+      expect(PlaylistStore.instance.find('folder')!.tracks.single.isFolder, true);
+      expect(PlaylistStore.instance.find('folder')!.tracks.single.key, file);
       expect(ResumeStore.instance.get(file)!.position, const Duration(seconds: 100));
       expect(sync.lastSync, isNotNull);
       // Linking a local-only track after connecting must not drop it.
       final secondRoot = '$root-other';
       final secondFile = '$secondRoot${Platform.pathSeparator}new.mp4';
-      final added = await PlaylistStore.instance.create('Newly linked', [PlaylistTrack(secondFile, 'new.mp4')]);
+      final added = await PlaylistStore.instance.create('Newly linked', [
+        PlaylistTrack(secondFile, 'New folder', isFolder: true),
+      ]);
       await sync.bindReference(secondRoot, '다른 폴더');
       expect(PlaylistStore.instance.find(added)!.tracks.single.key, secondFile);
+      expect(PlaylistStore.instance.find(added)!.tracks.single.isFolder, true);
       await PlaylistStore.instance.delete('remote');
       await ResumeStore.instance.remove(file);
       await sync.syncNow();

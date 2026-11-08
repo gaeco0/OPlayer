@@ -86,6 +86,39 @@ void main() {
     expect(tabs.encode(), snapshot);
   });
 
+  test('back closes only an exhausted tab and selects its left neighbor, preserving other stacks', () {
+    final tabs = BrowserTabs(
+      BrowserHistory()
+        ..record(home, 0)
+        ..record(a, 1),
+    );
+    tabs.active.title = 'Previous';
+    final previous = tabs.active;
+    tabs.add(b);
+    tabs.active.history.record(home, 1);
+    expect(tabs.closeOnBack(), isFalse); // Page history takes priority over closing.
+    tabs.active.history.move(-1);
+    tabs.add('https://example.com/right');
+    final right = tabs.active;
+    tabs.selected = 1;
+    expect(tabs.canCloseOnBack, isTrue);
+    expect(tabs.closeOnBack(), isTrue);
+    expect(tabs.selected, 0);
+    expect(tabs.active, same(previous)); // Closing a middle tab must not select the right tab.
+    expect(tabs.active.history.current, a);
+    expect(tabs.active.history.canBack, isTrue);
+    expect(tabs.tabs.last, same(right));
+    tabs.active.history.move(-1);
+    expect(tabs.closeOnBack(), isFalse); // No previous tab, even if another tab exists on the right.
+    final restored = BrowserTabs.restore(tabs.encode())!;
+    expect(restored.tabs, hasLength(2));
+    expect(restored.selected, 0);
+    expect(restored.active.title, 'Previous');
+    final single = BrowserTabs(BrowserHistory());
+    expect(single.closeOnBack(), isFalse);
+    expect(single.tabs, hasLength(1));
+  });
+
   test(
     'migrates old stack and persists tab changes across rapid menu return without resurrecting closed tabs',
     () async {

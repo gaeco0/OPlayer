@@ -6,10 +6,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'sync_references.dart';
 
 class PlaylistTrack {
-  const PlaylistTrack(this.key, this.title);
+  const PlaylistTrack(this.key, this.title, {this.isFolder = false});
   final String key;
   final String title;
-  Map<String, dynamic> toJson() => {'key': key, 'title': title};
+  final bool isFolder;
+  Map<String, dynamic> toJson() => {'key': key, 'title': title, if (isFolder) 'isFolder': true};
 }
 
 class SavedPlaylist {
@@ -42,7 +43,8 @@ class PlaylistStore extends ChangeNotifier {
     _lists = [
       for (final p in raw)
         SavedPlaylist(p['id'] as String, p['name'] as String, [
-          for (final t in p['tracks'] as List) PlaylistTrack(t['key'] as String, t['title'] as String),
+          for (final t in p['tracks'] as List)
+            PlaylistTrack(t['key'] as String, t['title'] as String, isFolder: t['isFolder'] == true),
         ]),
     ];
   }
@@ -115,7 +117,11 @@ class PlaylistStore extends ChangeNotifier {
     await _save(
       () => [
         for (final p in _lists)
-          SavedPlaylist(p.id, p.name, p.tracks.map((t) => matches(t) ? PlaylistTrack(newKey, title) : t)),
+          SavedPlaylist(
+            p.id,
+            p.name,
+            p.tracks.map((t) => matches(t) ? PlaylistTrack(newKey, title, isFolder: t.isFolder) : t),
+          ),
       ],
     );
   }

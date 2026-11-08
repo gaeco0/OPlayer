@@ -21,6 +21,7 @@ import 'package:oplayer/sources/server_store.dart';
 import 'package:oplayer/sources/webdav_source.dart';
 
 class _Source extends MediaSource {
+  String? listedPath;
   final entries = [
     const RemoteEntry(name: 'one.mp4', path: '/media/one.mp4', isDir: false),
     const RemoteEntry(name: 'two.mp4', path: '/media/two.mp4', isDir: false),
@@ -39,7 +40,11 @@ class _Source extends MediaSource {
   @override
   bool get canRename => true;
   @override
-  Future<List<RemoteEntry>> list(String path) async => List.of(entries);
+  Future<List<RemoteEntry>> list(String path) async {
+    listedPath = path;
+    return List.of(entries);
+  }
+
   @override
   Future<void> delete(RemoteEntry entry) async {
     entries.remove(entry);
@@ -91,6 +96,77 @@ void main() {
     expect(jsonDecode(raw), hasLength(2));
     await store.delete(copied);
     expect(store.find(copied), null);
+  });
+
+  test('folder references survive persistence and copying without changing ordinary tracks', () async {
+    final store = PlaylistStore();
+    final id = await store.create('Folders', [
+      const PlaylistTrack('/movies', 'Movies', isFolder: true),
+      const PlaylistTrack('webdav://saved-id/media', 'Remote', isFolder: true),
+      const PlaylistTrack('/one.mp4', 'One'),
+    ]);
+    await store.add(id, [const PlaylistTrack('/movies', 'Movies', isFolder: true)]);
+    final restored = PlaylistStore();
+    await restored.init();
+    final tracks = restored.find(id)!.tracks;
+    expect(tracks.map((t) => t.isFolder), [true, true, false]);
+    final copy = await restored.create('Copy', tracks);
+    await restored.remove(id, {'/movies'});
+    expect(restored.find(copy)!.tracks.first.isFolder, true);
+    expect(restored.find(copy)!.tracks.first.toJson()['isFolder'], true);
+    expect(tracks.last.toJson().containsKey('isFolder'), false);
+  });
+
+  testWidgets('local folder menu saves a folder and reopening shows current contents', (tester) async {
+    final root = Directory.systemTemp.createTempSync('oplayer_playlist_folder_');
+    addTearDown(() => root.delete(recursive: true));
+    final folder = Directory(p.join(root.path, 'Movies'))..createSync();
+    File(p.join(folder.path, 'one.mp4')).writeAsStringSync('one');
+    final id = await PlaylistStore.instance.create('Folder destination');
+    await tester.pumpWidget(
+      MaterialApp(
+        home: LocalBrowserPage(
+          rootPath: root.path,
+          rootTitle: 'Test',
+          ensurePermission: () async => true,
+          onOpenDrawer: () {},
+        ),
+      ),
+    );
+    Future<void> waitFor(Finder finder) async {
+      for (var i = 0; i < 100 && finder.evaluate().isEmpty; i++) {
+        await tester.pump();
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+      }
+      expect(finder, findsOneWidget);
+    }
+
+    await waitFor(find.byType(FolderListTile));
+    await tester.tap(find.byTooltip('폴더 메뉴'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('재생목록에 추가'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Folder destination'));
+    await tester.pumpAndSettle();
+    final saved = PlaylistStore.instance.find(id)!;
+    expect(saved.tracks.single.key, folder.path);
+    expect(saved.tracks.single.isFolder, true);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(MaterialApp(home: PlaylistPage(id: id)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Movies'));
+    await tester.pump();
+    await waitFor(find.text('one.mp4'));
+    await tester.pumpAndSettle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    File(p.join(folder.path, 'two.mp4')).writeAsStringSync('two');
+    await tester.tap(find.text('Movies'));
+    await tester.pump();
+    await waitFor(find.text('two.mp4'));
+    await tester.pumpAndSettle();
+    expect(PlaylistStore.instance.find(id)!.tracks, hasLength(1));
+    await tester.pumpWidget(const SizedBox());
   });
 
   test(
@@ -275,7 +351,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('전체 선택/해제'));
     await tester.pumpAndSettle();
-    expect(find.text('2개 선택'), findsOneWidget);
+    expect(find.text('3개 선택'), findsOneWidget);
     await tester.tap(find.byTooltip('선택 메뉴'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('파일 삭제'));
@@ -284,6 +360,35 @@ void main() {
     await tester.tap(find.text('파일 삭제'));
     await tester.pumpAndSettle();
     expect(source.entries.single.isDir, true);
+  });
+
+  testWidgets('remote folder menu stores its reference and folder view refreshes current contents', (tester) async {
+    final source = _Source();
+    final id = await PlaylistStore.instance.create('Remote destination');
+    await tester.pumpWidget(MaterialApp(home: RemoteBrowserPage(source: source)));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('폴더 메뉴'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('재생목록에 추가'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remote destination'));
+    await tester.pumpAndSettle();
+    expect(PlaylistStore.instance.find(id)!.tracks.single.key, 'test://management/media/folder');
+    expect(PlaylistStore.instance.find(id)!.tracks.single.isFolder, true);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: RemoteBrowserPage(source: source, initialPath: '/media/folder', initialTitle: 'Saved folder'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(source.listedPath, '/media/folder');
+    expect(find.text('Saved folder'), findsOneWidget);
+    source.entries.add(const RemoteEntry(name: 'new.mp4', path: '/media/folder/new.mp4', isDir: false));
+    await tester.tap(find.byTooltip('새로고침'));
+    await tester.pumpAndSettle();
+    expect(find.text('new.mp4'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('playlist selection copies to another list and removes references only', (tester) async {

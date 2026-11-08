@@ -17,6 +17,15 @@ class BrowserTabs {
   final List<BrowserTab> tabs;
   int selected = 0;
   BrowserTab get active => tabs[selected];
+  bool get canCloseOnBack => selected > 0 && !active.history.canBack;
+
+  bool closeOnBack() {
+    if (!canCloseOnBack) return false;
+    final previous = selected - 1;
+    close(selected);
+    selected = previous;
+    return true;
+  }
 
   static BrowserTabs? restore(String? encoded) {
     try {

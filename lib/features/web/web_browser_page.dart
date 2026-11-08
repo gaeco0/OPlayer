@@ -364,6 +364,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
   double _progress = 0;
   bool _canBack = false;
   bool _canForward = false;
+  bool get _canHandleBack => _canBack || (_historyReady && _tabs.canCloseOnBack);
   BrowserTabs _tabs = BrowserTabs(BrowserHistory());
   BrowserHistory get _history => _tabs.active.history;
   int _viewGeneration = 0;
@@ -610,6 +611,15 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
       size: url == m.url ? m.size : 0,
       referer: m.referer,
     );
+  }
+
+  void _back() {
+    if (!_historyReady || _historyMoving) return;
+    if (_canBack) {
+      unawaited(_navigateHistory(-1));
+    } else if (_tabs.closeOnBack()) {
+      _recreateTabView();
+    }
   }
 
   bool _forward() {
@@ -1475,9 +1485,9 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     return TooltipVisibility(
       visible: false,
       child: PopScope(
-        canPop: !_canBack,
+        canPop: !_canHandleBack,
         onPopInvokedWithResult: (didPop, _) {
-          if (!didPop) unawaited(_navigateHistory(-1));
+          if (!didPop) _back();
         },
         child: Scaffold(
           appBar: AppBar(
@@ -1783,7 +1793,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                 children: [
                   IconButton(
                     icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-                    onPressed: _canBack ? () => _navigateHistory(-1) : null,
+                    onPressed: _canHandleBack ? _back : null,
                   ),
                   IconButton(
                     icon: const Icon(Icons.arrow_forward_ios, size: 20),
