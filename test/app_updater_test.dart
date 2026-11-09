@@ -244,6 +244,98 @@ void main() {
     });
   }
 
+  for (final failChecksum in [false, true]) {
+    for (final recovers in [false, true]) {
+      test('temporary gateway errors retry with a limit (checksum=$failChecksum, recovers=$recovers)', () async {
+        final dir = await Directory.systemTemp.createTemp('oplayer-update-retry-');
+        const bytes = [1, 2, 3];
+        const filename = 'OPlayer-0.1.7-android-mobile-arm64-v8a.apk';
+        var attempts = 0;
+        final updater = AppUpdater(
+          installedVersion: '0.1.6',
+          target: 'android',
+          abis: ['arm64-v8a'],
+          cacheDirectory: () async => dir,
+          clientFactory: () => MockClient((r) async {
+            if (r.url.host == 'api.github.com') return http.Response(jsonEncode(releaseJson('0.1.7')), 200);
+            final checksum = r.url.path.endsWith('SHA256SUMS.txt');
+            if (checksum == failChecksum) {
+              attempts++;
+              if (!recovers || attempts < 3) return http.Response('Gateway timeout', 504);
+            }
+            return checksum
+                ? http.Response('${sha256.convert(bytes)}  $filename\n', 200)
+                : http.Response.bytes(bytes, 200);
+          }),
+        );
+        try {
+          await updater.check(force: true);
+          await updater.download();
+          expect(attempts, 3);
+          expect(updater.verifiedFile != null, recovers);
+          expect(updater.error == null, recovers);
+          expect(dir.listSync(recursive: true).whereType<File>().any((f) => f.path.endsWith('.part')), isFalse);
+          if (recovers) expect(await updater.verifiedFile!.readAsBytes(), bytes);
+        } finally {
+          updater.dispose();
+          await dir.delete(recursive: true);
+        }
+      });
+    }
+  }
+
+  for (final checksumFails in [false, true]) {
+    for (final corrupt in [false, true]) {
+      test('GitHub API fallback preserves verification (checksum=$checksumFails, corrupt=$corrupt)', () async {
+        final dir = await Directory.systemTemp.createTemp('oplayer-update-api-');
+        const bytes = [1, 2, 3];
+        const filename = 'OPlayer-0.1.7-android-mobile-arm64-v8a.apk';
+        var failures = 0, fallbacks = 0;
+        final metadata = releaseJson('0.1.7');
+        final assets = metadata['assets'] as List;
+        for (var i = 0; i < assets.length; i++) {
+          (assets[i] as Map)['id'] = 123 + i;
+          (assets[i] as Map)['url'] = 'https://example.com/untrusted-api';
+        }
+        final updater = AppUpdater(
+          installedVersion: '0.1.6',
+          target: 'android',
+          abis: ['arm64-v8a'],
+          cacheDirectory: () async => dir,
+          clientFactory: () => MockClient((r) async {
+            if (r.url.path.endsWith('/latest')) return http.Response(jsonEncode(metadata), 200);
+            final api = r.url.host == 'api.github.com';
+            final checksum = r.url.path.endsWith('SHA256SUMS.txt') || r.url.path.endsWith('/124');
+            if (!api && checksum == checksumFails) {
+              failures++;
+              return http.Response('Gateway timeout', 504);
+            }
+            if (api) {
+              fallbacks++;
+              expect(r.url.path, '/repos/gaeco0/OPlayer/releases/assets/${checksum ? 124 : 123}');
+              expect(r.headers['Accept'], 'application/octet-stream');
+            }
+            return checksum
+                ? http.Response('${sha256.convert(bytes)}  $filename\n', 200)
+                : http.Response.bytes(corrupt ? [3, 2, 1] : bytes, 200);
+          }),
+        );
+        try {
+          await updater.check(force: true);
+          await updater.download();
+          expect(failures, 3);
+          expect(fallbacks, 1);
+          expect(updater.verifiedFile != null, !corrupt);
+          expect(updater.error != null, corrupt);
+          expect(dir.listSync(recursive: true).whereType<File>().any((f) => f.path.endsWith('.part')), isFalse);
+        } finally {
+          updater.dispose();
+          await dir.delete(recursive: true);
+        }
+      });
+    }
+  }
+
   test('redirect to another origin cannot supply update metadata', () async {
     var calls = 0;
     final updater = AppUpdater(

@@ -760,9 +760,7 @@ class PlayerController extends ChangeNotifier {
       if (_disposed || generation != _openGeneration) return;
     }
     final r = st.resumeMode == ResumeMode.off ? null : ResumeStore.instance.get(current.key);
-    pendingResume = (askResume && r != null && !r.finished && r.position > const Duration(seconds: 10))
-        ? r.position
-        : null;
+    pendingResume = askResume && r != null && r.canResume ? r.position : null;
     _resumeStart = pendingResume;
     _awaitingResumeChoice = pendingResume != null && st.resumeMode == ResumeMode.ask;
     abA = abB = null;

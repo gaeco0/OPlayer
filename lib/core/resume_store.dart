@@ -28,6 +28,9 @@ class ResumeEntry {
   /// 95% 이상 봤으면 시청 완료로 본다.
   bool get finished => progress >= 0.95;
 
+  bool get canResume =>
+      !finished && position > (duration < const Duration(seconds: 100) ? duration ~/ 10 : const Duration(seconds: 10));
+
   Map<String, dynamic> toJson() => {
     'p': position.inMilliseconds,
     'd': duration.inMilliseconds,

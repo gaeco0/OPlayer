@@ -52,11 +52,12 @@ class AppVersion implements Comparable<AppVersion> {
 }
 
 class ReleaseAsset {
-  ReleaseAsset(this.name, this.url, this.size, this.digest);
+  ReleaseAsset(this.name, this.url, this.size, this.digest, {this.apiUrl});
   final String name;
   final Uri url;
   final int size;
   final String? digest;
+  final Uri? apiUrl;
 }
 
 class AppRelease {
@@ -102,6 +103,9 @@ class AppRelease {
           size,
           digest is String && RegExp(r'^sha256:[0-9a-fA-F]{64}$').hasMatch(digest)
               ? digest.substring(7).toLowerCase()
+              : null,
+          apiUrl: asset['id'] is int && (asset['id'] as int) > 0
+              ? Uri.https('api.github.com', '/repos/gaeco0/OPlayer/releases/assets/${asset['id']}')
               : null,
         ),
       );

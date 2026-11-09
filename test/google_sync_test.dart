@@ -288,8 +288,8 @@ void main() {
         ],
       });
       remote.change('resume:$key', {
-        'p': 100000,
-        'd': 900000,
+        'p': 6000,
+        'd': 12000,
         'u': DateTime.now().millisecondsSinceEpoch + 1000,
         't': 'episode.mp4',
       });
@@ -302,7 +302,8 @@ void main() {
       expect(PlaylistStore.instance.find('remote')!.tracks.single.key, file);
       expect(PlaylistStore.instance.find('folder')!.tracks.single.isFolder, true);
       expect(PlaylistStore.instance.find('folder')!.tracks.single.key, file);
-      expect(ResumeStore.instance.get(file)!.position, const Duration(seconds: 100));
+      expect(ResumeStore.instance.get(file)!.position, const Duration(seconds: 6));
+      expect(ResumeStore.instance.get(file)!.canResume, true);
       expect(sync.lastSync, isNotNull);
       // Linking a local-only track after connecting must not drop it.
       final secondRoot = '$root-other';

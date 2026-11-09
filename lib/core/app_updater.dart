@@ -208,8 +208,13 @@ class AppUpdater extends ChangeNotifier {
     }
   }
 
-  static Future<http.StreamedResponse> _get(http.Client client, Uri uri, {Future<void>? abort}) async {
-    for (var redirects = 0; redirects <= 5; redirects++) {
+  static Future<http.StreamedResponse> _get(
+    http.Client client,
+    Uri uri, {
+    Future<void>? abort,
+    bool binary = false,
+  }) async {
+    for (var redirects = 0, retries = 0; redirects <= 5;) {
       if (uri.scheme != 'https' ||
           uri.port != 443 ||
           uri.userInfo.isNotEmpty ||
@@ -218,16 +223,23 @@ class AppUpdater extends ChangeNotifier {
       }
       final request = http.AbortableRequest('GET', uri, abortTrigger: abort)..followRedirects = false;
       request.headers.addAll({
-        'Accept': uri.host == 'api.github.com' ? 'application/vnd.github+json' : 'application/octet-stream',
+        'Accept': !binary && uri.host == 'api.github.com' ? 'application/vnd.github+json' : 'application/octet-stream',
         'User-Agent': 'OPlayer-Updater',
         'Accept-Encoding': 'identity',
       });
       final response = await client.send(request).timeout(const Duration(seconds: 25));
+      if (const [502, 503, 504].contains(response.statusCode) && retries < 2) {
+        await _read(response, 1024 * 1024);
+        await Future<void>.delayed(Duration(seconds: 1 << retries));
+        retries++;
+        continue;
+      }
       if (![301, 302, 303, 307, 308].contains(response.statusCode)) return response;
       final location = response.headers['location'];
       if (location == null) throw const HttpException('업데이트 이동 주소가 없습니다');
       await _read(response, 1024 * 1024);
       uri = uri.resolve(location);
+      redirects++;
     }
     throw const HttpException('업데이트 이동 횟수 초과');
   }
@@ -239,6 +251,15 @@ class AppUpdater extends ChangeNotifier {
       bytes.addAll(chunk);
     }
     return bytes;
+  }
+
+  static Future<http.StreamedResponse> _getAsset(http.Client client, ReleaseAsset asset, {Future<void>? abort}) async {
+    final response = await _get(client, asset.url, abort: abort, binary: true);
+    if (const [502, 503, 504].contains(response.statusCode) && asset.apiUrl != null) {
+      await _read(response, 1024 * 1024);
+      return _get(client, asset.apiUrl!, abort: abort, binary: true);
+    }
+    return response;
   }
 
   void cancelDownload() {
@@ -264,7 +285,7 @@ class AppUpdater extends ChangeNotifier {
     File? partial;
     try {
       final sums = selectedRelease.assets.singleWhere((a) => a.name == 'SHA256SUMS.txt');
-      final response = await _get(client, sums.url, abort: _abort!.future);
+      final response = await _getAsset(client, sums, abort: _abort!.future);
       if (response.statusCode != 200) throw const HttpException('업데이트 체크섬을 받지 못했습니다');
       final checksums = utf8.decode(await _read(response, 1024 * 1024));
       final matches = RegExp(
@@ -277,7 +298,7 @@ class AppUpdater extends ChangeNotifier {
       final directory = await Directory(p.join((await _cacheDirectory()).path, 'updates')).create(recursive: true);
       final destination = File(p.join(directory.path, selected.name));
       partial = File('${destination.path}.part');
-      final body = await _get(client, selected.url, abort: _abort!.future);
+      final body = await _getAsset(client, selected, abort: _abort!.future);
       if (body.statusCode != 200) throw HttpException('업데이트 다운로드 실패 (HTTP ${body.statusCode})');
       if (body.contentLength != null && body.contentLength != selected.size) {
         throw const HttpException('업데이트 파일 크기가 다릅니다');

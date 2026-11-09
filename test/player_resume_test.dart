@@ -8,6 +8,7 @@ import 'package:oplayer/core/resource_locks.dart';
 import 'package:oplayer/core/resource_playback_store.dart';
 import 'package:oplayer/core/resume_store.dart';
 import 'package:oplayer/core/settings.dart';
+import 'package:oplayer/core/sync_references.dart';
 import 'package:oplayer/features/player/player_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -108,6 +109,55 @@ void main() {
     await controller.saveNow();
     expect(store.get(item.key)!.position, saved + const Duration(seconds: 2));
     expect(engine.seeks, isEmpty);
+  });
+
+  for (final position in [
+    Duration.zero,
+    const Duration(seconds: 1),
+    const Duration(seconds: 6),
+    const Duration(milliseconds: 11500),
+  ]) {
+    test('short 12-second video resumes its saved position when eligible ($position)', () async {
+      await store.save(item.key, position, const Duration(seconds: 12));
+      create([item]);
+      await controller.open();
+      final expected = position == const Duration(seconds: 6) ? position : null;
+      expect(engine.opened!.start, expected);
+      expect(controller.pendingResume, expected);
+    });
+  }
+
+  test('a synced short-video position opens at six seconds on another resource connection', () async {
+    final refs = SyncReferences.instance;
+    await refs.init();
+    await refs.bind('test://android-account', 'Review library');
+    const syncedItem = MediaItem(
+      key: 'test://android-account/clip',
+      uri: 'https://example.com/clip.mp4',
+      title: 'Clip',
+    );
+    final key = refs.portable(syncedItem.key)!;
+    await store.applySynced({
+      key: ResumeEntry(
+        path: key,
+        position: const Duration(seconds: 6),
+        duration: const Duration(seconds: 12),
+        updatedAt: DateTime.now(),
+      ),
+    });
+    create([syncedItem]);
+    await controller.open();
+    expect(engine.opened!.start, const Duration(seconds: 6));
+    expect(controller.pendingResume, const Duration(seconds: 6));
+    await refs.bind('test://android-account', '');
+  });
+
+  test('long videos still ignore the first ten seconds', () async {
+    await store.save(item.key, const Duration(seconds: 6), const Duration(minutes: 10));
+    create([item]);
+    await controller.open();
+    expect(engine.opened!.start, isNull);
+    expect(controller.pendingResume, isNull);
   });
 
   test('a delayed failed resolve preserves the saved position', () async {
