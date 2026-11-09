@@ -84,6 +84,8 @@ jobs:
       - if: matrix.arch == 'x64'
         run: python .github/scripts/package-release.test.py
       - if: matrix.arch == 'x64'
+        run: python .github/scripts/github_asset.test.py
+      - if: matrix.arch == 'x64'
         run: python .github/scripts/verify-architecture.test.py
       - run: flutter build windows --release --no-pub --dart-define-from-file=.dart_tool/google-oauth-defines.json --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
       - name: Verify native subtitle decoding and rendered pixels
@@ -293,6 +295,8 @@ jobs:
           cache: true
       - run: flutter config --no-enable-swift-package-manager
       - run: flutter pub get
+      - name: Prepare verified macOS media frameworks
+        run: python3 .github/scripts/prepare-macos-mpv.py
       - run: flutter build macos --release --no-pub --dart-define-from-file=.dart_tool/google-oauth-defines.json --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
       - name: Verify extension runtime and compatibility on macOS
         run: |

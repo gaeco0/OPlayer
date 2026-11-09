@@ -19,7 +19,7 @@ nPlayer의 UI/UX를 기준으로, 로컬·네트워크·클라우드 재생과 �
 
 - 현재 공개 베타: [0.1.8-beta.2](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.8-beta.2). 최근 재생 다중 선택을 포함한다. 앱의 업데이트 채널을 **beta**로 선택하면 확인할 수 있다. 정식 Latest·업데이트 확인 기본값은 stable v0.1.7로 유지한다.
 - 플랫폼별 실기기 검증을 모두 마친 베타는 아니다. 전체 플랫폼 빌드·자동 검증은 유지하며, 다양한 기기의 성능·호환성 문제는 사용자 제보를 모아 재현 후 수정한다. 설정 → **진단 정보 보내기**로 GitHub Issues에 신고할 수 있다.
-- 현재 nightly: [0.1.9-nightly.20261109.3](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.9-nightly.20261109.3). 짧은 영상의 동기화 이어보기, GitHub HTTP 504 업데이트 다운로드와 빌드 의존성 다운로드를 보완합니다. 재생목록 폴더 등록·브라우저 탭 뒤로가기 개선도 포함합니다. 내부 빌드 번호 `+2`, 기존 Android 서명, 정식 Latest·업데이트 확인 기본값 stable v0.1.7을 유지합니다.
+- 현재 nightly: [0.1.9-nightly.20261109.4](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.9-nightly.20261109.4). 짧은 영상의 동기화 이어보기, GitHub HTTP 504 업데이트 다운로드와 빌드 의존성 다운로드를 보완합니다. 재생목록 폴더 등록·브라우저 탭 뒤로가기 개선도 포함합니다. 내부 빌드 번호 `+2`, 기존 Android 서명, 정식 Latest·업데이트 확인 기본값 stable v0.1.7을 유지합니다.
 
 ## 파일·재생목록 관리 (v0.1.7)
 

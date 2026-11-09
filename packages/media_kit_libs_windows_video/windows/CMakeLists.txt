@@ -31,7 +31,13 @@ function(download_and_verify url md5 locationForArchive)
   # Download the archive if it doesn't exist.
   if(NOT EXISTS "${locationForArchive}")
     message(STATUS "Downloading archive from ${url}...")
-    file(DOWNLOAD "${url}" "${locationForArchive}")
+    file(DOWNLOAD "${url}" "${locationForArchive}"
+      HTTPHEADER "Accept: application/octet-stream" TLS_VERIFY ON STATUS download_status)
+    list(GET download_status 0 download_code)
+    if(NOT download_code EQUAL 0)
+      file(REMOVE "${locationForArchive}")
+      message(FATAL_ERROR "Dependency download failed: ${download_status}")
+    endif()
     message(STATUS "Downloaded archive to ${locationForArchive}.")
 
     # Verify MD5 of the newly downloaded file.
@@ -74,7 +80,7 @@ include("${CMAKE_SOURCE_DIR}/mpv-libraries.cmake")
 set(ANGLE "ANGLE.7z")
 
 # Download URL & MD5 hash of the ANGLE archive.
-set(ANGLE_URL "https://github.com/alexmercerind/flutter-windows-ANGLE-OpenGL-ES/releases/download/v1.0.1/ANGLE.7z")
+set(ANGLE_URL "https://api.github.com/repos/alexmercerind/flutter-windows-ANGLE-OpenGL-ES/releases/assets/195530655")
 set(ANGLE_MD5 "e866f13e8d552348058afaafe869b1ed")
 
 # Download location of the ANGLE archive.

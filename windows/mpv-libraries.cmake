@@ -2,9 +2,11 @@
 # Corresponding build sources and notices: third_party/libmpv/NOTICE.md.
 if(FLUTTER_TARGET_PLATFORM STREQUAL "windows-arm64")
   set(mpv_arch "aarch64")
+  set(mpv_asset "674997602")
   set(mpv_hash "d567591f7a5afb735f4d6817c3b3eda96af8d1e342f856345fef040dc333c820")
 else()
   set(mpv_arch "x86_64")
+  set(mpv_asset "674997545")
   set(mpv_hash "6429ebba4b6bfc5dd18ac5ac084f00776db0db4e767ef1bfb815fc78ec5bda2a")
 endif()
 set(mpv_name "mpv-dev-lgpl-${mpv_arch}-20261025-git-baa3e11d42.7z")
@@ -16,8 +18,8 @@ if(EXISTS "${mpv_archive}")
 endif()
 if(NOT actual STREQUAL mpv_hash)
   file(DOWNLOAD
-    "https://github.com/zhongfly/mpv-winbuild/releases/download/2026-10-25-baa3e11d42/${mpv_name}"
-    "${mpv_archive}" EXPECTED_HASH "SHA256=${mpv_hash}" TLS_VERIFY ON)
+    "https://api.github.com/repos/zhongfly/mpv-winbuild/releases/assets/${mpv_asset}"
+    "${mpv_archive}" HTTPHEADER "Accept: application/octet-stream" EXPECTED_HASH "SHA256=${mpv_hash}" TLS_VERIFY ON)
 endif()
 set(installed_hash "")
 set(mpv_install_id "${mpv_hash}-7zip25.01")
@@ -34,8 +36,8 @@ if(NOT installed_hash STREQUAL mpv_install_id OR NOT EXISTS "${LIBMPV_SRC}/inclu
     file(SHA256 "${seven_zip}" actual_seven_zip_hash)
   endif()
   if(NOT actual_seven_zip_hash STREQUAL seven_zip_hash)
-    file(DOWNLOAD "https://github.com/ip7z/7zip/releases/download/25.01/7zr.exe"
-      "${seven_zip}" EXPECTED_HASH "SHA256=${seven_zip_hash}" TLS_VERIFY ON)
+    file(DOWNLOAD "https://api.github.com/repos/ip7z/7zip/releases/assets/278934761"
+      "${seven_zip}" HTTPHEADER "Accept: application/octet-stream" EXPECTED_HASH "SHA256=${seven_zip_hash}" TLS_VERIFY ON)
   endif()
   execute_process(COMMAND "${seven_zip}" x -y "-o${LIBMPV_SRC}" "${mpv_archive}"
     OUTPUT_QUIET COMMAND_ERROR_IS_FATAL ANY)
