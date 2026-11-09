@@ -58,10 +58,10 @@ task downloadDependencies(type: Exec) {
 
         // Download all *.jar dependencies & verify their SHA-256 checksums.
         def filesToDownload = [
-            ["url": "https://github.com/media-kit/libmpv-android-video-build/releases/download/v1.1.11/full-arm64-v8a.jar", "sha256": "cdb54c5cf24725623ca717bbbd6d991031d625a377460bd128f19c2dffe189bd", "destination": file("$buildDir/v1.1.11/full-arm64-v8a.jar")],
-            ["url": "https://github.com/media-kit/libmpv-android-video-build/releases/download/v1.1.11/full-armeabi-v7a.jar", "sha256": "b658f2ff91169f8dad0e09e0240ebe200bb3df999da5712f8fab96ad11a4fbec", "destination": file("$buildDir/v1.1.11/full-armeabi-v7a.jar")],
-            ["url": "https://github.com/media-kit/libmpv-android-video-build/releases/download/v1.1.11/full-x86_64.jar", "sha256": "848936cfd7333077f21759adaca4a9e1a5647891da2e42ab211c5bdc30f4535d", "destination": file("$buildDir/v1.1.11/full-x86_64.jar")],
-            ["url": "https://github.com/media-kit/libmpv-android-video-build/releases/download/v1.1.11/full-x86.jar", "sha256": "8b3b84e54ec09bb79972095dc04bcaf651294da4e73b1e7c3251055fd8a2b901", "destination": file("$buildDir/v1.1.11/full-x86.jar")]
+            ["url": "https://api.github.com/repos/media-kit/libmpv-android-video-build/releases/assets/346694503", "sha256": "cdb54c5cf24725623ca717bbbd6d991031d625a377460bd128f19c2dffe189bd", "destination": file("$buildDir/v1.1.11/full-arm64-v8a.jar")],
+            ["url": "https://api.github.com/repos/media-kit/libmpv-android-video-build/releases/assets/346694508", "sha256": "b658f2ff91169f8dad0e09e0240ebe200bb3df999da5712f8fab96ad11a4fbec", "destination": file("$buildDir/v1.1.11/full-armeabi-v7a.jar")],
+            ["url": "https://api.github.com/repos/media-kit/libmpv-android-video-build/releases/assets/346694501", "sha256": "848936cfd7333077f21759adaca4a9e1a5647891da2e42ab211c5bdc30f4535d", "destination": file("$buildDir/v1.1.11/full-x86_64.jar")],
+            ["url": "https://api.github.com/repos/media-kit/libmpv-android-video-build/releases/assets/346694506", "sha256": "8b3b84e54ec09bb79972095dc04bcaf651294da4e73b1e7c3251055fd8a2b901", "destination": file("$buildDir/v1.1.11/full-x86.jar")]
         ]
 
         filesToDownload.each { fileInfo ->
@@ -79,8 +79,12 @@ task downloadDependencies(type: Exec) {
             if (!destFile.exists()) {
                 destFile.parentFile.mkdirs()
                 println "Downloading file from: ${fileInfo.url}"
+                def connection = new URL(fileInfo.url).openConnection()
+                connection.setRequestProperty("Accept", "application/octet-stream")
+                connection.setConnectTimeout(30000)
+                connection.setReadTimeout(60000)
                 destFile.withOutputStream { os ->
-                    os << new URL(fileInfo.url).openStream()
+                    connection.inputStream.withCloseable { input -> os << input }
                 }
 
                 def calculatedSHA256 = MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(destFile.toPath())).encodeHex().toString()

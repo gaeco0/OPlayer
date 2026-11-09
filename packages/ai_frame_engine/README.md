@@ -12,6 +12,7 @@ uses the SDK-provided NDK toolchain and Ninja. Release workflows remain tag-trig
   `a7532fc3f9f8f008cd6eecd6f2ffe2a9698e0cf7` (MIT).
 - ncnn: official `20261020` full-source release ZIP, SHA-256
   `699d9acc67489eee0993a551ca1ebc247bbf0f4e33babe1dec810e6a9a52b988`.
+  CMake downloads this pinned ZIP through GitHub's binary asset API to avoid browser-download HTTP 504 errors.
   Includes pinned glslang; no unpinned build-time Git checkout.
 - Public mpv client ABI header: mpv v0.40.0 (ISC).
 - Model SHA-256 values are checked by the app and `test/ai_interpolation_test.dart`.

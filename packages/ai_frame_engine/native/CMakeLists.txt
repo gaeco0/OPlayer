@@ -26,7 +26,9 @@ if(MSVC)
 endif()
 include(FetchContent)
 FetchContent_Declare(ncnn
-  URL https://github.com/Tencent/ncnn/releases/download/20261020/ncnn-20261020-full-source.zip
+  URL https://api.github.com/repos/Tencent/ncnn/releases/assets/658173295
+  HTTP_HEADER "Accept: application/octet-stream"
+  DOWNLOAD_NAME ncnn-20261020-full-source.zip
   URL_HASH SHA256=699d9acc67489eee0993a551ca1ebc247bbf0f4e33babe1dec810e6a9a52b988
   SOURCE_SUBDIR oplayer-populate-only)
 FetchContent_MakeAvailable(ncnn)

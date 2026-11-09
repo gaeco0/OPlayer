@@ -12,4 +12,5 @@ This project & the work under this repository is governed by MIT license that ca
 
 
 OPlayer override: use official v1.1.11 full ABI JARs with SHA-256 verification.
+The pinned GitHub asset API URLs avoid failures in the browser download endpoint; versions and checksums are unchanged.
 See ../../third_party/libmpv/NOTICE.md for native library sources and licenses.
