@@ -407,27 +407,33 @@ void main() {
     }
   });
 
-  test('Windows installer starts PowerShell and reports its exit', () async {
-    final dir = await Directory.systemTemp.createTemp('oplayer-installer-start-');
-    try {
-      final script = File('${dir.path}/probe.ps1');
-      final marker = File('${dir.path}/started');
-      await script.writeAsString('param([string]\$Marker)\n[IO.File]::WriteAllText(\$Marker, "started")\nexit 7\n');
-      final helper = await startWindowsInstaller(script.path, ['-Marker', marker.path]);
-      await helper.stdin.close();
-      final output = helper.stdout.drain<void>();
-      final errors = helper.stderr.drain<void>();
+  test(
+    'Windows installer starts PowerShell and reports its exit',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('oplayer-installer-start-');
       try {
-        expect(await helper.exitCode.timeout(const Duration(seconds: 15)), 7);
-        await Future.wait([output, errors]);
-        expect(await marker.readAsString(), 'started');
+        final script = File('${dir.path}/probe.ps1');
+        final marker = File('${dir.path}/started');
+        await script.writeAsString('param([string]\$Marker)\n[IO.File]::WriteAllText(\$Marker, "started")\nexit 7\n');
+        final helper = await startWindowsInstaller(script.path, ['-Marker', marker.path]);
+        await helper.stdin.close();
+        final output = helper.stdout.drain<void>();
+        final errors = helper.stderr.drain<void>();
+        try {
+          // First PowerShell startup on a busy Windows runner can exceed 15s.
+          expect(await helper.exitCode.timeout(const Duration(seconds: 60)), 7);
+          await Future.wait([output, errors]);
+          expect(await marker.readAsString(), 'started');
+        } finally {
+          helper.kill();
+        }
       } finally {
-        helper.kill();
+        await dir.delete(recursive: true);
       }
-    } finally {
-      await dir.delete(recursive: true);
-    }
-  }, skip: !Platform.isWindows);
+    },
+    skip: !Platform.isWindows,
+    timeout: const Timeout(Duration(seconds: 90)),
+  );
 
   testWidgets('update settings displays saved channel and manual check result', (tester) async {
     SharedPreferences.setMockInitialValues({'appUpdateChannel': 'beta', 'appUpdateAutomatic': false});
