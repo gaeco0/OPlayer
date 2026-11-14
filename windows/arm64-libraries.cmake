@@ -14,9 +14,8 @@ include("${CMAKE_SOURCE_DIR}/mpv-libraries.cmake")
 
 # Reuse architecture-independent EGL/GLES headers from the existing package.
 set(header_archive "${CMAKE_BINARY_DIR}/ANGLE.7z")
-download_and_verify(
-  "https://api.github.com/repos/alexmercerind/flutter-windows-ANGLE-OpenGL-ES/releases/assets/195530655"
-  "e866f13e8d552348058afaafe869b1ed" "${header_archive}")
+oplayer_github_asset(alexmercerind/flutter-windows-ANGLE-OpenGL-ES 195530655
+  e866f13e8d552348058afaafe869b1ed "${header_archive}" md5)
 set(ANGLE_SRC "${CMAKE_BINARY_DIR}/ANGLE")
 file(ARCHIVE_EXTRACT INPUT "${header_archive}" DESTINATION "${ANGLE_SRC}")
 set(angle_archive "${CMAKE_BINARY_DIR}/angle-arm64.nupkg")

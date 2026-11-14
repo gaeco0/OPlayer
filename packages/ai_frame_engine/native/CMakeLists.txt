@@ -25,9 +25,12 @@ if(MSVC)
   add_compile_options(/MP4)
 endif()
 include(FetchContent)
+include("${CMAKE_CURRENT_LIST_DIR}/../../../.github/scripts/github-asset.cmake")
+set(ncnn_archive "${CMAKE_BINARY_DIR}/ncnn-20261020-full-source.zip")
+oplayer_github_asset(Tencent/ncnn 658173295
+  699d9acc67489eee0993a551ca1ebc247bbf0f4e33babe1dec810e6a9a52b988 "${ncnn_archive}")
 FetchContent_Declare(ncnn
-  URL https://api.github.com/repos/Tencent/ncnn/releases/assets/658173295
-  HTTP_HEADER "Accept: application/octet-stream"
+  URL "${ncnn_archive}"
   DOWNLOAD_NAME ncnn-20261020-full-source.zip
   URL_HASH SHA256=699d9acc67489eee0993a551ca1ebc247bbf0f4e33babe1dec810e6a9a52b988
   SOURCE_SUBDIR oplayer-populate-only)

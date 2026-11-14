@@ -1,3 +1,4 @@
+include("${CMAKE_CURRENT_LIST_DIR}/../.github/scripts/github-asset.cmake")
 # Full subtitle decoders, LGPL build; pin both architectures and verify SHA-256.
 # Corresponding build sources and notices: third_party/libmpv/NOTICE.md.
 if(FLUTTER_TARGET_PLATFORM STREQUAL "windows-arm64")
@@ -17,9 +18,7 @@ if(EXISTS "${mpv_archive}")
   file(SHA256 "${mpv_archive}" actual)
 endif()
 if(NOT actual STREQUAL mpv_hash)
-  file(DOWNLOAD
-    "https://api.github.com/repos/zhongfly/mpv-winbuild/releases/assets/${mpv_asset}"
-    "${mpv_archive}" HTTPHEADER "Accept: application/octet-stream" EXPECTED_HASH "SHA256=${mpv_hash}" TLS_VERIFY ON)
+  oplayer_github_asset(zhongfly/mpv-winbuild "${mpv_asset}" "${mpv_hash}" "${mpv_archive}")
 endif()
 set(installed_hash "")
 set(mpv_install_id "${mpv_hash}-7zip25.01")
@@ -36,8 +35,7 @@ if(NOT installed_hash STREQUAL mpv_install_id OR NOT EXISTS "${LIBMPV_SRC}/inclu
     file(SHA256 "${seven_zip}" actual_seven_zip_hash)
   endif()
   if(NOT actual_seven_zip_hash STREQUAL seven_zip_hash)
-    file(DOWNLOAD "https://api.github.com/repos/ip7z/7zip/releases/assets/278934761"
-      "${seven_zip}" HTTPHEADER "Accept: application/octet-stream" EXPECTED_HASH "SHA256=${seven_zip_hash}" TLS_VERIFY ON)
+    oplayer_github_asset(ip7z/7zip 278934761 "${seven_zip_hash}" "${seven_zip}")
   endif()
   execute_process(COMMAND "${seven_zip}" x -y "-o${LIBMPV_SRC}" "${mpv_archive}"
     OUTPUT_QUIET COMMAND_ERROR_IS_FATAL ANY)

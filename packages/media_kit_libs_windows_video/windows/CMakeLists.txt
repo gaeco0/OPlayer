@@ -16,41 +16,6 @@ project(${PROJECT_NAME} LANGUAGES CXX)
 add_compile_definitions(_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR)
 
 # ------------------------------------------------------------------------------
-function(download_and_verify url md5 locationForArchive)
-  # Check if the archive exists.
-  if(EXISTS "${locationForArchive}")
-    file(MD5 "${locationForArchive}" ARCHIVE_MD5)
-
-    # If MD5 doesn't match, delete the archive to download again.
-    if(NOT md5 STREQUAL ARCHIVE_MD5)
-      file(REMOVE "${locationForArchive}")
-      message(STATUS "MD5 mismatch. File deleted.")
-    endif()
-  endif()
-
-  # Download the archive if it doesn't exist.
-  if(NOT EXISTS "${locationForArchive}")
-    message(STATUS "Downloading archive from ${url}...")
-    file(DOWNLOAD "${url}" "${locationForArchive}"
-      HTTPHEADER "Accept: application/octet-stream" TLS_VERIFY ON STATUS download_status)
-    list(GET download_status 0 download_code)
-    if(NOT download_code EQUAL 0)
-      file(REMOVE "${locationForArchive}")
-      message(FATAL_ERROR "Dependency download failed: ${download_status}")
-    endif()
-    message(STATUS "Downloaded archive to ${locationForArchive}.")
-
-    # Verify MD5 of the newly downloaded file.
-    file(MD5 "${locationForArchive}" ARCHIVE_MD5)
-
-    if(md5 STREQUAL ARCHIVE_MD5)
-      message(STATUS "${locationForArchive} Verification successful.")
-    else()
-      message(FATAL_ERROR "${locationForArchive} Integrity check failed, please try to re-build project again.")
-    endif()
-  endif()
-endfunction()
-
 function(check_directory_exists_and_not_empty dir result_var)
   # Check if the directory exists
   if(EXISTS "${dir}")
@@ -80,18 +45,14 @@ include("${CMAKE_SOURCE_DIR}/mpv-libraries.cmake")
 set(ANGLE "ANGLE.7z")
 
 # Download URL & MD5 hash of the ANGLE archive.
-set(ANGLE_URL "https://api.github.com/repos/alexmercerind/flutter-windows-ANGLE-OpenGL-ES/releases/assets/195530655")
 set(ANGLE_MD5 "e866f13e8d552348058afaafe869b1ed")
 
 # Download location of the ANGLE archive.
 set(ANGLE_ARCHIVE "${CMAKE_BINARY_DIR}/${ANGLE}")
 set(ANGLE_SRC "${CMAKE_BINARY_DIR}/ANGLE")
 
-download_and_verify(
-  ${ANGLE_URL}
-  ${ANGLE_MD5}
-  ${ANGLE_ARCHIVE}
-)
+oplayer_github_asset(alexmercerind/flutter-windows-ANGLE-OpenGL-ES 195530655
+  "${ANGLE_MD5}" "${ANGLE_ARCHIVE}" md5)
 
 check_directory_exists_and_not_empty(${ANGLE_SRC} ANGLE_SRC_VALID)
 

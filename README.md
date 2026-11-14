@@ -19,7 +19,7 @@ nPlayer의 UI/UX를 기준으로, 로컬·네트워크·클라우드 재생과 �
 
 - 현재 공개 베타: [0.1.8-beta.2](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.8-beta.2). 최근 재생 다중 선택을 포함한다. 앱의 업데이트 채널을 **beta**로 선택하면 확인할 수 있다. 정식 Latest·업데이트 확인 기본값은 stable v0.1.7로 유지한다.
 - 플랫폼별 실기기 검증을 모두 마친 베타는 아니다. 전체 플랫폼 빌드·자동 검증은 유지하며, 다양한 기기의 성능·호환성 문제는 사용자 제보를 모아 재현 후 수정한다. 설정 → **진단 정보 보내기**로 GitHub Issues에 신고할 수 있다.
-- 현재 nightly: [0.1.9-nightly.20261115.3](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.9-nightly.20261115.3). 브라우저 미디어 재생·다운로드는 OS 인증서 저장소 기반 HTTP를 우선하고 TLS·접근 차단 시 기존 WebView 세션으로 폴백합니다. 모든 OS에 같은 정책을 적용하며 내부 빌드 번호 `+2`, 기존 Android 서명과 stable v0.1.7 Latest를 유지합니다.
+- 현재 nightly: [0.1.9-nightly.20261115.4](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.9-nightly.20261115.4). 브라우저 미디어 재생·다운로드는 OS 인증서 저장소 기반 HTTP를 우선하고 TLS·접근 차단 시 기존 WebView 세션으로 폴백합니다. 모든 OS에 같은 정책을 적용하며 내부 빌드 번호 `+2`, 기존 Android 서명과 stable v0.1.7 Latest를 유지합니다.
 
 ## 파일·재생목록 관리 (v0.1.7)
 
@@ -150,6 +150,7 @@ flutter run -d windows   # 또는 macos / android / ios
 ```
 
 - Flutter 3.35+ (Dart 3.9)
+- Python 3.11 이상: 네이티브 의존성 다운로드·체크섬 검증에 사용합니다. Android 빌드는 `python3` 또는 `PYTHON` 환경 변수로 지정한 실행 파일을 사용하고 CMake는 Python3 인터프리터를 검색합니다. CI는 기본 GitHub 토큰을 사용하며 로컬 공개 자산 다운로드에는 토큰이 필요하지 않습니다.
 - **Windows**: 개발자 모드 켜기(플러그인 심볼릭 링크), WebView2 런타임(Win11 기본 포함),
   `nuget.exe`가 PATH에 있어야 함(flutter_inappwebview_windows). VS 2026(MSVC 14.5x)용으로
   `windows/CMakeLists.txt`에 `_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS` 정의 추가됨.
