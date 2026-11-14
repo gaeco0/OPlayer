@@ -20,6 +20,28 @@ void main() {
     base = 'http://127.0.0.1:${origin.port}';
     client = http.Client();
   });
+  Future<BrowserFetchResponse> browserFetch(Uri uri, Map<String, String> headers, String method) async {
+    final transport = HttpClient();
+    final request = await transport.openUrl(method, uri);
+    headers.forEach(request.headers.set);
+    final response = await request.close();
+    var finalUri = uri;
+    for (final redirect in response.redirects) {
+      finalUri = finalUri.resolveUri(redirect.location);
+    }
+    final fields = <String, String>{};
+    response.headers.forEach((name, values) => fields[name] = values.join(', '));
+    Stream<List<int>> body() async* {
+      try {
+        yield* response;
+      } finally {
+        transport.close(force: true);
+      }
+    }
+
+    return BrowserFetchResponse(response.statusCode, fields, finalUri, body());
+  }
+
   tearDown(() async {
     client.close();
     await origin.close(force: true);
@@ -52,6 +74,7 @@ void main() {
       await request.response.close();
     });
     final proxy = BrowserPlaybackProxy(
+      browserOpen: browserFetch,
       url: '$base/master.m3u8',
       pageUrl: 'https://player.example/watch',
       headers: const {'Authorization': 'Bearer playlist'},
@@ -86,8 +109,10 @@ void main() {
     expect((await client.get(Uri.parse(url).replace(path: '/wrong/0/media.ts'))).statusCode, 404);
   });
 
-  test('403 fallback streams browser bytes before EOF and forwards seek range and session headers', () async {
+  test('playback uses native first then browser on 403, streaming Range bytes before EOF', () async {
+    var nativeCalls = 0;
     origin.listen((request) async {
+      nativeCalls++;
       request.response.statusCode = 403;
       await request.response.close();
     });
@@ -130,6 +155,7 @@ void main() {
     }
     expect(received, [1, 2, 3, 4]);
     expect(browserCalls, 1);
+    expect(nativeCalls, 1);
     await chunks.cancel();
   });
 
@@ -138,7 +164,10 @@ void main() {
     origin.listen((request) async {
       if (request.uri.path == '/start') {
         request.response.statusCode = 302;
-        request.response.headers.set('Location', '/final/live.m3u8');
+        request.response.headers.set('Location', '/final/step');
+      } else if (request.uri.path == '/final/step') {
+        request.response.statusCode = 302;
+        request.response.headers.set('Location', 'live.m3u8');
       } else if (request.uri.path == '/final/live.m3u8') {
         request.response.write(
           '#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:${++calls}\n#EXTINF:4,\nsegment.ts\n',
@@ -149,7 +178,13 @@ void main() {
       }
       await request.response.close();
     });
-    final proxy = BrowserPlaybackProxy(url: '$base/start', pageUrl: '$base/watch', headers: const {}, hls: true);
+    final proxy = BrowserPlaybackProxy(
+      browserOpen: browserFetch,
+      url: '$base/start',
+      pageUrl: '$base/watch',
+      headers: const {},
+      hls: true,
+    );
     addTearDown(proxy.close);
     final url = Uri.parse(await proxy.start());
     final first = Hls.parseMedia(await client.read(url), url);

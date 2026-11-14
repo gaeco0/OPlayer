@@ -63,6 +63,7 @@ class DownloadTask {
   /// Preserve the signed key/segment URLs issued to the browser session.
   Map<String, String> hlsPlaylists;
   String? pageUrl;
+  BrowserDownloadTransport? browserTransport;
   final DateTime createdAt;
 
   DownloadStatus status = DownloadStatus.queued;
@@ -205,7 +206,6 @@ class DownloadManager extends ChangeNotifier {
   final _discoveredSources = <String, MediaSource>{};
   final _reservedPaths = <String>{};
   final _clients = <String, http.Client>{};
-  final _browserClients = <http.Client, BrowserDownloadTransport>{};
 
   String _newTaskId() {
     var value = DateTime.now().microsecondsSinceEpoch;
@@ -346,6 +346,8 @@ class DownloadManager extends ChangeNotifier {
         ..pageUrl = pageUrl
         ..speed = 0
         ..phase = '기존 조각 확인 중';
+      unawaited(previous.browserTransport?.close());
+      previous.browserTransport = pageUrl == null ? null : BrowserDownloadTransport(pageUrl);
       resume(previous);
       return previous;
     }
@@ -362,6 +364,7 @@ class DownloadManager extends ChangeNotifier {
       pageUrl: pageUrl,
       outputQuality: quality,
     );
+    task.browserTransport = pageUrl == null ? null : BrowserDownloadTransport(pageUrl);
     if (destination != null) {
       task
         ..remoteServerId = st.downloadServerId
@@ -382,6 +385,8 @@ class DownloadManager extends ChangeNotifier {
       if (resourceCancellation != null && !resourceCancellation.isCompleted) resourceCancellation.complete();
       _clients.remove(t.id)?.close();
     }
+    unawaited(t.browserTransport?.close());
+    t.browserTransport = null;
     t.status = DownloadStatus.paused;
     _changed(immediate: true);
   }
@@ -441,6 +446,8 @@ class DownloadManager extends ChangeNotifier {
   Future<void> remove(DownloadTask t, {bool deleteFile = false}) async {
     if (t.status == DownloadStatus.running) pause(t);
     tasks.remove(t);
+    await t.browserTransport?.close();
+    t.browserTransport = null;
     await _resourceFinished[t.id]?.future;
     final sp = t.savePath;
     if (sp != null) {
@@ -515,7 +522,12 @@ class DownloadManager extends ChangeNotifier {
     _cancel.remove(t.id);
     _changed();
     if (t.kind == DownloadKind.resource) _resourceFinished[t.id] = Completer<void>();
-    final client = IOClient(NetworkService.instance.createHttpClient(browser: t.kind != DownloadKind.resource));
+    final page = Uri.tryParse(t.pageUrl ?? '');
+    final http.Client client =
+        t.kind != DownloadKind.resource && page != null && ['http', 'https'].contains(page.scheme)
+        ? BrowserDownloadClient(t.browserTransport ?? BrowserDownloadTransport(t.pageUrl!))
+        : IOClient(NetworkService.instance.createHttpClient(browser: t.kind != DownloadKind.resource));
+    t.browserTransport = null;
     _clients[t.id] = client;
     String? reservedPath;
     String? overwriteReservation;
@@ -593,7 +605,7 @@ class DownloadManager extends ChangeNotifier {
       _uploadCancellation.remove(t.id);
       _clients.remove(t.id);
       try {
-        await _browserClients.remove(client)?.close();
+        if (client is BrowserDownloadClient) await client.closeBrowser();
       } catch (_) {}
       client.close();
       if (t.status == DownloadStatus.done || t.status == DownloadStatus.failed) {
@@ -1048,22 +1060,7 @@ class DownloadManager extends ChangeNotifier {
     if (range != null) h['Range'] = 'bytes=${range.$2}-${range.$2 + range.$1 - 1}';
     for (var attempt = 0; ; attempt++) {
       try {
-        final browser = _browserClients[c];
-        if (browser != null) {
-          final (status, bytes) = await browser.get(u, h);
-          if (status >= 300) throw _httpError(status);
-          return bytes;
-        }
         final r = await c.get(u, headers: h).timeout(const Duration(seconds: 30));
-        if (r.statusCode == 403 && (Platform.isWindows || Platform.isAndroid)) {
-          final task = tasks.where((task) => _clients[task.id] == c).firstOrNull;
-          if (task?.pageUrl != null) {
-            final browser = _browserClients.putIfAbsent(c, () => BrowserDownloadTransport(task!.pageUrl!));
-            final (status, bytes) = await browser.get(u, h);
-            if (status >= 300) throw _httpError(status);
-            return bytes;
-          }
-        }
         if (r.statusCode >= 300) throw _httpError(r.statusCode);
         return r.bodyBytes;
       } catch (e) {

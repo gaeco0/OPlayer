@@ -1,12 +1,115 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
+import 'package:http/http.dart' as http;
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'browser_environment.dart';
+import 'browser_session.dart';
+import '../../core/network/network_service.dart';
 
-/// Uses the browser's HTTP/TLS stack when a CDN rejects the native HTTP client.
+/// Uses OS trust first, then the original browser session for TLS/access failures.
+/// Playback and downloads share this policy on every OS.
+class BrowserDownloadClient extends http.BaseClient {
+  BrowserDownloadClient(this.browser, {http.Client? native, this.browserOpen})
+    : _nativeOverride = native,
+      _native = native == null ? NetworkService.instance.createHttpClient(browser: true) : null;
+  final BrowserDownloadTransport browser;
+  final http.Client? _nativeOverride;
+  final HttpClient? _native;
+  final Future<BrowserFetchResponse> Function(Uri, Map<String, String>, String)? browserOpen;
+  final _browserOrigins = <String>{};
+  bool _closed = false;
+  Future<void>? _closing;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    if (_closed) throw http.ClientException('다운로드 연결이 종료됐습니다', request.url);
+    if (!['GET', 'HEAD'].contains(request.method) || !['http', 'https'].contains(request.url.scheme)) {
+      throw http.ClientException('지원하지 않는 브라우저 미디어 요청입니다', request.url);
+    }
+    if (!_browserOrigins.contains(request.url.origin)) {
+      try {
+        final response = await (_nativeOverride?.send(request) ?? _sendNative(request));
+        final challenge = response.statusCode == 202 && response.headers['x-amzn-waf-action'] == 'challenge';
+        if (response.statusCode != 401 && response.statusCode != 403 && !challenge) return response;
+        await response.stream.listen((_) {}).cancel();
+      } on TlsException {
+        // The browser must perform its own certificate validation; never bypass it.
+      }
+      if (_closed) throw http.ClientException('다운로드 연결이 종료됐습니다', request.url);
+      _browserOrigins.add(request.url.origin);
+    }
+    final response = browserOpen == null
+        ? await browser.open(request.url, request.headers, method: request.method)
+        : await browserOpen!(request.url, request.headers, request.method);
+    if (_closed) {
+      await response.body.listen((_) {}).cancel();
+      throw http.ClientException('다운로드 연결이 종료됐습니다', request.url);
+    }
+    final headers = {...response.headers};
+    // Browser fetch returns decompressed bytes, so encoded lengths cannot be reused.
+    if (headers.containsKey('content-encoding')) {
+      headers.remove('content-encoding');
+      headers.remove('content-length');
+    }
+    return http.StreamedResponse(
+      response.body,
+      response.status,
+      headers: headers,
+      contentLength: int.tryParse(headers['content-length'] ?? ''),
+      request: http.Request(request.method, response.uri),
+    );
+  }
+
+  Future<void> closeBrowser() => _closing ??= browser.close();
+
+  Future<http.StreamedResponse> _sendNative(http.BaseRequest request) async {
+    final upstream = await _native!.openUrl(request.method, request.url).timeout(const Duration(seconds: 30));
+    upstream
+      ..followRedirects = request.followRedirects
+      ..maxRedirects = request.maxRedirects
+      ..persistentConnection = request.persistentConnection;
+    request.headers.forEach(upstream.headers.set);
+    final response = await request.finalize().pipe(upstream).timeout(const Duration(seconds: 30));
+    var finalUri = request.url;
+    for (final redirect in response.redirects) {
+      finalUri = finalUri.resolveUri(redirect.location);
+    }
+    final headers = <String, String>{};
+    response.headers.forEach((name, values) => headers[name.toLowerCase()] = values.join(', '));
+    if (response.compressionState == HttpClientResponseCompressionState.decompressed) {
+      headers.remove('content-encoding');
+      headers.remove('content-length');
+    }
+    return http.StreamedResponse(
+      response,
+      response.statusCode,
+      headers: headers,
+      contentLength: int.tryParse(headers['content-length'] ?? ''),
+      request: http.Request(request.method, finalUri),
+    );
+  }
+
+  @override
+  void close() {
+    if (_closed) return;
+    _closed = true;
+    _native?.close(force: true);
+    _nativeOverride?.close();
+    unawaited(closeBrowser().catchError((Object _) {}));
+  }
+}
+
+/// Reuses the original browser; restores a browser when no live session remains.
 class BrowserDownloadTransport {
-  BrowserDownloadTransport(this.pageUrl);
+  BrowserDownloadTransport(this.pageUrl) : _session = BrowserSession.find(pageUrl) {
+    _session?.retain();
+  }
+  final BrowserSession? _session;
+  final _active = <String>{};
+  static int _nextRequest = 0;
+  Future<InAppWebViewController> get _web async => _session == null ? _controller! : await _session.controller;
   final String pageUrl;
   HeadlessInAppWebView? _browser;
   InAppWebViewController? _controller;
@@ -15,9 +118,12 @@ class BrowserDownloadTransport {
 
   Future<void> _start() async {
     if (_closed) throw StateError('브라우저 다운로드 연결이 종료됐습니다');
+    if (_session != null) return;
+    final environment = await browserEnvironment();
+    if (_closed) throw StateError('브라우저 다운로드 연결이 종료됐습니다');
     final loaded = Completer<void>();
     _browser = HeadlessInAppWebView(
-      webViewEnvironment: await browserEnvironment(),
+      webViewEnvironment: environment,
       initialUrlRequest: URLRequest(url: WebUri(pageUrl)),
       initialSettings: InAppWebViewSettings(
         javaScriptEnabled: true,
@@ -42,12 +148,12 @@ class BrowserDownloadTransport {
     if (_closed) throw StateError('브라우저 다운로드 연결이 종료됐습니다');
   }
 
-  int _nextRequest = 0;
   Future<BrowserFetchResponse> open(Uri uri, Map<String, String> headers, {String method = 'GET'}) async {
     await (_ready ??= _start());
     if (_closed) throw StateError('브라우저 연결이 종료됐습니다');
     final id = '${_nextRequest++}';
-    final result = await _controller!
+    _active.add(id);
+    final result = await (await _web)
         .callAsyncJavaScript(
           arguments: {'url': uri.toString(), 'headers': headers, 'id': id, 'method': method},
           functionBody: r'''
@@ -59,18 +165,21 @@ class BrowserDownloadTransport {
       const credentials = Object.keys(headers).some(k=>k.toLowerCase()==='cookie') ? 'include' : 'same-origin';
       const abort = new AbortController();
       const timer = setTimeout(()=>abort.abort(), 30000);
+      window.__oplayerStreams = window.__oplayerStreams || {};
+      window.__oplayerStreams[id] = {reader:null,abort};
       try {
         const response = await fetch(url,{method,headers:allowed,credentials,signal:abort.signal});
-        window.__oplayerStreams = window.__oplayerStreams || {};
         if (response.body && method !== 'HEAD') window.__oplayerStreams[id] = {reader:response.body.getReader(),abort};
+        else delete window.__oplayerStreams[id];
         return {status:response.status,url:response.url,headers:Object.fromEntries(response.headers.entries())};
-      } catch(error) { return {error:String(error)}; }
+      } catch(error) { delete window.__oplayerStreams[id]; return {error:String(error)}; }
       finally { clearTimeout(timer); }
     ''',
         )
         .timeout(const Duration(seconds: 40));
     final value = result?.value;
     if (result?.error != null || value is! Map || value['error'] != null) {
+      _active.remove(id);
       throw StateError('브라우저 요청 실패: ${value is Map ? value['error'] : result?.error}');
     }
     return BrowserFetchResponse(
@@ -84,12 +193,12 @@ class BrowserDownloadTransport {
   Stream<List<int>> _read(String id) async* {
     try {
       while (!_closed) {
-        final result = await _controller!
+        final result = await (await _web)
             .callAsyncJavaScript(
               arguments: {'id': id},
               functionBody: r'''
           const stream = (window.__oplayerStreams || {})[id];
-          if (!stream) return {done:true};
+          if (!stream) return {error:'Browser media stream was lost'};
           try {
             const part = await stream.reader.read();
             if (part.done) return {done:true};
@@ -109,13 +218,14 @@ class BrowserDownloadTransport {
       }
       throw StateError('브라우저 연결이 종료됐습니다');
     } finally {
+      _active.remove(id);
       if (!_closed) {
         try {
-          await _controller?.callAsyncJavaScript(
+          await (await _web).callAsyncJavaScript(
             arguments: {'id': id},
             functionBody: r'''
             const stream = (window.__oplayerStreams || {})[id];
-            if (stream) { delete window.__oplayerStreams[id]; stream.abort.abort(); await stream.reader.cancel().catch(()=>{}); }
+            if (stream) { delete window.__oplayerStreams[id]; stream.abort.abort(); await stream.reader?.cancel().catch(()=>{}); }
           ''',
           );
         } catch (_) {}
@@ -137,7 +247,24 @@ class BrowserDownloadTransport {
   }
 
   Future<void> close() async {
+    if (_closed) return;
     _closed = true;
+    try {
+      if (_active.isNotEmpty && (_session != null || _controller != null)) {
+        await (await _web).callAsyncJavaScript(
+          arguments: {'ids': _active.toList()},
+          functionBody: r"""
+            for (const id of ids) {
+              const stream = (window.__oplayerStreams || {})[id];
+              if (stream) { delete window.__oplayerStreams[id]; stream.abort.abort(); stream.reader?.cancel().catch(()=>{}); }
+            }
+          """,
+        );
+      }
+    } finally {
+      _active.clear();
+      await _session?.release();
+    }
     final browser = _browser;
     _browser = null;
     await browser?.dispose();

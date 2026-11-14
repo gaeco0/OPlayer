@@ -60,6 +60,8 @@ class NetworkService extends ChangeNotifier with WidgetsBindingObserver {
       ? 'PROXY 127.0.0.1:$port'
       : 'DIRECT';
 
+  // Android supplies OS-approved CA anchors; other platforms use Dart's default
+  // platform trust store. Both paths keep certificate and hostname validation.
   HttpClient createHttpClient({bool browser = false}) =>
       HttpClient(context: _trust.context)..findProxy = (uri) => findProxy(uri, browser: browser);
 

@@ -27,6 +27,7 @@ import 'downloads_page.dart';
 import 'hls.dart';
 import 'request_headers.dart';
 import 'browser_environment.dart';
+import 'browser_session.dart';
 import 'external_links.dart';
 import 'browser_playback_proxy.dart';
 
@@ -350,6 +351,8 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
   String get _home => AppSettings.instance.homepage;
 
   InAppWebViewController? _web;
+  BrowserSession _browserSession = BrowserSession();
+  URLRequest? _initialRequest;
   PullToRefreshController? _pullToRefresh;
   final _address = TextEditingController();
   final _addressFocus = FocusNode();
@@ -475,6 +478,9 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
   }
 
   void _recreateTabView() {
+    _browserSession.detach();
+    _browserSession = BrowserSession();
+    _initialRequest = null;
     _historyRead++;
     setState(() {
       _web = null;
@@ -650,6 +656,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
         _canBack = _history.canBack;
         _canForward = _history.canForward;
       });
+      if (_retainMediaSession(URLRequest(url: WebUri(_history.current!)), reload: true)) return;
       final index = native?.currentIndex;
       if (nativeTarget != null && index != null) {
         await web.goBackOrForward(steps: nativeTarget - index);
@@ -691,6 +698,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
 
   @override
   void dispose() {
+    _browserSession.detach();
     if (_historyReady) _saveHistory();
     PluginStore.instance.removeListener(_pluginsChanged);
     MouseNav.removeForwardHandler(_forward);
@@ -766,10 +774,23 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     return false;
   }
 
-  void _reload() => _web?.reload();
+  // A document navigation destroys JavaScript fetch readers. Keep that document
+  // for running media and give navigation a fresh visible browser instance.
+  bool _retainMediaSession(URLRequest request, {bool reload = false}) {
+    if (!_browserSession.inUse || request.url == null) return false;
+    if (!reload) _history.record(request.url.toString(), -1);
+    _recreateTabView();
+    _initialRequest = request;
+    return true;
+  }
+
+  void _reload() {
+    if (!_retainMediaSession(URLRequest(url: WebUri(_url)), reload: true)) _web?.reload();
+  }
 
   /// Ctrl+F5: 캐시 무시 새로고침
   Future<void> _hardReload() async {
+    if (_retainMediaSession(URLRequest(url: WebUri(_url)), reload: true)) return;
     final w = _web;
     if (w == null) return;
     setState(() {
@@ -1213,7 +1234,8 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
           : 'https://www.google.com/search?q=${Uri.encodeQueryComponent(s)}';
     }
     _addressFocus.unfocus();
-    _web?.loadUrl(urlRequest: URLRequest(url: WebUri(s)));
+    final request = URLRequest(url: WebUri(s));
+    if (!_retainMediaSession(request)) _web?.loadUrl(urlRequest: request);
   }
 
   Future<void> _openExternalLink(Uri uri) async {
@@ -1560,9 +1582,10 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
               ? const SizedBox.shrink()
               : InAppWebView(
                   key: ValueKey(_viewGeneration),
+                  keepAlive: _browserSession.keepAlive,
                   webViewEnvironment: _env,
                   pullToRefreshController: _pullToRefresh,
-                  initialUrlRequest: URLRequest(url: WebUri(_history.current ?? _home)),
+                  initialUrlRequest: _initialRequest ?? URLRequest(url: WebUri(_history.current ?? _home)),
                   initialSettings: InAppWebViewSettings(
                     javaScriptEnabled: true,
                     useShouldOverrideUrlLoading: true,
@@ -1602,6 +1625,8 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                   onWebViewCreated: (c) {
                     if (!mounted || generation != _viewGeneration) return;
                     _web = c;
+                    _browserSession.attach(c);
+                    _browserSession.remember(_history.current ?? _home);
                     _attachNetworkMonitor(c);
                     c.addJavaScriptHandler(
                       handlerName: 'oplayerLinkMenu',
@@ -1677,7 +1702,12 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                   shouldOverrideUrlLoading: (c, action) async {
                     if (!_isCurrentWeb(c)) return NavigationActionPolicy.CANCEL;
                     final uri = Uri.tryParse(action.request.url?.toString() ?? '');
-                    if (uri == null || !isExternalBrowserLink(uri)) return NavigationActionPolicy.ALLOW;
+                    if (uri == null || !isExternalBrowserLink(uri)) {
+                      if (action.isForMainFrame && _retainMediaSession(action.request)) {
+                        return NavigationActionPolicy.CANCEL;
+                      }
+                      return NavigationActionPolicy.ALLOW;
+                    }
                     if (action.isForMainFrame || action.hasGesture == true) await _openExternalLink(uri);
                     return NavigationActionPolicy.CANCEL;
                   },
@@ -1723,6 +1753,8 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                   },
                   onLoadStart: (c, url) {
                     if (!_isCurrentWeb(c)) return;
+                    _browserSession.forgetPages();
+                    if (url != null) _browserSession.remember(url.toString());
                     setState(() {
                       _url = url?.toString() ?? '';
                       if (!_addressFocus.hasFocus) _address.text = _url;
@@ -1737,6 +1769,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                   },
                   onLoadStop: (c, url) async {
                     if (!_isCurrentWeb(c)) return;
+                    if (url != null) _browserSession.remember(url.toString());
                     await _pullToRefresh?.endRefreshing();
                     // 페이지에 따라 document_start 주입이 안 되는 경우 대비
                     await c.evaluateJavascript(source: _snifferJs);

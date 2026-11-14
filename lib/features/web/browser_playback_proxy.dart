@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
+import 'package:http/http.dart' as http;
 
-import '../../core/network/network_service.dart';
 import '../../core/media_item.dart';
 import 'browser_download_transport.dart';
 import 'hls.dart';
@@ -104,8 +104,7 @@ class BrowserPlaybackProxy {
   }) : _headers = BrowserRequestHeaders.replay(headers),
        _keys = {for (final e in keys.entries) e.key: Uint8List.fromList(e.value)},
        _playlists = Map.of(playlists),
-       _browser = BrowserDownloadTransport(pageUrl),
-       _browserOpen = browserOpen;
+       _client = BrowserDownloadClient(BrowserDownloadTransport(pageUrl), browserOpen: browserOpen);
 
   final String url;
   final bool hls;
@@ -114,13 +113,10 @@ class BrowserPlaybackProxy {
   final Map<String, Uint8List> _keys;
   final Map<String, String> _playlists;
   final Future<Map<String, String>> Function(Uri)? headersFor;
-  final BrowserDownloadTransport _browser;
-  final BrowserMediaOpener? _browserOpen;
-  final _client = NetworkService.instance.createHttpClient(browser: true);
+  final BrowserDownloadClient _client;
   final _resources = <_Resource>[];
   final _ids = <String, int>{};
   final _served = <String>{};
-  final _browserHosts = <String>{};
   final _token = base64UrlEncode(List.generate(24, (_) => Random.secure().nextInt(256))).replaceAll('=', '');
   HttpServer? _server;
   bool _closed = false;
@@ -194,32 +190,9 @@ class BrowserPlaybackProxy {
   }
 
   Future<BrowserFetchResponse> _open(Uri uri, Map<String, String> headers, String method) async {
-    if (!_browserHosts.contains(uri.origin)) {
-      final request = await _client.openUrl(method, uri).timeout(const Duration(seconds: 30));
-      headers.forEach((name, value) => request.headers.set(name, value));
-      final response = await request.close().timeout(const Duration(seconds: 30));
-      var finalUri = uri;
-      for (final redirect in response.redirects) {
-        finalUri = finalUri.resolveUri(redirect.location);
-      }
-      final fields = <String, String>{};
-      response.headers.forEach((name, values) => fields[name.toLowerCase()] = values.join(', '));
-      if (response.compressionState == HttpClientResponseCompressionState.decompressed) {
-        fields.remove('content-length');
-        fields.remove('content-encoding');
-      }
-      if (response.statusCode != 403 && response.statusCode != 401) {
-        return BrowserFetchResponse(
-          response.statusCode,
-          fields,
-          finalUri,
-          response.timeout(const Duration(seconds: 40)),
-        );
-      }
-      await response.listen((_) {}).cancel();
-      _browserHosts.add(uri.origin);
-    }
-    return _browserOpen == null ? _browser.open(uri, headers, method: method) : _browserOpen(uri, headers, method);
+    final response = await _client.send(http.Request(method, uri)..headers.addAll(headers));
+    final finalUri = response.request?.url ?? uri;
+    return BrowserFetchResponse(response.statusCode, response.headers, finalUri, response.stream);
   }
 
   Future<Uint8List> _collect(Stream<List<int>> body, int limit) async {
@@ -355,9 +328,9 @@ class BrowserPlaybackProxy {
   Future<void> close() async {
     if (_closed) return;
     _closed = true;
-    _client.close(force: true);
     await _server?.close(force: true);
-    await _browser.close();
+    _client.close();
+    await _client.closeBrowser();
     _keys.clear();
     _playlists.clear();
     _resources.clear();
