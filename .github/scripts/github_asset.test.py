@@ -1,7 +1,9 @@
 import hashlib
 import io
+import os
 from pathlib import Path
 import tempfile
+import urllib.request
 from unittest.mock import patch
 from github_asset import download_asset
 
@@ -23,4 +25,12 @@ with tempfile.TemporaryDirectory() as directory:
             pass
     assert target.read_bytes() == b'invalid cache'
     assert not target.with_suffix('.zip.part').exists()
+    with patch.dict(os.environ, {'GITHUB_TOKEN': 'test-ci-token'}):
+        with patch('urllib.request.urlopen', return_value=io.BytesIO(data)) as request:
+            download_asset('owner/repository', 123, digest, target)
+            api_request = request.call_args.args[0]
+            assert api_request.get_header('Authorization') == 'Bearer test-ci-token'
+            redirect = urllib.request.HTTPRedirectHandler().redirect_request(
+                api_request, None, 302, 'Found', {}, 'https://release-assets.githubusercontent.com/dependency.zip')
+            assert redirect.get_header('Authorization') is None
 print('Pinned asset verification, cache and partial cleanup checks passed')

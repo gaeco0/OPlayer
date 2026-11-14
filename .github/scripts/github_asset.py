@@ -1,5 +1,6 @@
-"""Download a pinned public release asset without credentials; reject changed bytes."""
+"""Download a pinned public release asset; use CI API auth and verify its bytes."""
 import hashlib
+import os
 from pathlib import Path
 import urllib.request
 
@@ -15,6 +16,9 @@ def download_asset(repository, asset_id, expected, target):
         f'https://api.github.com/repos/{repository}/releases/assets/{asset_id}',
         headers={'Accept': 'application/octet-stream', 'User-Agent': 'OPlayer-build'},
     )
+    if token := os.environ.get('GITHUB_TOKEN'):
+        # urllib does not copy unredirected headers to the signed asset URL.
+        request.add_unredirected_header('Authorization', f'Bearer {token}')
     partial = target.with_suffix(target.suffix + '.part')
     try:
         digest = hashlib.sha256()
