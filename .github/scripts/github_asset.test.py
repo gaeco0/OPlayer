@@ -3,6 +3,7 @@ import io
 import os
 from pathlib import Path
 import shutil
+import runpy
 import subprocess
 import sys
 import tempfile
@@ -50,4 +51,11 @@ with tempfile.TemporaryDirectory() as directory:
             f'oplayer_github_asset(owner/repository 123 {hashlib.md5(data).hexdigest()} '
             f'"{legacy_target.as_posix()}" md5)\n', encoding='utf-8')
         subprocess.run([cmake, f'-DPython3_EXECUTABLE={sys.executable}', '-P', str(script)], check=True)
+with patch('github_asset.download_asset') as prepare:
+    runpy.run_path(str(Path(__file__).with_name('prepare-native-deps.py')))
+    repository, asset_id, expected, target = prepare.call_args.args
+    root = Path(__file__).resolve().parents[2]
+    cmake_source = (root / 'packages/ai_frame_engine/native/CMakeLists.txt').read_text(encoding='utf-8')
+    assert repository == 'Tencent/ncnn' and str(asset_id) in cmake_source and expected in cmake_source
+    assert target.relative_to(root).as_posix() in cmake_source
 print('Pinned asset verification, cache and partial cleanup checks passed')

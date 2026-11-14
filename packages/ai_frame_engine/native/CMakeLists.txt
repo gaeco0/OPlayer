@@ -26,7 +26,7 @@ if(MSVC)
 endif()
 include(FetchContent)
 include("${CMAKE_CURRENT_LIST_DIR}/../../../.github/scripts/github-asset.cmake")
-set(ncnn_archive "${CMAKE_BINARY_DIR}/ncnn-20261020-full-source.zip")
+set(ncnn_archive "${CMAKE_CURRENT_LIST_DIR}/../../../.dart_tool/native-dependencies/ncnn-20261020-full-source.zip")
 oplayer_github_asset(Tencent/ncnn 658173295
   699d9acc67489eee0993a551ca1ebc247bbf0f4e33babe1dec810e6a9a52b988 "${ncnn_archive}")
 FetchContent_Declare(ncnn

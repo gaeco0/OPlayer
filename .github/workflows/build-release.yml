@@ -56,6 +56,8 @@ jobs:
           $revision = git -C "$env:RUNNER_TEMP/flutter-arm64" rev-parse HEAD
           if ($revision -ne 'abaf9c523780a608bd46686fd5e53740a07077f8') { throw 'Unexpected Flutter revision' }
           "$env:RUNNER_TEMP/flutter-arm64/bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Prepare verified native sources before isolated build hooks
+        run: python .github/scripts/prepare-native-deps.py
       - run: flutter pub get
       - if: matrix.arch == 'x64'
         run: flutter analyze --no-pub
@@ -156,6 +158,8 @@ jobs:
         run: sdkmanager 'platforms;android-36' 'platforms;android-37.0' 'build-tools;36.0.0' 'ndk;28.2.13676358'
       - name: Prepare pinned Gradle distribution
         run: python3 .github/scripts/prepare-gradle.py
+      - name: Prepare verified native sources before isolated build hooks
+        run: python .github/scripts/prepare-native-deps.py
       - run: flutter pub get
       - name: Restore release signing key
         if: github.event_name != 'pull_request'
@@ -253,6 +257,8 @@ jobs:
           git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git "$RUNNER_TEMP/flutter-arm64"
           test "$(git -C "$RUNNER_TEMP/flutter-arm64" rev-parse HEAD)" = abaf9c523780a608bd46686fd5e53740a07077f8
           echo "$RUNNER_TEMP/flutter-arm64/bin" >> "$GITHUB_PATH"
+      - name: Prepare verified native sources before isolated build hooks
+        run: python .github/scripts/prepare-native-deps.py
       - run: flutter pub get
       - run: flutter build linux --target-platform linux-${{ matrix.arch }} --release --no-pub --dart-define-from-file=.dart_tool/google-oauth-defines.json --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
       - name: Verify extension runtime and compatibility on Linux
@@ -295,6 +301,8 @@ jobs:
           channel: stable
           cache: true
       - run: flutter config --no-enable-swift-package-manager
+      - name: Prepare verified native sources before isolated build hooks
+        run: python .github/scripts/prepare-native-deps.py
       - run: flutter pub get
       - name: Prepare verified macOS media frameworks
         run: python3 .github/scripts/prepare-macos-mpv.py
