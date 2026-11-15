@@ -19,7 +19,7 @@ nPlayer의 UI/UX를 기준으로, 로컬·네트워크·클라우드 재생과 �
 
 - 현재 공개 베타: [0.1.8-beta.2](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.8-beta.2). 최근 재생 다중 선택을 포함한다. 앱의 업데이트 채널을 **beta**로 선택하면 확인할 수 있다. 정식 Latest·업데이트 확인 기본값은 stable v0.1.7로 유지한다.
 - 플랫폼별 실기기 검증을 모두 마친 베타는 아니다. 전체 플랫폼 빌드·자동 검증은 유지하며, 다양한 기기의 성능·호환성 문제는 사용자 제보를 모아 재현 후 수정한다. 설정 → **진단 정보 보내기**로 GitHub Issues에 신고할 수 있다.
-- 현재 nightly: [0.1.9-nightly.20261115.7](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.9-nightly.20261115.7). 플레이어 HTML을 영상으로 잘못 감지하던 문제를 수정했습니다. 전송 정책은 모든 OS에 공통으로 적용하며 OS 인증서 기반 HTTP 우선·기존 WebView 세션 폴백을 유지합니다. Windows 실제 MP4 전체 다운로드를 검증했고 내부 빌드 번호 `+2`, 기존 Android 서명과 stable v0.1.7 Latest를 유지합니다.
+- 현재 nightly: [0.1.9-nightly.20261115.8](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.9-nightly.20261115.8). 차단 확장앱을 켠 Windows에서 브라우저가 회색으로 뜨던 회귀를 수정했습니다. 설치된 확장앱을 유지한 실제 홈 화면 → 브라우저 진입과 외부 페이지 렌더링을 확인했습니다. OS 공통 전송 정책, 내부 빌드 번호 `+2`, 기존 Android 서명과 stable v0.1.7 Latest를 유지합니다.
 
 ## 파일·재생목록 관리 (v0.1.7)
 

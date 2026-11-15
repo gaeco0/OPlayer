@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,6 +11,28 @@ import 'package:oplayer/features/web/site_plugins.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() => FlutterSecureStorage.setMockInitialValues({}));
+  test('unsupported native content blockers preserve shared request blocking', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    SharedPreferences.setMockInitialValues({});
+    final store = PluginStore.instance;
+    await store.init();
+    await store.load(await File('plugins/site.disable-devtool.js').readAsString());
+    expect(pluginContentBlockers(), isEmpty);
+    expect(blockedBySitePlugin('https://example.com/', 'https://cdn.example.com/disable-devtool.js'), true);
+  });
+  test('supported native content blockers still serialize the same extension rule', () async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+    SharedPreferences.setMockInitialValues({});
+    final store = PluginStore.instance;
+    await store.init();
+    await store.load(await File('plugins/site.disable-devtool.js').readAsString());
+    final blockers = pluginContentBlockers();
+    expect(blockers, hasLength(1));
+    expect(blockers.single.toMap()['action'], {'type': 'block'});
+    expect(blockedBySitePlugin('https://example.com/', 'https://cdn.example.com/disable-devtool.js'), true);
+  });
   test('all-sites page permission blocks across domains without granting network access', () async {
     final source = await File('plugins/site.disable-devtool.js').readAsString();
     final plugin = OPlugin.parse(source);

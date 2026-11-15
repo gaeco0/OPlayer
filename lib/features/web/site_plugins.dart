@@ -35,17 +35,27 @@ String sitePluginScript(OPlugin p) => !p.site || p.compatibilityIssue() != null 
   } catch(e) { console.warn('OPlayer extension error', e); }
 })();''';
 
-List<ContentBlocker> pluginContentBlockers() => [
-  for (final p in PluginStore.instance.enabled.where((p) => p.site))
-    for (final rule in (p.manifest['blockRules'] as List? ?? []).cast<Map>())
-      ContentBlocker(
-        trigger: ContentBlockerTrigger(
-          urlFilter: rule['urlFilter'] as String,
-          ifTopUrl: [for (final site in p.sites) siteUrlPattern(site)],
+List<ContentBlocker> pluginContentBlockers() {
+  final ContentBlockerActionType block;
+  try {
+    block = ContentBlockerActionType.BLOCK;
+  } on TypeError {
+    // This plugin's native enum throws on engines without content blockers.
+    // Shared request interception / CDP still applies the same extension rules.
+    return const [];
+  }
+  return [
+    for (final p in PluginStore.instance.enabled.where((p) => p.site))
+      for (final rule in (p.manifest['blockRules'] as List? ?? []).cast<Map>())
+        ContentBlocker(
+          trigger: ContentBlockerTrigger(
+            urlFilter: rule['urlFilter'] as String,
+            ifTopUrl: [for (final site in p.sites) siteUrlPattern(site)],
+          ),
+          action: ContentBlockerAction(type: block),
         ),
-        action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
-      ),
-];
+  ];
+}
 
 bool blockedBySitePlugin(String pageUrl, String requestUrl) => PluginStore.instance.enabled
     .where((p) => p.site && p.matches(pageUrl))
