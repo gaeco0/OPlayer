@@ -38,7 +38,8 @@ void main() {
     await ResumeStore.instance.addFolder(folder.path);
     await AppSettings.instance.init();
     await ServerStore.instance.init();
-    await DownloadManager.instance.init();
+    // Native capability discovery needs real platform-channel event delivery.
+    await t.runAsync(DownloadManager.instance.init);
     t.view.physicalSize = const Size(1400, 900);
     t.view.devicePixelRatio = 1;
     Widget app(TargetPlatform platform) => MaterialApp(
