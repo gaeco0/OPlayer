@@ -49,7 +49,7 @@ class BrowserPlaybackRegistry {
           headersFor: (uri) async => requests[uri.toString()] ?? savedHeaders,
         );
         proxy.onError = (error) {
-          if (!errors.isClosed) errors.add('브라우저 재생 요청 실패: $error');
+          if (!errors.isClosed) errors.add('동영상 재생 요청 실패: $error');
         };
         Future<void> release() async {
           await proxy.close();

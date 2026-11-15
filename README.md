@@ -19,7 +19,7 @@ nPlayer의 UI/UX를 기준으로, 로컬·네트워크·클라우드 재생과 �
 
 - 현재 공개 베타: [0.1.8-beta.2](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.8-beta.2). 최근 재생 다중 선택을 포함한다. 앱의 업데이트 채널을 **beta**로 선택하면 확인할 수 있다. 정식 Latest·업데이트 확인 기본값은 stable v0.1.7로 유지한다.
 - 플랫폼별 실기기 검증을 모두 마친 베타는 아니다. 전체 플랫폼 빌드·자동 검증은 유지하며, 다양한 기기의 성능·호환성 문제는 사용자 제보를 모아 재현 후 수정한다. 설정 → **진단 정보 보내기**로 GitHub Issues에 신고할 수 있다.
-- 현재 nightly: [0.1.9-nightly.20261115.5](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.9-nightly.20261115.5). 브라우저 미디어 재생·다운로드는 OS 인증서 저장소 기반 HTTP를 우선하고 TLS·접근 차단 시 기존 WebView 세션으로 폴백합니다. 모든 OS에 같은 정책을 적용하며 내부 빌드 번호 `+2`, 기존 Android 서명과 stable v0.1.7 Latest를 유지합니다.
+- 현재 nightly: [0.1.9-nightly.20261115.6](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.9-nightly.20261115.6). 플레이어 HTML을 영상으로 잘못 감지하던 문제를 수정했습니다. 전송 정책은 모든 OS에 공통으로 적용하며 OS 인증서 기반 HTTP 우선·기존 WebView 세션 폴백을 유지합니다. Windows 실제 MP4 전체 다운로드를 검증했고 내부 빌드 번호 `+2`, 기존 Android 서명과 stable v0.1.7 Latest를 유지합니다.
 
 ## 파일·재생목록 관리 (v0.1.7)
 
@@ -321,6 +321,8 @@ Windows 버전을 실행하면 현재 실행 파일 경로를 사용자별 기�
 - Windows Hello는 앱 창의 HWND를 지정하는 공식 [UserConsentVerifier interop](https://learn.microsoft.com/en-us/uwp/api/windows.security.credentials.ui.userconsentverifier)으로 인증한다. `flutter run -d windows --debug --no-pub -t tool/privacy_native_smoke.dart`로 실제 캡처 차단 값과 Hello 사용 가능 여부를 확인한다. 실제 지문·Hello 승인과 Android 화면 차단은 실기기 확인이 필요하다.
 
 ## Android WebView와 HTTPS 필터링
+
+전송 정책은 OS 이름으로 분기하지 않습니다. 브라우저·HTTP/HLS·원격 리소스·동기화 각 경로의 요청·헤더 보완·재시도·폴백 정책은 모든 OS에 공통입니다. 네이티브 인증서·프록시·WebView·백그라운드 다운로드 API는 실제 지원 여부로 연결하고, OS 차이는 네이티브 실행 파일·OAuth 인증·저장 위치 어댑터에 한정합니다.
 
 Android는 시스템 인증서와 사용자가 기기에 설치한 CA 인증서를 신뢰한다. AdGuard HTTPS 필터링을 사용하려면 AdGuard CA가 기기의 사용자 인증서 저장소에 설치되어 있어야 한다. WebView·Android 네트워크 API뿐 아니라 Dart의 확장앱 저장소·클라우드·다운로드 요청도 Android의 신뢰 저장소를 사용하고 앱 복귀 시 CA 변경을 확인한다. 호스트명·유효기간·인증서 체인 검증은 유지한다. 내장 브라우저의 감지된 동영상 → 요청 기록에서 리소스 로드 실패·HTTP 오류를 확인할 수 있다.
 

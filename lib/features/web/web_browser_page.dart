@@ -70,9 +70,10 @@ const _snifferJs = r'''
   if (window.__oplayerSniffer) return; window.__oplayerSniffer = true;
   var isTop = (window === window.top);
   var seen = {};
-  var extRe = /\.(m3u8|mpd|mp4|webm|mkv|mov|m4v|flv)(\?|#|$)/i;
-  var segRe = /\.(ts|m4s|aac|m4a|vtt|webvtt|key)(\?|#|$)/i;
-  var imgRe = /\.(gif|jpe?g|png|webp|avif|svg|ico|bmp)(\?|#|$)/i;
+  // Only the URL path has an extension; ?url=movie.mp4 is a player document.
+  var extRe = /^[^?#]*\.(m3u8|mpd|mp4|webm|mkv|mov|m4v|flv)(\?|#|$)/i;
+  var segRe = /^[^?#]*\.(ts|m4s|aac|m4a|vtt|webvtt|key)(\?|#|$)/i;
+  var imgRe = /^[^?#]*\.(gif|jpe?g|png|webp|avif|svg|ico|bmp)(\?|#|$)/i;
   var PREVIEW_MAX = 1536 * 1024; // 1.5MB 미만 영상 파일은 미리보기/광고로 간주
   var mseSent = false;
   function send(u, kind, size, headers){
@@ -265,6 +266,7 @@ const _snifferJs = r'''
           var ct = res.headers.get('content-type');
           var len = parseInt(res.headers.get('content-length') || '0', 10);
           var u = res.url || url;
+          if (/html/i.test(ct || '')) return;
           var k = kindFromType(ct);
           if (k) {
             report(u, k, len, headers);
@@ -297,6 +299,7 @@ const _snifferJs = r'''
         var ct = this.getResponseHeader('content-type');
         var len = parseInt(this.getResponseHeader('content-length') || '0', 10);
         var url = this.responseURL || this.__oplayerUrl;
+        if (/html/i.test(ct || '')) return;
         var k = kindFromType(ct);
         if (!k && sniffable(ct, len)) {
           if (this.responseType === '' || this.responseType === 'text') k = kindFromText(this.responseText);
@@ -402,16 +405,14 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     if (Platform.isAndroid || Platform.isIOS) {
       _createPullToRefresh();
     }
-    if (Platform.isWindows) {
-      _windowsEnv().then((env) {
-        if (mounted) {
-          setState(() {
-            _env = env;
-            _envReady = true;
-          });
-        }
-      });
-    }
+    browserEnvironment().then((env) {
+      if (mounted) {
+        setState(() {
+          _env = env;
+          _envReady = true;
+        });
+      }
+    });
     SharedPreferences.getInstance().then((p) {
       if (!mounted) return;
       setState(() {
@@ -712,7 +713,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     final web = _web;
     if (web == null) return;
     try {
-      if (Platform.isWindows) await _configureAdBlock(web);
+      await _configureAdBlock(web);
       await web.setSettings(settings: InAppWebViewSettings(contentBlockers: pluginContentBlockers()));
       await web.removeUserScriptsByGroupName(groupName: 'oplayerPlugins');
       for (final p in PluginStore.instance.enabled.where((p) => p.site)) {
@@ -744,9 +745,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
   /// 다른 도메인 iframe(영상 플레이어)도 같은 프로세스에서 돌게 해서
   /// 감지 스크립트와 네트워크 감시가 iframe 안까지 닿게 한다.
   WebViewEnvironment? _env;
-  bool _envReady = !Platform.isWindows;
-
-  static Future<WebViewEnvironment?> _windowsEnv() => browserEnvironment();
+  bool _envReady = false;
 
   bool _onKey(KeyEvent e) {
     if (e is! KeyDownEvent || !mounted) return false;
@@ -799,15 +798,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
       _netLog.clear();
     });
     try {
-      if (Platform.isWindows) {
-        await w.callDevToolsProtocolMethod(methodName: 'Network.clearBrowserCache');
-        await w.callDevToolsProtocolMethod(methodName: 'Page.reload', parameters: {'ignoreCache': true});
-      } else if (Platform.isMacOS || Platform.isIOS) {
-        await w.reloadFromOrigin();
-      } else {
-        await InAppWebViewController.clearAllCache();
-        await w.reload();
-      }
+      await reloadBrowserIgnoringCache(w);
     } catch (_) {
       await w.reload();
     }
@@ -818,9 +809,9 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     }
   }
 
-  /// DevTools Network 이벤트로 모든 응답(iframe 포함)을 본다. Windows 전용.
+  /// Subscribe to DevTools when the current engine implements it; other engines
+  /// keep using native request callbacks and the shared page scripts.
   Future<void> _attachNetworkMonitor(InAppWebViewController c) async {
-    if (!Platform.isWindows) return;
     try {
       await c.addDevToolsProtocolEventListener(
         eventName: 'Fetch.requestPaused',
@@ -945,16 +936,24 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
     final enabled = PluginStore.instance.enabled.any(
       (p) => p.site && (p.manifest['blockRules'] as List? ?? []).isNotEmpty,
     );
-    await c.callDevToolsProtocolMethod(
-      methodName: enabled ? 'Fetch.enable' : 'Fetch.disable',
-      parameters: enabled
-          ? {
-              'patterns': [
-                {'urlPattern': '*', 'requestStage': 'Request'},
-              ],
-            }
-          : {},
-    );
+    try {
+      await c.callDevToolsProtocolMethod(
+        methodName: enabled ? 'Fetch.enable' : 'Fetch.disable',
+        parameters: enabled
+            ? {
+                'patterns': [
+                  {'urlPattern': '*', 'requestStage': 'Request'},
+                ],
+              }
+            : {},
+      );
+    } on UnimplementedError {
+      // This engine uses content blockers or native request interception.
+    } on UnsupportedError {
+      // This engine uses content blockers or native request interception.
+    } on MissingPluginException {
+      // This engine uses content blockers or native request interception.
+    }
   }
 
   void _recordPlaylist(String url, String text) {
@@ -1098,15 +1097,15 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
       if (!_mse) setState(() => _mse = true);
       return;
     }
-    final lower = url.toLowerCase();
+    final lower = (Uri.tryParse(url)?.path ?? '').toLowerCase();
     final kind = switch (hint) {
       'hls' => MediaKind.hls,
       'dash' => MediaKind.dash,
       'file' => MediaKind.file,
       _ =>
-        lower.contains('.m3u8')
+        lower.endsWith('.m3u8')
             ? MediaKind.hls
-            : lower.contains('.mpd')
+            : lower.endsWith('.mpd')
             ? MediaKind.dash
             : MediaKind.file,
     };
@@ -1130,9 +1129,9 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
   }
 
   /// 재생/다운로드 요청에 붙일 헤더 — 사이트에서 재생할 때와 최대한 같게.
-  ///  1) Windows: 웹뷰가 실제로 보낸 요청 헤더(쿠키 포함)를 그대로 재사용
-  ///  2) Android: 네이티브 요청 헤더 + 웹뷰 UA·쿠키
-  ///  3) 네이티브 수집 불가 시: fetch/XHR 헤더 + 문서(iframe) 기준 대체값
+  /// 전체 전송 헤더는 그대로 보존하고, 부분 수집이면 OS 구분 없이
+  /// 실제 웹뷰의 UA·쿠키를 보완한다. 문서(iframe) 기준 대체값은
+  /// 네이티브 요청 헤더가 없는 경우에만 사용한다.
   Future<void> _playDetectedMedia(DetectedMedia media) async {
     if (_preparingDownload) return;
     setState(() => _preparingDownload = true);
@@ -1165,23 +1164,23 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
   }
 
   Future<Map<String, String>> _headersFor(DetectedMedia m) async {
-    final captured = _capturedHeaders.forUrl(m.url);
-    final h = BrowserRequestHeaders.replay(captured ?? const {});
+    final h = await _capturedHeaders.forReplay(
+      m.url,
+      userAgent: () async {
+        final value = await _web?.evaluateJavascript(source: 'navigator.userAgent');
+        return value is String ? value : null;
+      },
+      cookies: () async {
+        final cookies = await CookieManager.instance(webViewEnvironment: _env).getCookies(url: WebUri(m.url));
+        return cookies.isEmpty ? null : cookies.map((c) => '${c.name}=${c.value}').join('; ');
+      },
+    );
+    if (_capturedHeaders.hasComplete(m.url)) return h;
     final native = _capturedHeaders.hasNative(m.url);
-    // Windows captures browser-added headers too: do not invent absent headers.
-    if (Platform.isWindows && native) return h;
-    String? ua = h['User-Agent'];
-    if (ua == null) {
-      try {
-        final r = await _web?.evaluateJavascript(source: 'navigator.userAgent');
-        if (r is String && r.isNotEmpty) ua = r;
-      } catch (_) {}
-    }
     final referer = h['Referer'] ?? m.referer ?? m.pageUrl;
     final refUri = Uri.tryParse(referer);
     final target = Uri.tryParse(m.url);
     if (!native) h.putIfAbsent('Referer', () => referer);
-    if (ua != null) h.putIfAbsent('User-Agent', () => ua!);
     if (!native) {
       h.putIfAbsent('Accept', () => '*/*');
       h.putIfAbsent(
@@ -1201,14 +1200,6 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
             ? 'same-origin'
             : (target != null && _site(target.host) == _site(refUri.host) ? 'same-site' : 'cross-site'),
       );
-    }
-    if (!native && !h.containsKey('Cookie')) {
-      try {
-        final cookies = await CookieManager.instance(webViewEnvironment: _env).getCookies(url: WebUri(m.url));
-        if (cookies.isNotEmpty) {
-          h['Cookie'] = cookies.map((c) => '${c.name}=${c.value}').join('; ');
-        }
-      } catch (_) {}
     }
     return h;
   }
@@ -1323,14 +1314,13 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        if (Platform.isWindows || Platform.isAndroid)
-                          TextButton(
-                            onPressed: () {
-                              Navigator.pop(c);
-                              _showNetLog();
-                            },
-                            child: const Text('요청 기록'),
-                          ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pop(c);
+                            _showNetLog();
+                          },
+                          child: const Text('요청 기록'),
+                        ),
                         TextButton(
                           onPressed: () {
                             setState(() {
@@ -1591,7 +1581,7 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     useShouldOverrideUrlLoading: true,
                     supportMultipleWindows: true,
                     useOnLoadResource: true,
-                    useShouldInterceptRequest: Platform.isAndroid,
+                    useShouldInterceptRequest: true,
                     useHybridComposition: true,
                     mediaPlaybackRequiresUserGesture: false,
                     allowsInlineMediaPlayback: true,
@@ -1747,7 +1737,10 @@ class _WebBrowserPageState extends State<WebBrowserPage> {
                     if (!_isCurrentWeb(c)) return;
                     final u = r.url?.toString();
                     if (u != null &&
-                        RegExp(r'\.(m3u8|mpd|mp4|webm|mkv|mov|m4v)(\?|#|$)', caseSensitive: false).hasMatch(u)) {
+                        RegExp(
+                          r'\.(m3u8|mpd|mp4|webm|mkv|mov|m4v|flv)$',
+                          caseSensitive: false,
+                        ).hasMatch(Uri.tryParse(u)?.path ?? '')) {
                       _onMedia(u, _title);
                     }
                   },

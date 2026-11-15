@@ -793,7 +793,7 @@ class PlayerController extends ChangeNotifier {
       });
       resolved = item;
       final native = player.platform;
-      if (native is NativePlayer && NetworkService.supported) {
+      if (native is NativePlayer) {
         final uri = Uri.tryParse(item.uri);
         final useProxy = uri != null && (uri.scheme == 'http' || uri.scheme == 'https') && !localNetworkHost(uri.host);
         await native.setProperty(

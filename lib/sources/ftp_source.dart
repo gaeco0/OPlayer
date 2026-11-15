@@ -6,7 +6,7 @@ import 'package:ftpconnect/ftpconnect.dart';
 import 'package:path/path.dart' as p;
 
 import '../core/media_item.dart';
-import '../core/network/android_trust_store.dart';
+import '../core/network/system_trust_store.dart';
 import 'media_source.dart';
 import 'server_store.dart';
 
@@ -106,8 +106,8 @@ class FtpSource extends MediaSource {
 
     try {
       const timeout = Duration(seconds: 20);
-      final trust = AndroidTrustStore();
-      if (cfg.secure && Platform.isAndroid) await trust.refresh();
+      final trust = SystemTrustStore();
+      if (cfg.secure) await trust.refresh();
       control = cfg.secure
           ? await SecureSocket.connect(cfg.host, cfg.effectivePort, context: trust.context, timeout: timeout)
           : await Socket.connect(cfg.host, cfg.effectivePort, timeout: timeout);

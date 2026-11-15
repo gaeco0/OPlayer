@@ -4,6 +4,19 @@ import 'package:flutter/services.dart';
 
 /// Serializes service commands so an old progress update cannot restart a stopped service.
 class DownloadForeground {
+  static Future<DownloadForeground?> connect({
+    required void Function(String? reason) onPause,
+    required void Function() onOpen,
+    required void Function(Object error) onError,
+  }) async {
+    try {
+      final pending = await _channel.invokeMethod<bool>('consumeOpen') ?? false;
+      return DownloadForeground(onPause: onPause, onOpen: onOpen, onError: onError).._initialOpen = pending;
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
   DownloadForeground({required this.onPause, required this.onOpen, required this.onError}) {
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'pause') onPause(null);
@@ -18,11 +31,10 @@ class DownloadForeground {
   Future<void> _tail = Future.value();
   Timer? _timer;
   Map<String, Object?>? _pending;
+  bool? _initialOpen;
 
   Future<void> _send(String method, Map<String, Object?> state) {
-    final result = _tail.then(
-      (_) => _channel.invokeMethod<void>(method, state).timeout(const Duration(seconds: 10)),
-    );
+    final result = _tail.then((_) => _channel.invokeMethod<void>(method, state).timeout(const Duration(seconds: 10)));
     _tail = result.catchError((Object _) {});
     return result;
   }
@@ -51,5 +63,9 @@ class DownloadForeground {
   Future<void> finished({required String id, required String name, required bool success}) =>
       _send('finished', {'id': id, 'name': name, 'success': success});
 
-  Future<bool> consumeOpen() async => await _channel.invokeMethod<bool>('consumeOpen') ?? false;
+  Future<bool> consumeOpen() async {
+    final initial = _initialOpen;
+    _initialOpen = null;
+    return initial ?? await _channel.invokeMethod<bool>('consumeOpen') ?? false;
+  }
 }

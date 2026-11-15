@@ -84,7 +84,14 @@ void main() {
     final browser = _Browser((_, __, ___) async => throw const HandshakeException('CERTIFICATE_VERIFY_FAILED'));
     final client = BrowserDownloadClient(browser, native: MockClient((_) async => http.Response('', 403)));
     addTearDown(client.close);
-    await expectLater(client.send(http.Request('GET', uri)), throwsA(isA<HandshakeException>()));
+    await expectLater(
+      client.send(http.Request('GET', uri)),
+      throwsA(
+        isA<BrowserFallbackException>()
+            .having((error) => error.nativeFailure.toString(), 'native reason', contains('HTTP 403'))
+            .having((error) => error.browserFailure, 'browser reason', isA<HandshakeException>()),
+      ),
+    );
     expect(browser.calls, 1);
     await expectLater(client.send(http.Request('POST', uri)), throwsA(isA<http.ClientException>()));
     expect(browser.calls, 1);
@@ -137,5 +144,60 @@ void main() {
     addTearDown(client.close);
     await expectLater(client.get(uri), throwsA(isA<SocketException>()));
     expect(browser.calls, 0);
+  });
+
+  test('failed browser fallback preserves native TLS error and retries native HTTP next time', () async {
+    var nativeCalls = 0;
+    final tls = const HandshakeException('CERTIFICATE_VERIFY_FAILED');
+    final browser = _Browser((_, __, ___) async => throw StateError('브라우저 요청 실패: Failed to fetch'));
+    final client = BrowserDownloadClient(
+      browser,
+      native: MockClient((_) async {
+        if (++nativeCalls == 1) throw tls;
+        return http.Response('native recovered', 200);
+      }),
+    );
+    addTearDown(client.close);
+    await expectLater(
+      client.get(uri),
+      throwsA(
+        isA<BrowserFallbackException>()
+            .having((error) => error.nativeFailure, 'native reason', same(tls))
+            .having(
+              (error) => error.toString(),
+              'combined reason',
+              allOf(contains('CERTIFICATE_VERIFY_FAILED'), contains('Failed to fetch')),
+            ),
+      ),
+    );
+    expect(await client.read(uri), 'native recovered');
+    expect(nativeCalls, 2);
+    expect(browser.calls, 1);
+  });
+
+  test('failed browser response body also clears fallback routing for the next retry', () async {
+    var nativeCalls = 0;
+    final browser = _Browser(
+      (url, _, __) async =>
+          BrowserFetchResponse(200, {}, url, Stream.error(StateError('Browser media stream was lost'))),
+    );
+    final client = BrowserDownloadClient(
+      browser,
+      native: MockClient((_) async => http.Response('', ++nativeCalls == 1 ? 403 : 200)),
+    );
+    addTearDown(client.close);
+    await expectLater(
+      client.read(uri),
+      throwsA(
+        isA<BrowserFallbackException>().having(
+          (error) => error.nativeFailure.toString(),
+          'native reason',
+          contains('HTTP 403'),
+        ),
+      ),
+    );
+    expect(await client.read(uri), '');
+    expect(nativeCalls, 2);
+    expect(browser.calls, 1);
   });
 }

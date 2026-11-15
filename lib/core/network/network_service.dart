@@ -2,21 +2,20 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/widgets.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../settings.dart';
 import 'bye_dpi.dart';
 import 'doh_resolver.dart';
 import 'local_proxy.dart';
 import 'tunnel_socket.dart';
-import 'android_trust_store.dart';
+import 'system_trust_store.dart';
+import 'browser_proxy.dart';
 
 class NetworkService extends ChangeNotifier with WidgetsBindingObserver {
   NetworkService._();
   static final instance = NetworkService._();
-  static bool get supported => Platform.isAndroid || Platform.isWindows;
   final _engine = ByeDpi();
-  final _trust = AndroidTrustStore();
+  final _trust = SystemTrustStore();
   LocalProxy? _proxy;
   DohResolver? _resolver;
   String? error;
@@ -28,7 +27,7 @@ class NetworkService extends ChangeNotifier with WidgetsBindingObserver {
   String? get proxyUrl => port == null ? null : 'http://127.0.0.1:$port';
 
   Future<void> init() async {
-    if (!supported || _proxy != null) return;
+    if (_proxy != null) return;
     await _refreshTrust();
     final bootstrap = _bootstrapClient();
     _resolver = DohResolver(Uri.parse(AppSettings.instance.dohUrl), bootstrap);
@@ -60,8 +59,8 @@ class NetworkService extends ChangeNotifier with WidgetsBindingObserver {
       ? 'PROXY 127.0.0.1:$port'
       : 'DIRECT';
 
-  // Android supplies OS-approved CA anchors; other platforms use Dart's default
-  // platform trust store. Both paths keep certificate and hostname validation.
+  // Use native CA anchors when the bridge exists, otherwise runtime OS trust.
+  // Certificate and hostname verification stay enabled in both cases.
   HttpClient createHttpClient({bool browser = false}) =>
       HttpClient(context: _trust.context)..findProxy = (uri) => findProxy(uri, browser: browser);
 
@@ -74,7 +73,7 @@ class NetworkService extends ChangeNotifier with WidgetsBindingObserver {
     try {
       await _trust.refresh();
     } catch (e) {
-      error = 'Android 인증서 저장소 확인 실패: $e';
+      error = 'OS 인증서 저장소 확인 실패: $e';
       notifyListeners();
     } finally {
       if (!identical(before, _trust.context) && _resolver != null) {
@@ -125,28 +124,17 @@ class NetworkService extends ChangeNotifier with WidgetsBindingObserver {
     final oldDoh = _doh, oldBye = _bye;
     final oldUrl = _resolver!.endpoint;
     try {
-      if (Platform.isAndroid &&
-          (doh || bye) &&
-          !await WebViewFeature.isFeatureSupported(WebViewFeature.PROXY_OVERRIDE)) {
-        throw StateError('현재 Android System WebView는 앱 프록시를 지원하지 않습니다. WebView를 업데이트해 주세요.');
+      final proxyOverride = await browserProxyOverrideSupport();
+      if ((doh || bye) && proxyOverride == false) {
+        throw StateError('현재 브라우저 엔진은 앱 프록시를 지원하지 않습니다. WebView를 업데이트해 주세요.');
       }
       if (bye) await _engine.start();
       _doh = doh;
       _bye = bye;
       _resolver!.endpoint = Uri.parse(url.trim());
       _resolver!.clear();
-      if (Platform.isAndroid) {
-        if (enabled) {
-          await ProxyController.instance().setProxyOverride(
-            settings: ProxySettings(
-              proxyRules: [ProxyRule(url: proxyUrl!)],
-              bypassRules: const ['localhost', '127.0.0.1', '[::1]', '*.local', '*.lan', '*.home.arpa'],
-              bypassSimpleHostnames: true,
-            ),
-          );
-        } else if (oldDoh || oldBye) {
-          await ProxyController.instance().clearProxyOverride();
-        }
+      if (proxyOverride == true) {
+        await configureBrowserProxy(url: enabled ? proxyUrl : null, clear: oldDoh || oldBye);
       }
       if (!bye) await _engine.stop();
       _proxy!.closeConnections();

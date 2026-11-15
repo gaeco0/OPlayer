@@ -94,9 +94,7 @@ class _PlaybackSyncPageState extends State<PlaybackSyncPage> {
               title: Text(sync.email ?? '동기화 계정 연결'),
               subtitle: Text(sync.connected ? '계정 연결됨' : '연결하면 기존 기록과 앱 저장소의 기록을 병합합니다'),
               trailing: sync.connected ? null : const Icon(Icons.login),
-              onTap: !blocked && !sync.connected && sync.available && PlaybackSync.supported
-                  ? () => _run(sync.connect)
-                  : null,
+              onTap: !blocked && !sync.connected && sync.available ? () => _run(sync.connect) : null,
             ),
             SwitchListTile(
               title: const Text('자동 동기화'),

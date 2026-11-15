@@ -8,6 +8,7 @@ const script = dart.match(/const _snifferJs = r'''([\s\S]*?)''';/)[1];
 
 const messages = [];
 const listeners = {};
+let resources;
 const playlist = '#EXTM3U\n#EXT-X-KEY:METHOD=AES-128,URI="https://key.test/v/session?v=video&p=0&t=browser&e=100"\n#EXTINF:4,\nseg.ts\n';
 const media = () => messages.findLast(m => m[0] === 'oplayerMedia');
 class XHR {
@@ -19,6 +20,7 @@ class XHR {
 }
 const context = {
   Headers, URL, TextDecoder, Uint8Array, XMLHttpRequest: XHR,
+  PerformanceObserver: class { constructor(callback) { resources = callback; } observe() {} },
   document: {title: 'player', readyState: 'complete', querySelectorAll: () => [], addEventListener() {}},
   location: {href: 'https://player.test/embed'},
   setInterval() {}, addEventListener(name, fn) { (listeners[name] ||= []).push(fn); },
@@ -34,6 +36,14 @@ context.top = context;
 vm.runInNewContext(script, context);
 
 (async () => {
+  const before = messages.length;
+  resources({getEntries: () => [
+    {name: 'https://player.test/chaktt.php?url=https://cdn.test/movie.mp4'},
+    {name: 'https://player.test/embed#https://cdn.test/master.m3u8'},
+  ]});
+  assert.equal(messages.length, before, 'embedded media URLs must not turn a player document into a download');
+  resources({getEntries: () => [{name: 'https://cdn.test/movie.mp4?token=value'}]});
+  assert.equal(media()[1], 'https://cdn.test/movie.mp4?token=value');
   const url = 'https://cdn.test/master.m3u8';
   await context.fetch(new Request(url, {headers: {'Authorization': 'Bearer first'}}));
   assert.equal(media()[6].authorization, 'Bearer first');

@@ -34,7 +34,7 @@ class NetworkSettings extends StatelessWidget {
           }
         }
 
-        final available = NetworkService.supported && network.port != null && !network.busy;
+        final available = network.port != null && !network.busy;
         return Column(
           children: [
             const ListTile(

@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:oplayer/core/settings.dart';
 import 'package:oplayer/features/web/download_manager.dart';
+import 'package:oplayer/features/web/browser_download_transport.dart';
 import 'package:oplayer/features/web/hls.dart';
 import 'package:oplayer/features/web/request_headers.dart';
 import 'package:pointycastle/export.dart';
@@ -77,6 +78,94 @@ void main() {
       'X-Site-Signature': 'signed',
       'Sec-Ch-Ua': 'browser',
     });
+  });
+
+  test('partial Windows and Android captures supplement the same missing browser session headers', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final url = 'http://127.0.0.1:${server.port}/video.mp4';
+    server.listen((request) async {
+      final authorized =
+          request.headers.value('cookie') == 'session=browser' &&
+          request.headers.value('user-agent') == 'Actual WebView UA' &&
+          request.headers.value('authorization') == 'Bearer captured';
+      request.response.statusCode = authorized ? 200 : 403;
+      request.response.write(authorized ? 'authorized' : 'missing session headers');
+      await request.response.close();
+    });
+    try {
+      for (final windows in [false, true]) {
+        final h = BrowserRequestHeaders();
+        if (windows) {
+          h.request('1', url, {'Authorization': 'Bearer captured'});
+        } else {
+          h.capture(url, {'Authorization': 'Bearer captured'});
+        }
+        expect(h.hasNative(url), true);
+        expect(h.hasComplete(url), false);
+        final result = await h.forReplay(
+          url,
+          userAgent: () async => 'Actual WebView UA',
+          cookies: () async => 'session=browser',
+        );
+        expect(result, {
+          'Authorization': 'Bearer captured',
+          'User-Agent': 'Actual WebView UA',
+          'Cookie': 'session=browser',
+        });
+        final client = BrowserDownloadClient(
+          BrowserDownloadTransport('https://page.test/watch'),
+          browserOpen: (_, __, ___) async => throw StateError('Native request must succeed without fallback'),
+        );
+        try {
+          expect(await client.read(Uri.parse(url), headers: result), 'authorized');
+        } finally {
+          client.close();
+        }
+      }
+    } finally {
+      await server.close(force: true);
+    }
+  });
+
+  test('complete wire headers preserve deliberately absent cookies and do not query a different session', () async {
+    const url = 'https://cdn.test/video.mp4';
+    final h = BrowserRequestHeaders();
+    h.request('1', url, {'User-Agent': 'Captured UA'});
+    h.extra('1', {'Authorization': 'Bearer wire'});
+    expect(h.hasComplete(url), true);
+    var queried = 0;
+    final result = await h.forReplay(
+      url,
+      userAgent: () async {
+        queried++;
+        return 'Must not query';
+      },
+      cookies: () async {
+        queried++;
+        return 'Must not query';
+      },
+    );
+    expect(result, {'User-Agent': 'Captured UA', 'Authorization': 'Bearer wire'});
+    expect(queried, 0);
+    h.request('2', url, {'Accept': '*/*'});
+    expect(h.hasComplete(url), false);
+    h.extra('1', {'Cookie': 'old=not-for-current-request'});
+    expect(h.hasComplete(url), false);
+  });
+
+  test('late complete headers override supplemented session values while reading browser state', () async {
+    const url = 'https://cdn.test/video.mp4';
+    final h = BrowserRequestHeaders();
+    h.request('1', url, {});
+    final result = await h.forReplay(
+      url,
+      userAgent: () async => 'Fallback UA',
+      cookies: () async {
+        h.extra('1', {'User-Agent': 'Wire UA', 'Authorization': 'Bearer wire'});
+        return 'fallback=must-not-be-sent';
+      },
+    );
+    expect(result, {'User-Agent': 'Wire UA', 'Authorization': 'Bearer wire'});
   });
 
   for (final useBrowserKey in [false, true]) {

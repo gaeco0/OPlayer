@@ -4,12 +4,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:oplayer/features/web/browser_download_transport.dart';
 import 'package:oplayer/features/web/browser_session.dart';
+import 'package:oplayer/features/web/browser_environment.dart';
+import 'package:oplayer/core/network/browser_proxy.dart';
 
 class _Engine extends InAppWebViewPlatform {
   final attachedIds = <dynamic>[];
   final requests = <Map<String, dynamic>>[];
   final cancelled = <String>[];
   int disposals = 0;
+  bool devTools = false, originReload = false;
+  final reloadCalls = <String>[];
   @override
   PlatformInAppWebViewController createPlatformInAppWebViewController(
     PlatformInAppWebViewControllerCreationParams params,
@@ -33,6 +37,22 @@ class _Controller extends PlatformInAppWebViewController {
   @override
   Future<void> disposeKeepAlive(InAppWebViewKeepAlive keepAlive) async => engine.disposals++;
   @override
+  Future<dynamic> callDevToolsProtocolMethod({required String methodName, Map<String, dynamic>? parameters}) async {
+    if (!engine.devTools) throw UnimplementedError();
+    engine.reloadCalls.add(methodName);
+  }
+
+  @override
+  Future<void> reloadFromOrigin() async {
+    if (!engine.originReload) throw UnimplementedError();
+    engine.reloadCalls.add('reloadFromOrigin');
+  }
+
+  @override
+  Future<void> clearAllCache({bool includeDiskFiles = true}) async => engine.reloadCalls.add('clearAllCache');
+  @override
+  Future<void> reload() async => engine.reloadCalls.add('reload');
+  @override
   Future<CallAsyncJavaScriptResult?> callAsyncJavaScript({
     required String functionBody,
     Map<String, dynamic> arguments = const {},
@@ -48,6 +68,28 @@ class _Controller extends PlatformInAppWebViewController {
 }
 
 void main() {
+  testWidgets('browser network adapters select supported APIs without OS names', (tester) async {
+    for (final capabilities in [(true, false), (false, true), (false, false)]) {
+      final engine = _Engine()
+        ..devTools = capabilities.$1
+        ..originReload = capabilities.$2;
+      InAppWebViewPlatform.instance = engine;
+      final controller = InAppWebViewController.fromPlatformCreationParams(
+        params: const PlatformInAppWebViewControllerCreationParams(id: 'reload'),
+      );
+      await reloadBrowserIgnoringCache(controller);
+      expect(
+        engine.reloadCalls,
+        capabilities.$1
+            ? ['Network.clearBrowserCache', 'Page.reload']
+            : capabilities.$2
+            ? ['reloadFromOrigin']
+            : ['clearAllCache', 'reload'],
+      );
+      expect(await browserProxyOverrideSupport(), isNull);
+    }
+  });
+
   testWidgets('queued media retains the original native view after closing its tab; last user disposes it', (
     tester,
   ) async {

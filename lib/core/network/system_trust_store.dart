@@ -2,10 +2,10 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/services.dart';
 
-/// Mirrors Android's app-approved CA anchors without weakening TLS validation.
+/// Uses an available native CA bridge, otherwise the runtime's OS trust store.
 /// Contexts are replaced on change so removed CAs do not accumulate over time.
-class AndroidTrustStore {
-  AndroidTrustStore({bool? enabled}) : enabled = enabled ?? Platform.isAndroid;
+class SystemTrustStore {
+  SystemTrustStore({this.enabled = true});
   final bool enabled;
   static const channel = MethodChannel('oplayer/network-trust');
   SecurityContext? context;
@@ -18,7 +18,7 @@ class AndroidTrustStore {
     if (!enabled) return false;
     try {
       final pem = await channel.invokeMethod<String>('certificates');
-      if (pem == null || pem.trim().isEmpty) throw StateError('Android CA 목록을 읽지 못했습니다');
+      if (pem == null || pem.trim().isEmpty) throw StateError('OS CA 목록을 읽지 못했습니다');
       if (pem == _pem) return false;
       // The native list contains both system and approved user roots. Do not
       // merge into defaultContext, which cannot remove subsequently deleted CAs.
@@ -27,6 +27,10 @@ class AndroidTrustStore {
       context = next;
       _pem = pem;
       return true;
+    } on MissingPluginException {
+      context = null;
+      _pem = null;
+      return false;
     } catch (_) {
       context = null;
       _pem = null;

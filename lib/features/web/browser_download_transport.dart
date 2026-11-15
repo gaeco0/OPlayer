@@ -18,7 +18,7 @@ class BrowserDownloadClient extends http.BaseClient {
   final http.Client? _nativeOverride;
   final HttpClient? _native;
   final Future<BrowserFetchResponse> Function(Uri, Map<String, String>, String)? browserOpen;
-  final _browserOrigins = <String>{};
+  final _browserOrigins = <String, Object>{};
   bool _closed = false;
   Future<void>? _closing;
 
@@ -28,21 +28,35 @@ class BrowserDownloadClient extends http.BaseClient {
     if (!['GET', 'HEAD'].contains(request.method) || !['http', 'https'].contains(request.url.scheme)) {
       throw http.ClientException('지원하지 않는 브라우저 미디어 요청입니다', request.url);
     }
-    if (!_browserOrigins.contains(request.url.origin)) {
+    final origin = request.url.origin;
+    var nativeFailure = _browserOrigins[origin];
+    if (nativeFailure == null) {
       try {
         final response = await (_nativeOverride?.send(request) ?? _sendNative(request));
         final challenge = response.statusCode == 202 && response.headers['x-amzn-waf-action'] == 'challenge';
         if (response.statusCode != 401 && response.statusCode != 403 && !challenge) return response;
+        nativeFailure = HttpException('HTTP ${response.statusCode}${challenge ? ' (WAF challenge)' : ''}');
         await response.stream.listen((_) {}).cancel();
-      } on TlsException {
+      } on TlsException catch (error) {
         // The browser must perform its own certificate validation; never bypass it.
+        nativeFailure = error;
       }
       if (_closed) throw http.ClientException('다운로드 연결이 종료됐습니다', request.url);
-      _browserOrigins.add(request.url.origin);
+      _browserOrigins[origin] = nativeFailure;
     }
-    final response = browserOpen == null
-        ? await browser.open(request.url, request.headers, method: request.method)
-        : await browserOpen!(request.url, request.headers, request.method);
+    Never failed(Object error, StackTrace stack) {
+      if (identical(_browserOrigins[origin], nativeFailure)) _browserOrigins.remove(origin);
+      Error.throwWithStackTrace(BrowserFallbackException(nativeFailure!, error), stack);
+    }
+
+    final BrowserFetchResponse response;
+    try {
+      response = browserOpen == null
+          ? await browser.open(request.url, request.headers, method: request.method)
+          : await browserOpen!(request.url, request.headers, request.method);
+    } catch (error, stack) {
+      failed(error, stack);
+    }
     if (_closed) {
       await response.body.listen((_) {}).cancel();
       throw http.ClientException('다운로드 연결이 종료됐습니다', request.url);
@@ -53,8 +67,18 @@ class BrowserDownloadClient extends http.BaseClient {
       headers.remove('content-encoding');
       headers.remove('content-length');
     }
+    Stream<List<int>> body() async* {
+      try {
+        await for (final chunk in response.body) {
+          yield chunk;
+        }
+      } catch (error, stack) {
+        failed(error, stack);
+      }
+    }
+
     return http.StreamedResponse(
-      response.body,
+      body(),
       response.status,
       headers: headers,
       contentLength: int.tryParse(headers['content-length'] ?? ''),
@@ -99,6 +123,16 @@ class BrowserDownloadClient extends http.BaseClient {
     _nativeOverride?.close();
     unawaited(closeBrowser().catchError((Object _) {}));
   }
+}
+
+/// Keep both failures: a WebView fetch error must not hide the native TLS/status error.
+class BrowserFallbackException implements Exception {
+  BrowserFallbackException(this.nativeFailure, this.browserFailure);
+  final Object nativeFailure;
+  final Object browserFailure;
+
+  @override
+  String toString() => '기본 HTTP 요청 실패: $nativeFailure → WebView 폴백 실패: $browserFailure';
 }
 
 /// Reuses the original browser; restores a browser when no live session remains.

@@ -20,6 +20,7 @@ import '../../sources/media_source.dart';
 import 'hls.dart';
 import 'browser_download_transport.dart';
 import 'download_foreground.dart';
+import 'download_location.dart';
 
 enum DownloadKind { direct, hls, resource }
 
@@ -253,8 +254,8 @@ class DownloadManager extends ChangeNotifier {
         tasks.add(DownloadTask.fromJson(jsonDecode(s) as Map<String, dynamic>));
       } catch (_) {}
     }
-    if (Platform.isAndroid && _foreground == null) {
-      _foreground = DownloadForeground(
+    if (_foreground == null) {
+      _foreground = await DownloadForeground.connect(
         onPause: (reason) => pauseAll(reason: reason),
         onOpen: openDownloads,
         onError: (_) {
@@ -263,8 +264,10 @@ class DownloadManager extends ChangeNotifier {
           }
         },
       );
-      if (await _foreground!.consumeOpen()) _openPending = true;
-      ResourceLocks.instance.addListener(() => _foreground!.schedule(downloadNotificationState(tasks)));
+      if (_foreground != null) {
+        if (await _foreground!.consumeOpen()) _openPending = true;
+        ResourceLocks.instance.addListener(() => _foreground!.schedule(downloadNotificationState(tasks)));
+      }
     }
   }
 
@@ -272,28 +275,7 @@ class DownloadManager extends ChangeNotifier {
 
   static Future<Directory> downloadDir() async {
     final custom = AppSettings.instance.downloadDir;
-    Directory d;
-    if (custom != null && custom.isNotEmpty) {
-      d = Directory(custom);
-    } else if (Platform.isAndroid) {
-      d = Directory('/storage/emulated/0/Download/OPlayer');
-      try {
-        await d.create(recursive: true);
-      } catch (_) {
-        d = Directory(p.join((await getExternalStorageDirectory())!.path, 'Download'));
-      }
-    } else if (Platform.isIOS) {
-      d = Directory(p.join((await getApplicationDocumentsDirectory()).path, 'Downloads'));
-    } else {
-      Directory? base;
-      try {
-        base = await getDownloadsDirectory();
-      } catch (_) {}
-      try {
-        base ??= await getApplicationDocumentsDirectory();
-      } catch (_) {}
-      d = Directory(p.join((base ?? Directory.systemTemp).path, 'OPlayer'));
-    }
+    final d = custom != null && custom.isNotEmpty ? Directory(custom) : await defaultDownloadDirectory();
     await d.create(recursive: true);
     return d;
   }
@@ -906,6 +888,14 @@ class DownloadManager extends ChangeNotifier {
       t.received = 0;
       _changed(immediate: true);
       return _hls(t, client);
+    }
+
+    final prefix = utf8.decode(first.take(512).toList(), allowMalformed: true).replaceFirst('\uFEFF', '').trimLeft();
+    if ((isVideo(t.fileName) || isAudio(t.fileName)) &&
+        (ct.contains('html') ||
+            RegExp(r'^<(?:!doctype\s+html|html\b|head\b|body\b)', caseSensitive: false).hasMatch(prefix))) {
+      await iter.cancel();
+      throw '미디어 대신 웹페이지(HTML)가 응답했습니다. 감지 목록에서 실제 영상 주소를 선택하거나 페이지에서 영상을 재생한 뒤 다시 시도해 주세요.';
     }
 
     t.total = len == null ? 0 : start + len;

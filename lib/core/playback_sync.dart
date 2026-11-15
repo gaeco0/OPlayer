@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
 import 'package:flutter/widgets.dart';
 import 'package:flutter/services.dart';
@@ -53,7 +52,6 @@ class PlaybackSync extends ChangeNotifier with WidgetsBindingObserver {
   String? error;
   DateTime? lastSync;
   bool get connected => _accountId != null;
-  static bool get supported => Platform.isAndroid || Platform.isWindows || Platform.isLinux || Platform.isMacOS;
   String get _connectionKey => 'pluginSyncConnection:$providerId';
   String get _stateKey => 'pluginSyncState:$providerId:$_accountId';
   String get _autoKey => 'pluginSyncAuto:$providerId:$_accountId';
@@ -97,11 +95,17 @@ class PlaybackSync extends ChangeNotifier with WidgetsBindingObserver {
     _initialized = true;
     _prefs = await SharedPreferences.getInstance();
     await SyncReferences.instance.init();
-    _device = Platform.isAndroid
-        ? (await const MethodChannel('oplayer/google-drive').invokeMethod<String>('syncDeviceId'))!
-        : _prefs.getString('sync_device') ??
-              _prefs.getString('google_sync_device') ??
-              base64Url.encode(List.generate(16, (_) => Random.secure().nextInt(256))).replaceAll('=', '');
+    String? nativeDevice;
+    try {
+      nativeDevice = await const MethodChannel('oplayer/google-drive').invokeMethod<String>('syncDeviceId');
+    } on MissingPluginException {
+      // The same persisted ID policy applies when no native device-ID bridge exists.
+    }
+    _device =
+        nativeDevice ??
+        _prefs.getString('sync_device') ??
+        _prefs.getString('google_sync_device') ??
+        base64Url.encode(List.generate(16, (_) => Random.secure().nextInt(256))).replaceAll('=', '');
     await _prefs.setString('sync_device', _device);
     providerId = _prefs.getString('sync_provider');
     final saved = _prefs.getString(_connectionKey);
@@ -269,8 +273,7 @@ class PlaybackSync extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void _schedule() {
-    if (!supported ||
-        !connected ||
+    if (!connected ||
         !available ||
         !automatic ||
         !_foreground ||

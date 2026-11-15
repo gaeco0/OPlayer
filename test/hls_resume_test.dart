@@ -14,7 +14,9 @@ import 'package:oplayer/sources/server_store.dart';
 Future<void> settled(DownloadTask task) async {
   final deadline = DateTime.now().add(const Duration(seconds: 20));
   while ([DownloadStatus.queued, DownloadStatus.running].contains(task.status)) {
-    if (DateTime.now().isAfter(deadline)) fail('Download timed out: ${task.error}');
+    if (DateTime.now().isAfter(deadline)) {
+      fail('Download timed out: ${task.error}');
+    }
     await Future<void>.delayed(const Duration(milliseconds: 10));
   }
   await Future<void>.delayed(const Duration(milliseconds: 30));
@@ -121,6 +123,33 @@ void main() {
     expect(task.fileName, 'movie.mkv');
     expect(await File(task.savePath!).readAsBytes(), [2, 1, 2]);
     expect(requests.where((r) => r.startsWith('/init.mp4:')), hasLength(1));
+  });
+
+  test('HTML player responses cannot be saved or converted as video', () async {
+    final html = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    html.listen((request) async {
+      request.response.headers.contentType = request.uri.path == '/typed' ? ContentType.html : ContentType.binary;
+      request.response.write('\n\n<!DOCTYPE html><html><title>player</title></html>');
+      await request.response.close();
+    });
+    try {
+      for (final path in ['typed', 'sniffed']) {
+        final task = manager.add(
+          url: 'http://127.0.0.1:${html.port}/$path',
+          title: 'Player',
+          fileName: '$path.mkv',
+          outputQuality: OutputQuality.mkv,
+        );
+        await settled(task);
+        expect(task.status, DownloadStatus.failed);
+        expect(task.error, contains('HTML'));
+        expect(task.received, 0);
+        expect(task.localDone, isFalse);
+        expect(await File(task.savePath!).exists(), isFalse);
+      }
+    } finally {
+      await html.close(force: true);
+    }
   });
 
   test('fresh cookies resume the same segments after task persistence without fetching completed ones', () async {

@@ -4,10 +4,34 @@ class BrowserRequestHeaders {
   final _requests = <String, List<Map<String, String>>>{};
   final _extras = <String, List<Map<String, String>>>{};
   final _native = <String>{};
+  // Metadata belongs to a specific request snapshot, not its URL: late
+  // ExtraInfo for an older request must not complete a newer one at the same URL.
+  final _complete = Expando<bool>();
 
   Map<String, String>? forUrl(String url) => _urls[url];
   bool hasNative(String url) => _native.contains(url);
+  bool hasComplete(String url) => _urls[url] != null && _complete[_urls[url]!] == true;
   Map<String, Map<String, String>> snapshot() => {for (final e in _urls.entries) e.key: Map.of(e.value)};
+
+  /// Every engine uses this policy. Preserve complete wire headers exactly;
+  /// supplement only missing session headers when capture is still partial.
+  Future<Map<String, String>> forReplay(
+    String url, {
+    required Future<String?> Function() userAgent,
+    required Future<String?> Function() cookies,
+  }) async {
+    final headers = replay(_urls[url] ?? const {});
+    if (hasComplete(url)) return headers;
+    for (final entry in {'User-Agent': userAgent, 'Cookie': cookies}.entries) {
+      if (headers.containsKey(entry.key)) continue;
+      try {
+        final value = await entry.value();
+        if (value != null && value.isNotEmpty) headers[entry.key] = value;
+      } catch (_) {} // A missing engine capability must not discard captured headers.
+    }
+    final latest = replay(_urls[url] ?? const {});
+    return hasComplete(url) ? latest : {...headers, ...latest};
+  }
 
   void clear() {
     _urls.clear();
@@ -32,6 +56,7 @@ class BrowserRequestHeaders {
     final extras = _extras[id];
     if (extras != null && extras.length >= requests.length) {
       h.addAll(extras[requests.length - 1]);
+      _complete[h] = true;
     }
     _urls[url] = h;
     _native.add(url);
@@ -44,6 +69,7 @@ class BrowserRequestHeaders {
     final requests = _requests[id];
     if (requests != null && requests.length >= extras.length) {
       requests[extras.length - 1].addAll(extras.last);
+      _complete[requests[extras.length - 1]] = true;
     }
     _trim();
   }

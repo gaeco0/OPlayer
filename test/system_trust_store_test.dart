@@ -1,12 +1,13 @@
 import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:oplayer/core/network/android_trust_store.dart';
+import 'package:oplayer/core/network/system_trust_store.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final messenger = TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-  tearDown(() => messenger.setMockMethodCallHandler(AndroidTrustStore.channel, null));
-  test('Android anchors enable valid TLS while untrusted, wrong-host and expired certificates still fail', () async {
+  tearDown(() => messenger.setMockMethodCallHandler(SystemTrustStore.channel, null));
+  test('native OS anchors enable valid TLS while untrusted, wrong-host and expired certificates still fail', () async {
     HttpOverrides.global = null;
     final dir = await Directory.systemTemp.createTemp('oplayer_tls_');
     addTearDown(() async {
@@ -116,11 +117,11 @@ commonName = supplied
     ]);
     final ca = File('${dir.path}/ca.pem').readAsStringSync();
     var current = ca;
-    messenger.setMockMethodCallHandler(AndroidTrustStore.channel, (call) async {
+    messenger.setMockMethodCallHandler(SystemTrustStore.channel, (call) async {
       expect(call.method, 'certificates');
       return current;
     });
-    final trust = AndroidTrustStore(enabled: true);
+    final trust = SystemTrustStore(enabled: true);
     expect(await trust.refresh(), true);
     final first = trust.context;
     expect(await trust.refresh(), false);
@@ -164,10 +165,21 @@ commonName = supplied
     await expectLater(trust.refresh(), throwsA(anything));
     expect(trust.context, null);
   });
-  test('non-Android platforms keep their default trust store and do not call the bridge', () async {
-    messenger.setMockMethodCallHandler(AndroidTrustStore.channel, (_) async => fail('Unexpected certificate bridge'));
-    final trust = AndroidTrustStore(enabled: false);
+  test('an explicitly disabled bridge preserves runtime trust without a native call', () async {
+    messenger.setMockMethodCallHandler(SystemTrustStore.channel, (_) async => fail('Unexpected certificate bridge'));
+    final trust = SystemTrustStore(enabled: false);
     expect(await trust.refresh(), false);
     expect(trust.context, null);
+  });
+  test('missing native CA capability uses runtime trust without an OS check', () async {
+    var calls = 0;
+    messenger.setMockMethodCallHandler(SystemTrustStore.channel, (_) async {
+      calls++;
+      throw MissingPluginException('No native CA adapter');
+    });
+    final trust = SystemTrustStore();
+    expect(await trust.refresh(), false);
+    expect(trust.context, isNull);
+    expect(calls, 1);
   });
 }

@@ -21,6 +21,21 @@ void main() {
     messenger.setMockMethodCallHandler(privacyChannel, null);
   });
 
+  test('foreground service selection follows native capability rather than the host OS', () async {
+    expect(await DownloadForeground.connect(onPause: (_) {}, onOpen: () {}, onError: (_) {}), isNull);
+    var queries = 0;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      expect(call.method, 'consumeOpen');
+      return ++queries == 1;
+    });
+    final bridge = await DownloadForeground.connect(onPause: (_) {}, onOpen: () {}, onError: (_) {});
+    expect(bridge, isNotNull);
+    expect(await bridge!.consumeOpen(), true);
+    expect(queries, 1); // Capability detection must not consume the pending action twice.
+    expect(await bridge.consumeOpen(), false);
+    expect(queries, 2);
+  });
+
   test('active and queued downloads continue behind the app lock in background', () async {
     final previousOverrides = HttpOverrides.current;
     HttpOverrides.global = null;

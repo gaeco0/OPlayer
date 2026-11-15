@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
@@ -37,16 +36,15 @@ String sitePluginScript(OPlugin p) => !p.site || p.compatibilityIssue() != null 
 })();''';
 
 List<ContentBlocker> pluginContentBlockers() => [
-  if (!Platform.isAndroid && !Platform.isWindows)
-    for (final p in PluginStore.instance.enabled.where((p) => p.site))
-      for (final rule in (p.manifest['blockRules'] as List? ?? []).cast<Map>())
-        ContentBlocker(
-          trigger: ContentBlockerTrigger(
-            urlFilter: rule['urlFilter'] as String,
-            ifTopUrl: [for (final site in p.sites) siteUrlPattern(site)],
-          ),
-          action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+  for (final p in PluginStore.instance.enabled.where((p) => p.site))
+    for (final rule in (p.manifest['blockRules'] as List? ?? []).cast<Map>())
+      ContentBlocker(
+        trigger: ContentBlockerTrigger(
+          urlFilter: rule['urlFilter'] as String,
+          ifTopUrl: [for (final site in p.sites) siteUrlPattern(site)],
         ),
+        action: ContentBlockerAction(type: ContentBlockerActionType.BLOCK),
+      ),
 ];
 
 bool blockedBySitePlugin(String pageUrl, String requestUrl) => PluginStore.instance.enabled
