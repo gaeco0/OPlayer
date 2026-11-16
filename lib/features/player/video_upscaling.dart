@@ -127,6 +127,17 @@ class UpscaleShader {
     return result;
   }
 
+  Future<void> reapply() {
+    final result = _tail.then((_) async {
+      final path = _active;
+      if (path == null) return;
+      await command(['change-list', 'glsl-shaders', 'remove', path]);
+      await command(['change-list', 'glsl-shaders', 'append', path]);
+    });
+    _tail = result.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    return result;
+  }
+
   Future<void> _apply(String? path) async {
     if (_active == path) return;
     final previous = _active;

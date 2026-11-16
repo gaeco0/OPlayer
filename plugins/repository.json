@@ -166,26 +166,33 @@
     },
     {
       "id": "player.video-presets",
-      "name": "영상 색상 프리셋",
-      "version": "1.0.1",
+      "name": "동영상 필터",
+      "version": "1.1.0",
       "kind": "player",
       "capabilities": [
         "videoFilter"
       ],
-      "pluginApi": 4,
+      "pluginApi": 5,
       "author": "OPlayer",
       "features": [
-        "영상 필터"
+        "복수 필터",
+        "부드럽게",
+        "선명하게",
+        "색온도",
+        "흑백"
       ],
-      "description": "영상 색상·회전·반전 설정 프리셋",
+      "description": "부드럽게·선명하게·색온도·흑백을 동시에 적용합니다. 설정과 처리 프로그램을 확장앱이 제공합니다.",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/player.video-presets.js",
-      "sha256": "36feb977f4b9ad7446858b5ebcc065acf53ea3ad9031b33663fce791d4c0c1bd",
+      "sha256": "28a18f2f486a722cad30babf91aab841dfff8f76e4fd8589a52502ce5a52a843",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
       "platforms": [
         "android",
         "windows",
         "linux",
         "macos"
+      ],
+      "requiresHost": [
+        "pixelPrograms"
       ]
     },
     {

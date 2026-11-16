@@ -1,3 +1,4 @@
+import '../frame_pipeline.dart';
 import 'package:flutter/material.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import '../player_controller.dart';
@@ -41,7 +42,14 @@ class PlayerVideo extends StatelessWidget {
                 ? const SizedBox.shrink()
                 : ColoredBox(
                     color: Colors.black,
-                    child: RawImage(image: image, fit: fit, filterQuality: FilterQuality.medium),
+                    child: controller.frameEffects.programs.isEmpty
+                        ? RawImage(image: image, fit: fit, filterQuality: FilterQuality.medium)
+                        : FramePipelineView(
+                            image: image,
+                            programs: controller.frameEffects.programs,
+                            fit: fit,
+                            onError: controller.frameProcessingIssue,
+                          ),
                   ),
           ),
           ValueListenableBuilder(
@@ -50,7 +58,14 @@ class PlayerVideo extends StatelessWidget {
                 ? const SizedBox.shrink()
                 : ColoredBox(
                     color: Colors.black,
-                    child: RawImage(image: image, fit: fit, filterQuality: FilterQuality.medium),
+                    child: controller.frameEffects.programs.isEmpty
+                        ? RawImage(image: image, fit: fit, filterQuality: FilterQuality.medium)
+                        : FramePipelineView(
+                            image: image,
+                            programs: controller.frameEffects.programs,
+                            fit: fit,
+                            onError: controller.frameProcessingIssue,
+                          ),
                   ),
           ),
           if (subtitleViewConfiguration.visible)

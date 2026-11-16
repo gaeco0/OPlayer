@@ -489,29 +489,85 @@ class _AspectPanel extends StatelessWidget {
       _QualityControls(c: c),
       const _Section('화면 비율'),
       _Radios<AspectMode>(values: AspectMode.values, selected: c.aspect, label: (m) => m.label, onChanged: c.setAspect),
-      const _Section('영상 필터 확장앱'),
+      const _Section('프레임 처리 확장앱'),
       ListenableBuilder(
         listenable: PluginStore.instance,
-        builder: (context, _) => Column(
-          children: [
-            if (c.videoFilterBusy) const LinearProgressIndicator(),
-            for (final plugin in PluginStore.instance.enabled.where(
-              (p) => p.kind == 'player' && p.supports('videoFilter'),
-            ))
-              ListTile(
-                title: Text(plugin.name, style: _white),
-                leading: const Icon(Icons.filter, color: Colors.white70),
-                enabled: !c.videoFilterBusy,
-                onTap: () async {
-                  try {
-                    await c.applyVideoFilter(plugin);
-                  } catch (e) {
-                    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
-                  }
-                },
-              ),
-          ],
-        ),
+        builder: (context, _) {
+          final busy = c.videoFilterBusy || c.frameEffects.busy;
+          Future<void> act(Future<void> Function() action) async {
+            try {
+              await action();
+            } catch (e) {
+              if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+            }
+          }
+
+          return Column(
+            children: [
+              if (busy) const LinearProgressIndicator(),
+              if (c.frameEffects.ids.isNotEmpty) ...[
+                ListTile(
+                  title: const Text('모든 필터 해제', style: _white),
+                  enabled: !busy,
+                  onTap: () => act(c.clearVideoFilters),
+                ),
+                for (final id in c.frameEffects.ids)
+                  ListTile(
+                    title: Text(PluginStore.instance.installed[id]?.name ?? id, style: _white),
+                    subtitle: Text('처리 순서 ${c.frameEffects.ids.indexOf(id) + 1}', style: _label),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          tooltip: '앞으로',
+                          icon: const Icon(Icons.arrow_upward, color: Colors.white70),
+                          onPressed: busy || id == c.frameEffects.ids.first
+                              ? null
+                              : () => act(() => c.moveVideoFilter(id, -1)),
+                        ),
+                        IconButton(
+                          tooltip: '뒤로',
+                          icon: const Icon(Icons.arrow_downward, color: Colors.white70),
+                          onPressed: busy || id == c.frameEffects.ids.last
+                              ? null
+                              : () => act(() => c.moveVideoFilter(id, 1)),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+              for (final plugin in PluginStore.instance.enabled.where(
+                (p) => p.kind == 'player' && p.supports('videoFilter'),
+              ))
+                ListTile(
+                  title: Text(plugin.name, style: _white),
+                  leading: Icon(
+                    c.frameEffects.contains(plugin.id) ? Icons.check_box : Icons.check_box_outline_blank,
+                    color: Colors.white70,
+                  ),
+                  enabled: !busy,
+                  onTap: () => act(
+                    () => c.frameEffects.contains(plugin.id)
+                        ? c.removeVideoFilter(plugin.id)
+                        : c.applyVideoFilter(plugin),
+                  ),
+                  trailing: IconButton(
+                    tooltip: '확장앱 설정',
+                    icon: const Icon(Icons.tune, color: Colors.white70),
+                    onPressed: busy
+                        ? null
+                        : () async {
+                            if (await showPluginSettingsDialog(context, plugin) &&
+                                context.mounted &&
+                                !c.frameEffects.contains(plugin.id)) {
+                              await act(() => c.applyVideoFilter(PluginStore.instance.require(plugin.id)));
+                            }
+                          },
+                  ),
+                ),
+            ],
+          );
+        },
       ),
       const _Section('확대'),
       _Stepper(

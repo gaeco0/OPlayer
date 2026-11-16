@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'package:oplayer/core/plugins/plugin.dart';
+import 'package:oplayer/core/plugins/plugin_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:media_kit/media_kit.dart';
@@ -18,6 +21,53 @@ class _Engine extends PlatformPlayer {
 }
 
 void main() {
+  testWidgets('playback exposes extension-owned independent multi-filter options', (t) async {
+    SharedPreferences.setMockInitialValues({});
+    await AppSettings.instance.init();
+    final plugin = OPlugin.parse(File('plugins/player.video-presets.js').readAsStringSync());
+    final store = PluginStore.instance;
+    store.installed[plugin.id] = plugin;
+    final c = PlayerController(
+      playlist: const [MediaItem(key: 'filter-ui', uri: 'test', title: 'Test')],
+      startIndex: 0,
+      playbackEngine: Player(platformPlayer: _Engine()),
+    );
+    addTearDown(() {
+      store.installed.remove(plugin.id);
+      c.dispose();
+    });
+    await t.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Stack(
+            children: [SidePanel(kind: PanelKind.aspect, c: c, onClose: () {}, onToast: (_) {})],
+          ),
+        ),
+      ),
+    );
+    final tile = find.widgetWithText(ListTile, plugin.name);
+    await t.scrollUntilVisible(tile, 200, scrollable: find.byType(Scrollable).first);
+    await t.pumpAndSettle();
+    await t.tap(find.descendant(of: tile, matching: find.byIcon(Icons.tune)));
+    await t.pumpAndSettle();
+    for (final label in ['부드럽게', '선명하게', '색온도', '흑백']) {
+      expect(find.text(label), findsOneWidget);
+    }
+    expect(find.text('끄기'), findsNWidgets(2));
+    await t.tap(find.text('끄기').first);
+    await t.pumpAndSettle();
+    await t.tap(find.text('보통').last);
+    await t.pumpAndSettle();
+    await t.tap(find.text('끄기'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('강하게').last);
+    await t.pumpAndSettle();
+    expect(find.text('보통'), findsOneWidget);
+    expect(find.text('강하게'), findsOneWidget);
+    await t.tap(find.text('취소'));
+    await t.pumpAndSettle();
+    expect(t.takeException(), isNull);
+  });
   testWidgets('AI overlay toggle stays visible at compact width and moves to more in portrait', (t) async {
     SharedPreferences.setMockInitialValues({'settings_v1': '{}'});
     await AppSettings.instance.init();

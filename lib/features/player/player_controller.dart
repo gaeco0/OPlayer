@@ -33,6 +33,7 @@ import 'frame_interpolation.dart';
 import 'ai_interpolation.dart';
 import 'ai_upscaling.dart';
 import 'video_upscaling.dart';
+import 'frame_effects.dart';
 import 'package:flutter/painting.dart';
 
 /// 화면 비율 모드 (nPlayer: 화면 맞춤 → 가득 채우기 → 늘이기 → 16:9 → 4:3 → 원본)
@@ -102,6 +103,18 @@ class PlayerController extends ChangeNotifier {
     Player? playbackEngine,
   }) : _index = startIndex,
        player = playbackEngine ?? Player(configuration: const PlayerConfiguration(title: 'OPlayer')) {
+    frameEffects = FrameEffects(
+      command: (args) async {
+        final native = player.platform;
+        if (native is! NativePlayer) throw UnsupportedError('프레임 처리를 지원하지 않는 재생 엔진');
+        await native.command(args);
+      },
+      changed: () {
+        if (_disposed) return;
+        if (frameEffects.issue != null) warning = frameEffects.issue;
+        notifyListeners();
+      },
+    );
     final st = AppSettings.instance;
     baseRate = st.defaultSpeed;
     aspect = switch (st.defaultAspect) {
@@ -370,6 +383,7 @@ class PlayerController extends ChangeNotifier {
       }
       if (aiUpscaling.applied) shader = null;
       await _upscaleShader.apply(shader);
+      await frameEffects.reapply();
       if (_disposed || request != _upscalingRequest) return;
       await _upscaler.apply(enabled && !aiUpscaling.applied, aiUpscaling.applied ? null : target);
       if (_disposed || request != _upscalingRequest) return;
@@ -384,6 +398,7 @@ class PlayerController extends ChangeNotifier {
         upscalingIssue = '$e';
         try {
           await _upscaleShader.apply(null);
+          await frameEffects.reapply();
           await _upscaler.apply(enabled, target);
           if (!_disposed && request == _upscalingRequest) {
             upscalingApplied = enabled;
@@ -677,6 +692,27 @@ class PlayerController extends ChangeNotifier {
   String? onlineSubtitleError;
   final onlineSubtitles = SubtitlePlugins(PluginStore.instance);
   bool videoFilterBusy = false;
+  late final FrameEffects frameEffects;
+  Future<void> removeVideoFilter(String id) async {
+    await frameEffects.remove(id);
+    await _savePlaybackSettings();
+  }
+
+  Future<void> clearVideoFilters() async {
+    await frameEffects.clear();
+    await _savePlaybackSettings();
+  }
+
+  Future<void> moveVideoFilter(String id, int delta) async {
+    await frameEffects.move(id, delta);
+    await _savePlaybackSettings();
+  }
+
+  void frameProcessingIssue(String message) {
+    if (_disposed) return;
+    warning = message;
+    notifyListeners();
+  }
 
   Future<void> applyVideoFilter(OPlugin plugin) async {
     if (videoFilterBusy || _disposed) return;
@@ -686,6 +722,10 @@ class PlayerController extends ChangeNotifier {
     videoFilterBusy = true;
     notifyListeners();
     try {
+      if (await frameEffects.activate(plugin)) {
+        await _savePlaybackSettings();
+        return;
+      }
       final values = await videoFilterValues(plugin, store.publicSettings(plugin));
       if (_disposed || generation != _openGeneration) return;
       if (!identical(store.require(plugin.id), plugin)) throw StateError('확장앱이 변경되었습니다. 다시 선택하세요');
@@ -1507,6 +1547,7 @@ class PlayerController extends ChangeNotifier {
   }
 
   Future<void> _savePlaybackSettings() => ResumeStore.instance.savePlaybackSettings(current.key, {
+    'frameEffects': frameEffects.ids,
     'boost': audioBoost,
     'audioDelay': audioDelay.inMilliseconds,
     'eq': equalizer,
@@ -1551,6 +1592,14 @@ class PlayerController extends ChangeNotifier {
     await _nativeProperty('brightness', '$videoBrightness');
     await _nativeProperty('contrast', '$videoContrast');
     await _nativeProperty('saturation', '$videoSaturation');
+    final effects = values['frameEffects'];
+    if (effects is List) {
+      try {
+        await frameEffects.restore(effects.whereType<String>().toList());
+      } catch (e) {
+        warning = '프레임 처리 복원 실패: $e';
+      }
+    }
   }
 
   @override
@@ -1580,6 +1629,7 @@ class PlayerController extends ChangeNotifier {
     }
     unawaited(
       Future.wait([
+        frameEffects.dispose(),
         aiInterpolation.dispose(),
         aiUpscaling.dispose(),
       ]).then((_) => player.dispose()).whenComplete(_clearOnlineSubtitleFiles),
