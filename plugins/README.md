@@ -643,3 +643,60 @@ Windows CRLF 원본의 해시를 등록하면 GitHub가 제공하는 LF 파일�
 호스트는 `oplayer-sync-v1-<device>.json` 이름으로 기기별 문서를 기록하며 같은 이름의 기존 ID를 `syncWrite`에 전달한다. 확장앱은 목록 페이지 순회·원격 폴더 생성·다운로드 리다이렉트·생성/수정을 구현한다. 읽기 후 호스트가 형식·참조·총 크기를 검증하고 병합한다. 비밀번호·토큰·원본 미디어 파일은 동기화 문서에 포함하지 않는다. 삭제 기록(tombstone)을 보존해야 오프라인 기기의 오래된 기록이 다시 살아나지 않는다.
 
 공식 예제: `sync.gdrive.js`(Drive 앱 데이터), `sync.onedrive.js`(앱 전용 폴더), `sync.box.js`(전용 폴더). 저장 방식 변경과 제공자 추가는 이 공통 계약을 따르는 JS 확장앱만 배포하면 된다. 새로운 네이티브 SDK 기능을 요구할 때는 별도 호스트 업데이트가 필요하다.
+
+### Player-owned options (API 5, `playerOptions`)
+
+A player extension declares `settings` in its manifest. The shared settings UI renders
+these fields without a player-specific form. `validateSettings(context)` validates
+combinations using `OPlayer.config`; it returns an error string or `null`. The
+context includes `platform` and, when opened from the model screen, `model`.
+
+Declare `requiresHost: ["playerOptions"]` when using the optional
+`playbackOptions(context)` hook. Upscaling providers return
+`{ai: boolean, npu: boolean, resolution: integer, issue: string | null}`.
+`resolution: 0` means viewport sizing. The context supplies the selected model,
+source/target dimensions, playback rate, visibility, subtitle and casting state.
+The extension owns accelerator preference, model restrictions and conflict policy;
+the host applies validated output to its existing rendering/acceleration primitives
+and retains memory, shader and native-engine safety limits. Settings changes notify
+the active player and are read again without restarting playback.
+
+The official upscale provider defines its own accelerator, target resolution and
+fallback options. Adding fields or changing validation/policy requires only an
+extension update once this host contract is installed. Existing providers without
+the hook continue to supply GPU shaders. New native inference engines still require
+host support.
+
+
+### Extension ownership and frame processing
+
+Each extension owns its settings/defaults and validation, execution code for its
+player/browser/resource capabilities, description and version. Browser `page` and
+`resolveDownload` code and resource authentication/list/stream/control hooks are
+executed by the shared host; provider-specific rules are not added to app screens.
+
+API 5 providers can require `frameProcessing` and implement `frameProcessor(input)`.
+It returns a processing program with `engine`, `inputFrames` and `outputFrames`.
+The upscale provider supplies the actual `mpv-glsl` frame shader and CNN weights in
+that program. Interpolation supplies a two-input RIFE program and model graph/weight
+artifacts with names, HTTPS URLs and SHA-256 digests. The host verifies/caches those
+files for the provider and passes them to the common inference backend. Uninstalling
+the provider removes its frame-model cache after outstanding preparations finish.
+The app no longer extracts a fixed RIFE model from its own asset bundle.
+
+Shaders/inference operate on native frame buffers; the output frame is returned to
+the player display/sync queue. A JSON callback is not used to copy full pixel arrays
+on every frame. This is a program/model execution contract, not merely a catalogue
+of model names. New settings, validation and processing programs for existing engine
+primitives ship with the extension. New native engine primitives require host support.
+
+
+### Extension update notifications
+
+The app checks configured repositories at startup and on foreground return, with a
+one-hour throttle. It notifies about compatible newer versions of installed
+extensions. The toast opens an update-only extension list; installation still uses
+the normal review/confirmation screen. Each extension/version is announced once
+per app session. Offline failures preserve previously discovered updates and never
+interrupt playback. Provider-specific OAuth redirects come from the extension
+manifest; old registration values are read only through the legacy migration path.
