@@ -700,3 +700,62 @@ the normal review/confirmation screen. Each extension/version is announced once
 per app session. Offline failures preserve previously discovered updates and never
 interrupt playback. Provider-specific OAuth redirects come from the extension
 manifest; old registration values are read only through the legacy migration path.
+
+### Common extension frame pipeline (`pixelPrograms`)
+
+This host feature is independent of upscaling/interpolation model selection. A
+`player` extension with `videoFilter` may require `pixelPrograms` and implement
+`frameProcessor({operation: "videoFilter"})`. Return:
+
+```js
+{engine:"pixel-program-v1", inputFrames:1, outputFrames:1, passes:[
+  [[8,0,0,1], [1,1,1,1], [32,1,0,0]] // r0 = white - source: invert
+]}
+```
+
+The extension owns its settings schema, validation, executable instruction stream,
+description and version. The host knows no smoothing, sharpening, temperature or
+other effect names. New effects built from this instruction set ship as extension
+updates alone after the common executor is installed. New execution engines or
+instruction-set versions still need corresponding host support.
+
+Each instruction is `[opcode * 8 + destination, a, b, c]`, using eight RGB vector
+registers. Register 0 is the output. Every read must follow initialization. Each
+pass accepts at most 64 instructions; the combined active chain at most 8 passes.
+The same code is compiled to mpv GLSL for decoded video and executed by a fixed
+Flutter GPU interpreter on NPU/upscaler/interpolator output images. No JavaScript
+pixel copies, arbitrary native property names, executable downloads or OS-specific
+filter implementations are involved. Inputs/outputs remain the same dimensions.
+
+| Opcode | Operation | Operands |
+| --- | --- | --- |
+| 0 | Constant RGB | r, g, b |
+| 1 | Sample frame, multiply | x/y pixel offsets, scalar gain |
+| 2 | Add multiplied sample to destination | x/y offsets, gain |
+| 3–9 | add, subtract, multiply, divide, min, max, power | input register a, input register b, 0 |
+| 10 | Clamp | input register, lower bound, upper bound |
+| 11 | Dot product, broadcast to RGB | input register a, input register b, 0 |
+| 12 | Copy | input register, 0, 0 |
+| 13 | Normalized coordinates (x,y,0) | 0, 0, 0 |
+| 14–15 | sine, absolute value | input register, 0, 0 |
+| 16 | Write dot product into one output component | input register a, input register b, component 0–2 |
+| 17–20 | exponential, square root, cosine, floor | input register, 0, 0 |
+
+Constants are finite and bounded; sample offsets are within ±64 pixels and gain
+within ±16. Division guards zero denominators; power/exponential exponents are
+bounded. Each pass clamps its final RGB output to 0–1. Sampling clamps at image
+edges. Programs cannot access files, arbitrary textures or unbounded loops.
+
+Playback → screen/quality → 프레임 처리 확장앱 enables any number of compatible
+providers within the shared resource bound, configures their extension-owned
+options and changes processing order. Provider updates/settings changes rebuild
+the active chain; disabling/uninstalling removes its program. Selection/order are
+saved in per-video playback settings. Slow AI postprocessing keeps one frame in
+flight and one pending frame, retaining the last completed image rather than
+flashing black or accumulating an unbounded queue.
+
+`player.video-presets` 1.1.0 supplies independent smoothing/sharpening strength,
+cool/neutral/warm balance and grayscale, including simultaneous combinations.
+Old scalar-only `videoFilter()` providers remain supported through the legacy
+adapter. The new provider declares `requiresHost: ["pixelPrograms"]` so earlier
+apps reject it instead of pretending to apply unsupported processing.
