@@ -4,10 +4,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../../core/plugins/plugin.dart';
 import '../../core/plugins/plugin_store.dart';
+import '../../core/plugins/plugin_updates.dart';
 import 'cloud_settings.dart';
 
 class PluginsPage extends StatefulWidget {
-  const PluginsPage({super.key});
+  const PluginsPage({super.key, this.updatesOnly = false});
+  final bool updatesOnly;
   @override
   State<PluginsPage> createState() => _PluginsPageState();
 }
@@ -18,10 +20,12 @@ class _PluginsPageState extends State<PluginsPage> {
   final errors = <String, String>{};
   bool busy = false;
   String category = '';
+  bool updatesOnly = false;
   static const categories = {'': '전체', 'player': '플레이어', 'browser': '브라우저', 'resource': '리소스'};
   @override
   void initState() {
     super.initState();
+    updatesOnly = widget.updatesOnly;
     _refresh();
   }
 
@@ -141,6 +145,14 @@ class _PluginsPageState extends State<PluginsPage> {
             scrollDirection: Axis.horizontal,
             child: Row(
               children: [
+                Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: FilterChip(
+                    label: const Text('업데이트'),
+                    selected: updatesOnly,
+                    onSelected: (value) => setState(() => updatesOnly = value),
+                  ),
+                ),
                 for (final entry in categories.entries)
                   Padding(
                     padding: const EdgeInsets.all(4),
@@ -160,7 +172,9 @@ class _PluginsPageState extends State<PluginsPage> {
                   title: Text('설치됨'),
                   subtitle: Text('사이트 변경은 페이지를 새로고침한 뒤 적용됩니다. 끄면 설정을 보관하고, 삭제하면 설정·인증정보·연결 계정을 함께 삭제합니다.'),
                 ),
-                for (final p in store.installed.values.where((p) => category.isEmpty || p.kind == category))
+                for (final p in store.installed.values.where(
+                  (p) => !updatesOnly && (category.isEmpty || p.kind == category),
+                ))
                   ListTile(
                     title: Text(p.name),
                     subtitle: Text(
@@ -227,7 +241,11 @@ class _PluginsPageState extends State<PluginsPage> {
                   if (errors[repository] != null)
                     ListTile(title: const Text('저장소 목록을 받지 못했습니다'), subtitle: Text(errors[repository]!)),
                   for (final entry in (listings[repository] ?? <PluginListing>[]).where(
-                    (p) => category.isEmpty || p.kind == category,
+                    (p) =>
+                        (category.isEmpty || p.kind == category) &&
+                        (!updatesOnly ||
+                            store.installed[p.id] != null &&
+                                newerPluginVersion(p.version, store.installed[p.id]!.version)),
                   ))
                     ListTile(
                       title: Text(entry.name),
@@ -245,7 +263,11 @@ class _PluginsPageState extends State<PluginsPage> {
                             : () => _guard(() async => _install(await store.download(entry))),
                         child: Text(
                           store.installed.containsKey(entry.id)
-                              ? (store.installed[entry.id]?.version == entry.version ? '설치됨' : '교체')
+                              ? (store.installed[entry.id]?.version == entry.version
+                                    ? '설치됨'
+                                    : newerPluginVersion(entry.version, store.installed[entry.id]!.version)
+                                    ? '업데이트'
+                                    : '교체')
                               : '설치',
                         ),
                       ),

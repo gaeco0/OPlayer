@@ -30,7 +30,7 @@ OAuthClient oauthClientFor(CloudProvider provider, {String? clientId, String? ac
   if (Platform.isAndroid &&
       oauth['authEndpoint'] == 'https://accounts.google.com/o/oauth2/v2/auth' &&
       oauth['tokenEndpoint'] == 'https://oauth2.googleapis.com/token' &&
-      (definition.oauth['nativeAndroid'] == 'google' || provider == CloudProvider.gdrive)) {
+      definition.oauth['nativeAndroid'] == 'google') {
     return GoogleAndroidOAuthClient(
       clientId:
           clientId ??
@@ -42,17 +42,16 @@ OAuthClient oauthClientFor(CloudProvider provider, {String? clientId, String? ac
       extraAuthParams: (oauth['extraAuthParams'] as Map? ?? {}).cast<String, String>(),
     );
   }
-  final id =
-      clientId ??
-      (PluginStore.instance.oauthClientId(definition).isNotEmpty
-          ? PluginStore.instance.oauthClientId(definition)
-          : null) ??
-      switch (provider) {
-        CloudProvider.gdrive => CloudConfig.googleDesktopClientId,
-        CloudProvider.dropbox => CloudConfig.dropboxAppKey,
-        CloudProvider.onedrive => CloudConfig.oneDriveClientId,
-        CloudProvider.plugin => PluginStore.instance.oauthClientId(definition),
-      };
+  final id = clientId ?? PluginStore.instance.oauthClientId(definition);
+  final isGoogleOAuth =
+      oauth['authEndpoint'] == 'https://accounts.google.com/o/oauth2/v2/auth' &&
+      oauth['tokenEndpoint'] == 'https://oauth2.googleapis.com/token';
+  final mobileRedirect =
+      oauth['mobileRedirectUri'] as String? ??
+      ((definition.manifest['setup'] as Map?)?['redirectUris'] as List? ?? [])
+          .whereType<String>()
+          .where((uri) => Uri.tryParse(uri)?.scheme == CloudConfig.mobileScheme)
+          .firstOrNull;
   return OAuthClient(
     authEndpoint: oauth['authEndpoint'] as String,
     tokenEndpoint: oauth['tokenEndpoint'] as String,
@@ -62,17 +61,13 @@ OAuthClient oauthClientFor(CloudProvider provider, {String? clientId, String? ac
             oauth['authEndpoint'] == 'https://accounts.google.com/o/oauth2/v2/auth'
         ? CloudConfig.googleBundledSecret(id)
         : null,
-    clientSecretKey: provider == CloudProvider.gdrive || oauth['requiresClientSecret'] == true
+    clientSecretKey: isGoogleOAuth || oauth['requiresClientSecret'] == true
         ? PluginStore.oauthSecretKey(definition.id, id)
         : null,
-    clientSecretFallbackKey: provider == CloudProvider.gdrive ? CloudConfig.googleSecretKey(id) : null,
+    clientSecretFallbackKey: isGoogleOAuth ? CloudConfig.googleSecretKey(id) : null,
     scopes: (oauth['scopes'] as List).cast<String>(),
     mobileScheme: CloudConfig.mobileScheme,
-    mobileRedirectUri: switch (provider) {
-      CloudProvider.dropbox => CloudConfig.dropboxRedirect,
-      CloudProvider.onedrive => CloudConfig.oneDriveRedirect,
-      _ => oauth['mobileRedirectUri'] as String?,
-    },
+    mobileRedirectUri: mobileRedirect,
     extraAuthParams: {
       ...(oauth['extraAuthParams'] as Map? ?? {}).cast<String, String>(),
       if (accountEmail != null && oauth['authEndpoint'] == 'https://accounts.google.com/o/oauth2/v2/auth')
@@ -458,6 +453,7 @@ class CloudSource extends MediaSource {
         isDir: e['isDir'] == true,
         size: (e['size'] as num?)?.toInt() ?? 0,
         modified: DateTime.tryParse(e['modified'] as String? ?? ''),
+        created: DateTime.tryParse(e['created'] as String? ?? ''),
         thumbnailUrl: e['thumbnailUrl'] as String?,
       );
     }).toList();

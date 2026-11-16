@@ -151,7 +151,7 @@ class _PlaybackToggles extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         _PlaybackToggle(
-          label: '업스케일',
+          label: AppSettings.instance.aiUpscalingSelected ? 'AI 업스케일' : '업스케일',
           onLongPress: () =>
               Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const UpscaleModelsPage())),
           icon: Icons.high_quality_outlined,

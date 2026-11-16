@@ -92,6 +92,17 @@ void main() {
     }
     expect(find.text('inside.mp3'), findsOneWidget);
     expect(find.byIcon(Icons.arrow_back), findsOneWidget);
+    final contentLeft = t.getTopLeft(find.text('inside.mp3')).dx;
+    await t.tap(find.byIcon(Icons.menu));
+    await t.pump();
+    expect(find.text('OPlayer'), findsNothing);
+    expect(find.text('inside.mp3'), findsOneWidget);
+    expect(t.getTopLeft(find.text('inside.mp3')).dx, lessThan(contentLeft));
+    await t.tap(find.byIcon(Icons.menu));
+    await t.pump();
+    expect(find.text('OPlayer'), findsOneWidget);
+    expect(find.text('inside.mp3'), findsOneWidget);
+
     await t.tap(find.text('설정'));
     await t.pump();
     await t.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 500))); // ffmpeg 탐색(실제 프로세스)
@@ -119,7 +130,13 @@ void main() {
       t.view.physicalSize = size;
       await t.pump();
       expect(find.byType(Drawer), findsNothing);
-      expect(find.byIcon(Icons.menu), findsNothing);
+      expect(find.byIcon(Icons.menu), findsOneWidget);
+      await t.tap(find.byIcon(Icons.menu));
+      await t.pump();
+      expect(find.text('OPlayer'), findsNothing);
+      await t.tap(find.byIcon(Icons.menu));
+      await t.pump();
+      expect(find.text('OPlayer'), findsOneWidget);
       expect(find.text('최근 재생').hitTestable(), findsOneWidget);
       expect(find.textContaining('다운로드한 파일이 없습니다'), findsOneWidget);
     }
@@ -139,7 +156,7 @@ void main() {
     await t.pump(const Duration(milliseconds: 400));
     expect(find.text('재생 기록이 없습니다'), findsOneWidget);
     expect(find.widgetWithText(ListTile, '최근 재생').hitTestable(), findsOneWidget);
-    expect(find.byIcon(Icons.menu), findsNothing);
+    expect(find.byIcon(Icons.menu), findsOneWidget);
     await t.pumpWidget(const SizedBox());
     await t.pump(const Duration(seconds: 5));
     t.view.reset();

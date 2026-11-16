@@ -1,9 +1,7 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import '../../core/settings.dart';
 import '../../core/plugins/plugin.dart';
 import '../../core/plugins/plugin_store.dart';
-import '../../sources/cloud/cloud_config.dart';
 import '../../sources/server_store.dart';
 import 'plugin_settings_dialog.dart';
 
@@ -14,15 +12,7 @@ bool cloudPluginConfigured(OPlugin plugin) {
   final store = PluginStore.instance;
   if (store.hasCredentials(plugin.id)) return true;
   if (plugin.authType != 'oauth') return false;
-  if (store.oauthClientId(plugin).isNotEmpty) return true;
-  // Compatibility for registrations created before extension-owned settings.
-  return switch (cloudPluginProvider(plugin)) {
-    CloudProvider.dropbox => CloudConfig.dropboxAppKey.isNotEmpty,
-    CloudProvider.onedrive => CloudConfig.oneDriveClientId.isNotEmpty,
-    CloudProvider.gdrive =>
-      Platform.isAndroid ? CloudConfig.googleAndroidClientId.isNotEmpty : CloudConfig.googleDesktopClientId.isNotEmpty,
-    _ => false,
-  };
+  return store.oauthClientId(plugin).isNotEmpty;
 }
 
 class CloudPluginSettingsPage extends StatelessWidget {

@@ -48,7 +48,7 @@ class WebDavSource extends MediaSource {
       ..body =
           '<?xml version="1.0" encoding="utf-8"?>'
           '<d:propfind xmlns:d="DAV:"><d:prop>'
-          '<d:displayname/><d:getcontentlength/><d:getlastmodified/><d:resourcetype/>'
+          '<d:displayname/><d:getcontentlength/><d:getlastmodified/><d:creationdate/><d:resourcetype/>'
           '</d:prop></d:propfind>';
     final res = await http.Response.fromStream(await req.send());
     if (res.statusCode == 401) throw '인증 실패 (아이디/비밀번호 확인)';
@@ -75,6 +75,9 @@ class WebDavSource extends MediaSource {
           isDir: isDir,
           size: size,
           modified: mod == null ? null : _parseHttpDate(mod),
+          created: DateTime.tryParse(
+            prop?.findAllElements('creationdate', namespace: 'DAV:').firstOrNull?.innerText ?? '',
+          ),
         ),
       );
     }

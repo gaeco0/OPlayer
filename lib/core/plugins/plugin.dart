@@ -54,6 +54,7 @@ class OPlugin {
   };
   Set<String> get allowedMethods => {
     'validateSettings',
+    if (kind == 'player') ...['playbackOptions', 'frameProcessor'],
     for (final capability in capabilities) ...contracts[kind]![capability]!,
     if (cloud) ...[
       'authenticate',

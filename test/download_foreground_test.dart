@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
+import 'package:oplayer/core/ffmpeg.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -132,6 +134,109 @@ void main() {
     expect(downloadNotificationState([task])['active'], false);
     task.status = DownloadStatus.queued;
     expect(downloadNotificationState([task])['active'], true);
+  });
+
+  test('file generation reports output throughput and stops sampling after completion', () async {
+    SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
+    await AppSettings.instance.init();
+    await ResourceLocks.instance.init();
+    final manager = DownloadManager.instance;
+    await manager.init();
+    final dir = await Directory.systemTemp.createTemp('oplayer_output_speed_');
+    final input = File('${dir.path}/input.ts');
+    await input.writeAsBytes([1, 2, 3]);
+    final task =
+        DownloadTask(
+            id: 'output-speed',
+            url: 'https://example.invalid/input',
+            fileName: 'input.ts',
+            kind: DownloadKind.direct,
+            outputQuality: OutputQuality.mkv,
+          )
+          ..status = DownloadStatus.paused
+          ..localDone = true
+          ..localDirectory = dir.path
+          ..savePath = input.path;
+    final release = Completer<void>();
+    final sampled = Completer<void>();
+    final completed = Completer<void>();
+    void changed() {
+      if (task.processing && task.speed > 0 && !sampled.isCompleted) sampled.complete();
+      if ([DownloadStatus.done, DownloadStatus.failed].contains(task.status) && !completed.isCompleted) {
+        completed.complete();
+      }
+    }
+
+    const ffmpeg = MethodChannel('oplayer/ffmpeg');
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    Ffmpeg.reset();
+    messenger.setMockMethodCallHandler(ffmpeg, (call) async {
+      if (call.method == 'version') return 'test';
+      final args = List<String>.from((call.arguments as Map)['arguments']);
+      await File(args.last).writeAsBytes(List.filled(4096, 0), flush: true);
+      await release.future;
+      return {'code': 0, 'error': ''};
+    });
+    manager.tasks.add(task);
+    manager.addListener(changed);
+    try {
+      manager.resume(task);
+      await sampled.future.timeout(const Duration(seconds: 10));
+      expect(task.progress, isNull);
+      expect(task.received, 4096);
+      expect(downloadNotificationState([task])['title'], contains('생성 중'));
+      release.complete();
+      await completed.future.timeout(const Duration(seconds: 10));
+      expect(task.status, DownloadStatus.done, reason: task.error);
+      expect(task.processing, false);
+      expect(task.speed, 0);
+      await Future<void>.delayed(const Duration(milliseconds: 1100));
+      expect(task.speed, 0);
+    } finally {
+      if (!release.isCompleted) release.complete();
+      manager.removeListener(changed);
+      await manager.remove(task, deleteFile: true);
+      messenger.setMockMethodCallHandler(ffmpeg, null);
+      debugDefaultTargetPlatformOverride = null;
+      Ffmpeg.reset();
+      await dir.delete(recursive: true);
+    }
+  });
+
+  test('notification follows merge and upload phases with current throughput', () {
+    final task =
+        DownloadTask(id: 'phase', url: 'https://example.com/video', fileName: 'video.mp4', kind: DownloadKind.hls)
+          ..status = DownloadStatus.running
+          ..total = 10
+          ..done = 10
+          ..processing = true
+          ..phase = '조각 병합·원본 생성 중'
+          ..speed = 2 * 1024 * 1024;
+    var state = downloadNotificationState([task]);
+    expect(state['title'], '조각 병합·원본 생성 중');
+    expect(state['phase'], contains('2.0 MB/s'));
+    expect(state['progress'], -1); // Downloaded segments do not mean merging is complete.
+    task
+      ..processing = false
+      ..uploading = true
+      ..phase = 'Drive(으)로 업로드 중'
+      ..received = 25
+      ..total = 100
+      ..speed = 512 * 1024;
+    state = downloadNotificationState([task]);
+    expect(state['title'], 'Drive(으)로 업로드 중');
+    expect(state['phase'], contains('512.0 KB/s'));
+    expect(state['progress'], 25);
+    final queued = DownloadTask(
+      id: 'next',
+      url: 'https://example.com/next',
+      fileName: 'next.mp4',
+      kind: DownloadKind.direct,
+    );
+    expect(downloadNotificationState([queued, task])['title'], 'Drive(으)로 업로드 중 · 총 2개');
+    task.speed = 0;
+    expect(downloadNotificationState([task])['phase'], contains('0 B/s'));
   });
 
   test('service acknowledgement precedes later updates, and errors do not block cleanup', () async {

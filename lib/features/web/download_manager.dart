@@ -89,6 +89,7 @@ class DownloadTask {
   /// 로컬 받기 완료 여부 (업로드만 남은 상태에서 재시도할 때 다시 받지 않게)
   bool localDone = false;
 
+  bool processing = false;
   bool uploading = false;
   bool moving = false;
 
@@ -99,6 +100,7 @@ class DownloadTask {
 
   double? get progress {
     if (status == DownloadStatus.done) return 1;
+    if (processing) return null;
     return kind == DownloadKind.hls && !uploading && !moving
         ? (total == 0 ? null : done / total)
         : (total == 0 ? null : received / total);
@@ -584,6 +586,7 @@ class DownloadManager extends ChangeNotifier {
         t.phase = null;
       }
     } finally {
+      t.processing = false;
       _uploadCancellation.remove(t.id);
       _clients.remove(t.id);
       try {
@@ -817,6 +820,42 @@ class DownloadManager extends ChangeNotifier {
     task.outputDone = true;
   }
 
+  Future<(bool, String)> _createOutput(
+    DownloadTask task, {
+    required String video,
+    String? audio,
+    required String output,
+  }) async {
+    task.processing = true;
+    task.speed = 0;
+    task.received = 0;
+    _changed(immediate: true);
+    final elapsed = Stopwatch()..start();
+    var previousBytes = 0;
+    var previousTime = 0;
+    var finished = false;
+    final timer = Timer.periodic(const Duration(seconds: 1), (_) async {
+      final stat = await File(output).stat();
+      if (finished || stat.type != FileSystemEntityType.file) return;
+      final now = elapsed.elapsedMilliseconds;
+      final delta = now - previousTime;
+      if (delta <= 0) return;
+      task.received = stat.size;
+      task.speed = (stat.size - previousBytes).clamp(0, stat.size) * 1000 / delta;
+      previousBytes = stat.size;
+      previousTime = now;
+      _changed();
+    });
+    try {
+      return await Ffmpeg.createOutput(video: video, audio: audio, output: output, quality: task.outputQuality);
+    } finally {
+      finished = true;
+      timer.cancel();
+      task.processing = false;
+      task.speed = 0;
+    }
+  }
+
   Future<void> _convertTask(DownloadTask t) async {
     _check(t);
     t.phase = '${t.outputQuality.label} 생성 중';
@@ -827,7 +866,7 @@ class DownloadManager extends ChangeNotifier {
       File(input).parent,
       '${p.basenameWithoutExtension(input)} (${t.outputQuality.name})$ext',
     );
-    final (ok, error) = await Ffmpeg.createOutput(video: input, output: output, quality: t.outputQuality);
+    final (ok, error) = await _createOutput(t, video: input, output: output);
     if (!ok) {
       if (await File(output).exists()) await File(output).delete();
       if (t.outputQuality == OutputQuality.original) {
@@ -1246,21 +1285,25 @@ class DownloadManager extends ChangeNotifier {
       files.addAll([for (var i = 0; i < tracks[k].segments.length; i++) segPath(names[k], i)]);
       inputs.add(await Ffmpeg.concatInput(files: files, listPath: p.join(tmp.path, '${names[k]}_segments.txt')));
     }
+    final joinElapsed = Stopwatch();
     Future<String> joinTrack(int k) async {
+      joinElapsed.start();
       final pl = tracks[k];
       final ext = pl.isFmp4 ? '.mp4' : '.ts';
       final out = p.join(tmp.path, '${names[k]}_joined$ext');
       final sink = File(out).openWrite();
       try {
-        if (pl.initSegment != null) await sink.addStream(File(p.join(tmp.path, '${names[k]}_init.seg')).openRead());
+        Stream<List<int>> trackBytes(File file) => file.openRead().map((chunk) {
+          _check(t);
+          t.received += chunk.length;
+          t.speed = t.received * 1000 / joinElapsed.elapsedMilliseconds.clamp(1, 1 << 53);
+          _changed();
+          return chunk;
+        });
+        if (pl.initSegment != null) await sink.addStream(trackBytes(File(p.join(tmp.path, '${names[k]}_init.seg'))));
         for (var i = 0; i < pl.segments.length; i++) {
           _check(t);
-          await sink.addStream(
-            File(segPath(names[k], i)).openRead().map((chunk) {
-              _check(t);
-              return chunk;
-            }),
-          );
+          await sink.addStream(trackBytes(File(segPath(names[k], i))));
         }
       } finally {
         await sink.close();
@@ -1270,11 +1313,11 @@ class DownloadManager extends ChangeNotifier {
 
     final extension = t.outputQuality.extension;
     final target = '${p.withoutExtension(t.savePath!)}$extension';
-    final (ok, err) = await Ffmpeg.createOutput(
+    final (ok, err) = await _createOutput(
+      t,
       video: inputs[0],
       audio: inputs.length > 1 ? inputs[1] : null,
       output: target,
-      quality: t.outputQuality,
     );
     _check(t);
     if (!ok && t.outputQuality != OutputQuality.original) throw '변환 실패 (받은 조각은 보관됨): $err';
@@ -1283,6 +1326,8 @@ class DownloadManager extends ChangeNotifier {
       t.note = null;
       t.outputDone = true;
     } else {
+      t.processing = true;
+      t.received = 0;
       t.phase = '변환 실패 · 원본 조각 합치는 중';
       _changed(immediate: true);
       final joinedVideo = await joinTrack(0);
@@ -1311,6 +1356,8 @@ class DownloadManager extends ChangeNotifier {
             : 'MP4 변환 실패로 ${p.extension(tsPath)}로 저장: $err';
       }
     }
+    t.processing = false;
+    t.speed = 0;
     t.fileName = p.basename(t.savePath!);
     t.received = await File(t.savePath!).length();
     // 받은 조각·중간 파일 삭제
@@ -1448,11 +1495,15 @@ Map<String, Object?> downloadNotificationState(List<DownloadTask> tasks) {
   final running = active.where((t) => t.status == DownloadStatus.running).toList();
   final first = running.firstOrNull ?? active.firstOrNull;
   final progress = first?.progress;
+  final phase = first?.phase ?? (running.isEmpty ? '다운로드 준비 중' : '파일 받는 중');
+  final speed = first == null
+      ? ''
+      : '${formatSize(first.speed.isFinite && first.speed > 0 ? first.speed.round() : 0)}/s';
   return {
     'active': active.isNotEmpty,
-    'title': active.length > 1 ? '다운로드 ${active.length}개 진행 중' : '다운로드 중',
+    'title': active.length > 1 ? '$phase · 총 ${active.length}개' : phase,
     'name': ResourceLocks.instance.protects(downloadsResourceKey) ? '' : first?.fileName ?? '',
-    'phase': first?.phase ?? (running.isEmpty ? '다운로드 준비 중' : '파일 받는 중'),
+    'phase': running.isEmpty ? phase : '$phase · $speed',
     'progress': progress == null ? -1 : (progress * 100).clamp(0, 100).round(),
   };
 }

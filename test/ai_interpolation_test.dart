@@ -55,16 +55,13 @@ void main() {
     await settings.init();
     expect(settings.frameInterpolation, false);
     expect(settings.interpolationMode, 'blend');
-    expect(settings.interpolationNpu, true);
     settings.update((s) {
       s.interpolationMode = 'rife';
       s.frameInterpolation = true;
-      s.interpolationNpu = false;
     });
     await settings.init();
     expect(settings.interpolationMode, 'rife');
     expect(settings.frameInterpolation, true);
-    expect(settings.interpolationNpu, false);
     for (final value in [null, true, 'unknown', <String, Object>{}]) {
       SharedPreferences.setMockInitialValues({
         'settings_v1': jsonEncode({'interpolationMode': value}),
@@ -74,7 +71,7 @@ void main() {
     }
   });
 
-  test('bundled RIFE files match pinned upstream model', () async {
+  test('provider RIFE model files match pinned upstream weights', () async {
     const hashes = {
       'flownet.param': '724569596bcd1e7b9fa50455c604777ebed99746d2ef40aa86e31b5725f1053c',
       'flownet-npu.param': '517561e5affe42e39c6c8328675139104228cc8454c2dfd54d06a6f6bf74106c',

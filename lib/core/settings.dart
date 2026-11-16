@@ -52,10 +52,9 @@ class AppSettings extends ChangeNotifier {
   String interpolationMode = 'blend';
   String interpolationModel = '';
   int upscalingResolution = 0;
-  bool interpolationNpu = true;
   bool videoUpscaling = false;
-  bool upscalingNpu = true;
   String upscalingModel = 'lanczos';
+  bool get aiUpscalingSelected => upscalingModel != 'lanczos';
   double defaultSpeed = 1.0;
   DefaultAspect defaultAspect = DefaultAspect.fit;
   PlaybackOrientation playbackOrientation = PlaybackOrientation.landscape;
@@ -137,9 +136,7 @@ class AppSettings extends ChangeNotifier {
     'interpolationMode': interpolationMode,
     'interpolationModel': interpolationModel,
     'upscalingResolution': upscalingResolution,
-    'interpolationNpu': interpolationNpu,
     'videoUpscaling': videoUpscaling,
-    'upscalingNpu': upscalingNpu,
     'upscalingModel': upscalingModel,
     'speed': defaultSpeed,
     'aspect': defaultAspect.index,
@@ -198,9 +195,7 @@ class AppSettings extends ChangeNotifier {
         j['upscalingResolution'] is int && const [720, 1080, 1440, 2160].contains(j['upscalingResolution'])
         ? j['upscalingResolution'] as int
         : 0;
-    interpolationNpu = j['interpolationNpu'] != false;
     videoUpscaling = j['videoUpscaling'] == true;
-    upscalingNpu = j['upscalingNpu'] != false;
     upscalingModel = j['upscalingModel'] is String ? j['upscalingModel'] as String : 'lanczos';
     defaultSpeed = (j['speed'] as num?)?.toDouble() ?? 1.0;
     defaultAspect = DefaultAspect.values[v('aspect', 0)];

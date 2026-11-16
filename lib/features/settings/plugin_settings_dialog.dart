@@ -9,7 +9,11 @@ import '../../sources/cloud/oauth.dart';
 import '../../sources/cloud/cloud_config.dart';
 
 /// The extension owns the schema; the app only renders standard controls.
-Future<bool> showPluginSettingsDialog(BuildContext context, OPlugin plugin) async {
+Future<bool> showPluginSettingsDialog(
+  BuildContext context,
+  OPlugin plugin, {
+  Map<String, dynamic> playbackContext = const {},
+}) async {
   if (plugin.settings.isEmpty) return false;
   final store = PluginStore.instance;
   final values = <String, dynamic>{
@@ -152,12 +156,10 @@ Future<bool> showPluginSettingsDialog(BuildContext context, OPlugin plugin) asyn
                           error = null;
                         });
                         try {
-                          final validation = await callPlugin(
-                            plugin,
-                            'validateSettings',
-                            {},
-                            config: plugin.publicConfig(values),
-                          );
+                          final validation = await callPlugin(plugin, 'validateSettings', {
+                            'platform': Platform.operatingSystem,
+                            ...playbackContext,
+                          }, config: plugin.publicConfig(values));
                           if (validation is String && validation.isNotEmpty) throw FormatException(validation);
                           if (plugin.cloud && plugin.authType == 'oauth') {
                             final id = values[plugin.oauth['clientIdSetting'] ?? 'clientId'] as String? ?? '';
@@ -190,4 +192,32 @@ Future<bool> showPluginSettingsDialog(BuildContext context, OPlugin plugin) asyn
         ),
       ) ??
       false;
+}
+
+/// Player options and their validation belong to the selected extension.
+class PlayerPluginOptions extends StatelessWidget {
+  const PlayerPluginOptions({super.key, required this.capability, required this.model, this.color});
+  final String capability, model;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: PluginStore.instance,
+    builder: (context, _) => Column(
+      children: [
+        for (final plugin in PluginStore.instance.enabled.where(
+          (p) =>
+              p.kind == 'player' &&
+              p.supports(capability) &&
+              p.settings.isNotEmpty &&
+              (model.startsWith('${p.id}/') || model.startsWith('url/') || model.isEmpty || model == 'lanczos'),
+        ))
+          ListTile(
+            title: Text('${plugin.name} 옵션', style: TextStyle(color: color)),
+            trailing: Icon(Icons.tune, color: color),
+            onTap: () => showPluginSettingsDialog(context, plugin, playbackContext: {'model': model}),
+          ),
+      ],
+    ),
+  );
 }

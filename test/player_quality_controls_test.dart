@@ -130,7 +130,7 @@ void main() {
     await t.tap(find.byTooltip('화면·화질'));
     await t.pumpAndSettle();
     expect(panel, PanelKind.aspect);
-    final upscaling = find.widgetWithText(SwitchListTile, '고화질 업스케일');
+    final upscaling = find.widgetWithText(SwitchListTile, '일반 업스케일');
     final interpolation = find.widgetWithText(SwitchListTile, '프레임 보간');
     expect(upscaling.hitTestable(), findsOneWidget);
     expect(interpolation.hitTestable(), findsOneWidget);

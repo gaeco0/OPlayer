@@ -1,12 +1,16 @@
 import '../settings/resource_access_view.dart';
+
 import 'package:flutter/material.dart';
+
 import '../../core/resource_locks.dart';
 
 import '../../app/theme.dart';
 import '../../core/media_utils.dart';
 import '../../core/settings.dart';
+
 import 'dart:convert';
 import 'dart:async';
+
 import '../../sources/media_source.dart';
 import '../browser/home_screen.dart';
 import '../browser/local_browser_page.dart' show ErrorView, ScrollablePlaceholder;
@@ -322,9 +326,8 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
   Future<void> _play(RemoteEntry e) async {
     if (e.isPhoto) {
       final photos = _items.where((x) => x.isPhoto).toList();
-      await Navigator.of(
-        context,
-      ).push(PhotoViewer.route(photos.map((x) => widget.source.itemFor(x, _all)).toList(), photos.indexOf(e)));
+      await Navigator.of(context)
+          .push(PhotoViewer.route(photos.map((x) => widget.source.itemFor(x, _all)).toList(), photos.indexOf(e)));
       return;
     }
     final videos = _items.where((x) => x.isPlayableMedia).toList();
@@ -557,7 +560,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
             width: 96,
             child: Icon(Icons.insert_drive_file_outlined, color: OColors.of(context).textSecondary),
           ),
-          title: Text(e.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+          title: EntryName(e.name, recentAt: e.created ?? e.modified, maxLines: 1),
           subtitle: Text(formatSize(e.size), style: TextStyle(fontSize: 12, color: OColors.of(context).textSecondary)),
           onTap: _selecting ? () => _toggle(e.path) : null,
           trailing: PopupMenuButton<String>(
@@ -590,6 +593,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
         return VideoGridTile(
           resumeKey: key,
           lastPlayed: _highlighted(key),
+          recentAt: e.created ?? e.modified,
           name: e.name,
           size: e.size,
           thumbnailUrl: e.thumbnailUrl,
@@ -610,6 +614,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
       return VideoListTile(
         resumeKey: key,
         lastPlayed: _highlighted(key),
+        recentAt: e.created ?? e.modified,
         name: e.name,
         size: e.size,
         modified: e.modified,
@@ -650,6 +655,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
                   name: e.name,
                   resource: src.keyFor(e.path),
                   lastPlayed: _highlighted(src.keyFor(e.path), folder: true),
+                  recentAt: e.created ?? e.modified,
                   onTap: () => _enter(e),
                   onAddToPlaylist: () => runFileAction(context, () => addToPlaylist(context, [_track(e)])),
                   onSelect: () => setState(() {
@@ -675,6 +681,7 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
                 name: e.name,
                 resource: src.keyFor(e.path),
                 lastPlayed: _highlighted(src.keyFor(e.path), folder: true),
+                recentAt: e.created ?? e.modified,
                 onTap: () => _enter(e),
                 onAddToPlaylist: () => runFileAction(context, () => addToPlaylist(context, [_track(e)])),
                 onSelect: () => setState(() {

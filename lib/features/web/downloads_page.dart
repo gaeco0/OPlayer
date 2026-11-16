@@ -113,9 +113,9 @@ class _Tile extends StatelessWidget {
     final status = switch (t.status) {
       DownloadStatus.queued => '대기 중${_dest(t)}',
       DownloadStatus.running =>
-        t.kind == DownloadKind.hls && !t.uploading && !t.moving
+        t.kind == DownloadKind.hls && !t.processing && !t.uploading && !t.moving
             ? '${t.phase ?? ''}${t.total > 0 ? ' · ${t.done}/${t.total} 조각' : ''} · ${formatSize(t.received)} ${_speed(t.speed)}'
-            : '${t.phase == null ? '' : '${t.phase} · '}${formatSize(t.received)}${t.total > 0 ? ' / ${formatSize(t.total)}' : ''} ${_speed(t.speed)}',
+            : '${t.phase == null ? '' : '${t.phase} · '}${formatSize(t.received)}${!t.processing && t.total > 0 ? ' / ${formatSize(t.total)}' : ''} ${_speed(t.speed)}',
       DownloadStatus.paused => '일시정지 · ${((t.progress ?? 0) * 100).toStringAsFixed(0)}%',
       DownloadStatus.done =>
         '완료 · ${formatSize(t.total > 0 && t.kind != DownloadKind.hls ? t.total : t.received)}'

@@ -3,6 +3,7 @@ import '../../core/plugins/interpolation_models.dart';
 import '../../core/plugins/plugin_store.dart';
 import '../../core/settings.dart';
 import 'plugins_page.dart';
+import 'plugin_settings_dialog.dart';
 
 class InterpolationModelsPage extends StatefulWidget {
   const InterpolationModelsPage({super.key});
@@ -42,6 +43,7 @@ class _InterpolationModelsPageState extends State<InterpolationModelsPage> {
         future: _models,
         builder: (context, snapshot) => ListView(
           children: [
+            PlayerPluginOptions(capability: 'interpolation', model: AppSettings.instance.interpolationModel),
             ListTile(
               leading: Icon(
                 AppSettings.instance.interpolationMode == 'blend'
@@ -65,7 +67,7 @@ class _InterpolationModelsPageState extends State<InterpolationModelsPage> {
                 ),
                 enabled: PluginStore.instance.enabled.contains(m.provider),
                 title: Text(m.name),
-                subtitle: const Text('1배속 SDR · 320px 처리 · 250ms 지연 · NPU/GPU 기기 성능에 따라 원본 복귀'),
+                subtitle: Text(m.description),
                 onTap: () => AppSettings.instance.update((s) {
                   s.interpolationMode = 'rife';
                   s.interpolationModel = m.key;

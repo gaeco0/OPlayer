@@ -190,7 +190,6 @@ class PlayerController extends ChangeNotifier {
   String _upscalingModelPreference = AppSettings.instance.upscalingModel;
   int _upscalingResolution = AppSettings.instance.upscalingResolution;
   String? _aiShaderError;
-  bool _upscalingNpuPreference = AppSettings.instance.upscalingNpu;
   Future<void> _upscalingTail = Future.value();
   late final aiUpscaling = AiUpscaling(changed: _aiUpscalingChanged);
   void _aiUpscalingChanged() {
@@ -210,6 +209,7 @@ class PlayerController extends ChangeNotifier {
     aiUpscaling.issue = null;
     if (AppSettings.instance.upscalingModel != 'lanczos') _queueUpscaling();
     if (AppSettings.instance.interpolationMode == 'rife') {
+      _reloadInterpolationModel = true;
       aiInterpolation.issue = null;
       unawaited(_refreshInterpolation());
     }
@@ -250,14 +250,9 @@ class PlayerController extends ChangeNotifier {
     final value = AppSettings.instance.videoUpscaling;
     final model = AppSettings.instance.upscalingModel;
     final resolution = AppSettings.instance.upscalingResolution;
-    final npu = AppSettings.instance.upscalingNpu;
-    if (_upscalingPreference == value &&
-        _upscalingModelPreference == model &&
-        _upscalingResolution == resolution &&
-        _upscalingNpuPreference == npu) {
+    if (_upscalingPreference == value && _upscalingModelPreference == model && _upscalingResolution == resolution) {
       return;
     }
-    _upscalingNpuPreference = npu;
     aiUpscaling.issue = null;
     _upscalingResolution = resolution;
     _upscalingPreference = value;
@@ -292,7 +287,7 @@ class PlayerController extends ChangeNotifier {
         !audioOnly &&
         source.width > 0 &&
         source.height > 0;
-    final target = enabled
+    var target = enabled
         ? upscaleTarget(source, _upscalingViewport, _upscalingFit, resolution: AppSettings.instance.upscalingResolution)
         : null;
     upscalingBusy = true;
@@ -306,29 +301,39 @@ class PlayerController extends ChangeNotifier {
       if (enabled && model != 'lanczos' && !UpscaleModels.instance.available) {
         throw StateError('업스케일 모델 확장앱을 설치하고 켜 주세요');
       }
-      String? shader;
-      if (enabled &&
-          target != null &&
-          target.width / source.width > 1.3 &&
-          target.height / source.height > 1.3 &&
-          model != 'lanczos' &&
-          _aiShaderError == null) {
-        if (source.longestSide > 1920 || source.width * source.height > 2073600) {
-          throw UnsupportedError('저사양용 AI 모델은 1080p 이하 입력만 지원합니다');
+      Map<String, dynamic>? options;
+      Map<String, dynamic> playbackContext = {};
+      if (AppSettings.instance.videoUpscaling && model != 'lanczos') {
+        playbackContext = {
+          'platform': Platform.operatingSystem,
+          'enabled': enabled,
+          'sourceWidth': source.width,
+          'sourceHeight': source.height,
+          'targetWidth': target?.width,
+          'targetHeight': target?.height,
+          'visible': _aiVisible,
+          'bitmapSubtitles': _bitmapSubtitle,
+          'rate': baseRate,
+          'fastForwarding': fastForwarding,
+          'casting': CastController.instance.active,
+          'aiInterpolation': aiInterpolation.running,
+          'acceleratorIssue': aiUpscaling.issue,
+        };
+        options = await UpscaleModels.instance.playbackOptions(model, playbackContext);
+        if (_disposed || request != _upscalingRequest) return;
+        if (options != null) {
+          target = enabled
+              ? upscaleTarget(source, _upscalingViewport, _upscalingFit, resolution: options['resolution'] as int)
+              : null;
+          upscalingIssue = options['issue'] as String?;
         }
+      }
+      String? shader;
+      if (enabled && target != null && model != 'lanczos' && options?['ai'] != false && _aiShaderError == null) {
         shader = await UpscaleModels.instance.resolve(model);
         if (_disposed || request != _upscalingRequest) return;
       }
-      final useNpu =
-          Platform.isAndroid &&
-          AppSettings.instance.upscalingNpu &&
-          shader != null &&
-          target != null &&
-          _aiVisible &&
-          !_bitmapSubtitle &&
-          baseRate == 1 &&
-          !fastForwarding &&
-          !CastController.instance.active;
+      final useNpu = options?['npu'] == true && shader != null && target != null;
       if (useNpu && aiUpscaling.issue == null) {
         final key = '$shader:${target.width.toInt()}x${target.height.toInt()}';
         if (!aiUpscaling.running || aiUpscaling.key != key) {
@@ -354,6 +359,15 @@ class PlayerController extends ChangeNotifier {
       } else if (!useNpu) {
         await aiUpscaling.stop();
       }
+      if (useNpu && aiUpscaling.issue != null) {
+        options = await UpscaleModels.instance.playbackOptions(model, {
+          ...playbackContext,
+          'acceleratorIssue': aiUpscaling.issue,
+        });
+        if (_disposed || request != _upscalingRequest) return;
+        if (options?['ai'] == false) shader = null;
+        upscalingIssue = options?['issue'] as String?;
+      }
       if (aiUpscaling.applied) shader = null;
       await _upscaleShader.apply(shader);
       if (_disposed || request != _upscalingRequest) return;
@@ -361,13 +375,6 @@ class PlayerController extends ChangeNotifier {
       if (_disposed || request != _upscalingRequest) return;
       upscalingApplied = enabled;
       upscalingOutput = target;
-      if (enabled && model != 'lanczos' && shader == null && !aiUpscaling.applied && _aiShaderError == null) {
-        upscalingIssue = '목표 출력이 원본의 1.3배를 넘을 때 AI 모델을 적용합니다. 현재는 Lanczos를 사용합니다';
-      }
-      if (useNpu && aiUpscaling.issue != null) upscalingIssue = aiUpscaling.issue;
-      if (Platform.isAndroid && enabled && AppSettings.instance.upscalingNpu && _bitmapSubtitle) {
-        upscalingIssue = '비트맵 자막은 GPU 업스케일로 표시합니다';
-      }
       if (_aiShaderError != null && model != 'lanczos') upscalingIssue = 'AI 적용 실패 · Lanczos로 재생합니다: $_aiShaderError';
     } catch (e) {
       await aiUpscaling.stop();
@@ -407,8 +414,8 @@ class PlayerController extends ChangeNotifier {
   Timer? _interpolationCheck;
   bool _interpolationPreference = AppSettings.instance.frameInterpolation;
   String _interpolationMode = AppSettings.instance.interpolationMode;
+  bool _reloadInterpolationModel = true;
   String _interpolationModel = AppSettings.instance.interpolationModel;
-  bool _interpolationNpu = AppSettings.instance.interpolationNpu;
   Future<void> _interpolationTail = Future.value();
   bool _bitmapSubtitle = false;
   bool _aiVisible = true;
@@ -462,16 +469,12 @@ class PlayerController extends ChangeNotifier {
   void _onInterpolationSettings() {
     final value = AppSettings.instance.frameInterpolation;
     final mode = AppSettings.instance.interpolationMode;
-    final npu = AppSettings.instance.interpolationNpu;
     final model = AppSettings.instance.interpolationModel;
-    if (_interpolationPreference == value &&
-        _interpolationMode == mode &&
-        _interpolationNpu == npu &&
-        _interpolationModel == model) {
+    if (_interpolationPreference == value && _interpolationMode == mode && _interpolationModel == model) {
       return;
     }
+    if (_interpolationModel != model) _reloadInterpolationModel = true;
     _interpolationModel = model;
-    _interpolationNpu = npu;
     _interpolationPreference = value;
     _interpolationMode = mode;
     aiInterpolation.issue = null;
@@ -510,35 +513,49 @@ class PlayerController extends ChangeNotifier {
         await aiUpscaling.stop();
         await _frameInterpolation.apply(false, _displayRate);
         if (_disposed || request != _interpolationRequest) return;
-        if (!_aiVisible || _bitmapSubtitle || baseRate != 1 || fastForwarding || CastController.instance.active) {
+        final gamma = await (player.platform as NativePlayer).getProperty('video-params/gamma');
+        if (_disposed || request != _interpolationRequest) return;
+        final options = await InterpolationModels.instance.playbackOptions(AppSettings.instance.interpolationModel, {
+          'platform': Platform.operatingSystem,
+          'visible': _aiVisible,
+          'bitmapSubtitles': _bitmapSubtitle,
+          'rate': baseRate,
+          'fastForwarding': fastForwarding,
+          'casting': CastController.instance.active,
+          'gamma': gamma,
+        });
+        if (_disposed || request != _interpolationRequest) return;
+        if (options['ai'] != true) {
           await aiInterpolation.stop();
           await _applyAiTiming();
           _queueUpscaling();
           interpolationApplied = false;
-          interpolationIssue = _bitmapSubtitle ? '비트맵 자막 재생 중에는 AI 보간을 중지합니다' : 'AI 보간은 화면에서 1배속으로 재생할 때 적용됩니다';
+          interpolationIssue = options['issue'] as String?;
           return;
         }
-        await InterpolationModels.instance.resolve(AppSettings.instance.interpolationModel);
-        if (_disposed || request != _interpolationRequest) return;
+        final preferNpu = options['npu'] == true;
+        if (_reloadInterpolationModel) {
+          _reloadInterpolationModel = false;
+          await aiInterpolation.stop();
+          if (_disposed || request != _interpolationRequest) return;
+        }
         if (aiInterpolation.issue != null) {
           interpolationIssue = aiInterpolation.issue;
           interpolationApplied = false;
           return;
         }
-        if (aiInterpolation.running && aiInterpolation.preferNpu != AppSettings.instance.interpolationNpu) {
+        if (aiInterpolation.running && aiInterpolation.preferNpu != preferNpu) {
           await aiInterpolation.stop();
           if (_disposed || request != _interpolationRequest) return;
         }
         if (!aiInterpolation.running) {
-          final gamma = await (player.platform as NativePlayer).getProperty('video-params/gamma');
+          final modelPath = await InterpolationModels.instance.prepare(AppSettings.instance.interpolationModel);
           if (_disposed || request != _interpolationRequest) return;
-          if (gamma == 'pq' || gamma == 'hlg') {
-            throw UnsupportedError('HDR 영상은 원본 화질로 재생합니다. AI 보간은 SDR 영상에서 사용할 수 있습니다');
-          }
           await aiInterpolation.start(
             handle: await player.handle,
             mpvLibrary: NativeLibrary.path,
-            preferNpu: AppSettings.instance.interpolationNpu,
+            preferNpu: preferNpu,
+            modelPath: modelPath,
           );
           await _applyAiTiming();
           _queueUpscaling();

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'dart:io';
 
 import '../../core/plugins/plugin_store.dart';
 import '../../core/plugins/upscale_models.dart';
 import '../../core/settings.dart';
 import 'plugins_page.dart';
+import 'plugin_settings_dialog.dart';
 import 'upscale_target_tile.dart';
 
 class UpscaleModelsPage extends StatefulWidget {
@@ -88,18 +88,13 @@ class _UpscaleModelsPageState extends State<UpscaleModelsPage> {
           children: [
             if (_busy) const LinearProgressIndicator(),
             SwitchListTile(
-              title: const Text('업스케일 켜기'),
+              title: Text(settings.aiUpscalingSelected ? 'AI 업스케일 켜기' : '일반 업스케일 켜기'),
+              subtitle: Text(settings.aiUpscalingSelected ? '선택한 AI 모델 사용' : 'Lanczos · AI 사용 안 함'),
               value: settings.videoUpscaling,
               onChanged: _busy ? null : (v) => settings.update((s) => s.videoUpscaling = v),
             ),
-            if (Platform.isAndroid)
-              SwitchListTile(
-                title: const Text('AI 업스케일 NPU 가속'),
-                subtitle: const Text('Snapdragon·Exynos 지원 드라이버 · 기본 CNN 3개 · 미지원·속도 부족 시 GPU 복귀'),
-                value: settings.upscalingNpu,
-                onChanged: (v) => settings.update((s) => s.upscalingNpu = v),
-              ),
-            const UpscaleTargetTile(),
+            PlayerPluginOptions(capability: 'upscaling', model: settings.upscalingModel),
+            if (!settings.aiUpscalingSelected) const UpscaleTargetTile(),
             const Padding(
               padding: EdgeInsets.all(16),
               child: Text('AI 모델은 설치하고 켠 확장앱에서 제공합니다. 모델 선택은 현재 영상에 적용되며 켜기·끄기 상태는 유지합니다.'),

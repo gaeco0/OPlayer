@@ -113,7 +113,7 @@ class AiUpscaling {
         4 => 'NPU 처리 속도가 부족합니다',
         _ => 'NPU 출력이 지연되거나 실패했습니다',
       };
-      issue = '$reason · GPU로 재생합니다';
+      issue = reason;
       unawaited(stop());
       changed();
       return;

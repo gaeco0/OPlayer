@@ -18,6 +18,7 @@ import 'network_settings.dart';
 import 'privacy_settings.dart';
 import 'appearance_settings.dart';
 import 'plugins_page.dart';
+import 'plugin_settings_dialog.dart';
 import 'app_update_page.dart';
 import 'playback_sync_page.dart';
 import 'issue_report_page.dart';
@@ -124,13 +125,7 @@ class SettingsPage extends StatelessWidget {
               onTap: () =>
                   Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const InterpolationModelsPage())),
             ),
-            if (Platform.isAndroid && s.interpolationMode == 'rife')
-              SwitchListTile(
-                title: const Text('AI 보간 NPU 가속'),
-                subtitle: const Text('Snapdragon·Exynos의 지원 NPU만 사용 · 지원되지 않거나 느리면 GPU로 복귀'),
-                value: s.interpolationNpu,
-                onChanged: (v) => s.update((x) => x.interpolationNpu = v),
-              ),
+            PlayerPluginOptions(capability: 'interpolation', model: s.interpolationModel),
             SwitchListTile(
               title: const Text('고화질 업스케일'),
               subtitle: const Text('낮은 해상도 영상을 화면 크기로 선명하게 확대 · GPU 사용'),
@@ -139,11 +134,11 @@ class SettingsPage extends StatelessWidget {
             ),
             ListTile(
               title: const Text('업스케일 모델'),
-              subtitle: Text(s.upscalingModel == 'lanczos' ? 'Lanczos · AI 모델은 확장앱 설치 필요' : 'AI 모델 선택됨 · 변경·URL 추가'),
+              subtitle: Text(s.upscalingModel == 'lanczos' ? 'Lanczos · AI 사용 안 함' : 'AI 모델 선택됨 · 변경·URL 추가'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const UpscaleModelsPage())),
             ),
-            const UpscaleTargetTile(),
+            if (!s.aiUpscalingSelected) const UpscaleTargetTile(),
             _choice<DefaultAspect>(
               context,
               title: '기본 화면 비율',

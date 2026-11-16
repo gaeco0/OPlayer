@@ -74,6 +74,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  bool _sidebarVisible = true;
   Source? _selected;
   ServerConfig? _serverConfig;
   Future<MediaSource>? _serverSource;
@@ -140,7 +141,18 @@ class _HomeScreenState extends State<HomeScreen> {
     return (await Permission.storage.request()).isGranted || (await Permission.videos.request()).isGranted;
   }
 
-  void _openDrawer() => _scaffoldKey.currentState?.openDrawer();
+  bool get _wideLayout {
+    final size = MediaQuery.sizeOf(context);
+    return Theme.of(context).platform == TargetPlatform.android ? size.shortestSide >= 600 : size.width >= 900;
+  }
+
+  void _openDrawer() {
+    if (_wideLayout) {
+      setState(() => _sidebarVisible = !_sidebarVisible);
+    } else {
+      _scaffoldKey.currentState?.openDrawer();
+    }
+  }
 
   Future<void> _select(Source s) async {
     final key = _sourceResource(s);
@@ -378,8 +390,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    final wide = Theme.of(context).platform == TargetPlatform.android ? size.shortestSide >= 600 : size.width >= 900;
+    final wide = _wideLayout;
     final sidebar = _Sidebar(
       selected: _selected,
       device: _deviceRoot == null ? null : _deviceSource(),
@@ -407,16 +418,14 @@ class _HomeScreenState extends State<HomeScreen> {
       drawer: wide ? null : Drawer(width: 300, child: sidebar),
       body: Row(
         children: [
-          if (wide)
+          if (wide && _sidebarVisible)
             SizedBox(
               width: 280,
               child: Material(color: OColors.of(context).surface, child: sidebar),
             ),
           Expanded(
-            child: _ShowDrawerButton(
-              showMenu: !wide,
-              child: Builder(builder: _content),
-            ),
+            key: const ValueKey('source-content'),
+            child: _ShowDrawerButton(showMenu: true, child: Builder(builder: _content)),
           ),
         ],
       ),

@@ -4,6 +4,8 @@ const pluginHostApi = 5;
 const pluginPlatforms = ['android', 'ios', 'windows', 'linux', 'macos'];
 
 Set<String> pluginHostFeatures(String platform) => {
+  'playerOptions',
+  'frameProcessing',
   if (['android', 'windows', 'linux', 'macos'].contains(platform)) 'googlePicker',
   if (['android', 'windows', 'linux', 'macos'].contains(platform)) ...['oauthScopes', 'fixedUploadRoot', 'syncStorage'],
   if (['android', 'ios', 'windows', 'macos'].contains(platform)) 'webBrowser',

@@ -19,6 +19,7 @@ class RemoteEntry {
     required this.isDir,
     this.size = 0,
     this.modified,
+    this.created,
     this.thumbnailUrl,
     this.directUrl,
   });
@@ -30,6 +31,7 @@ class RemoteEntry {
   final bool isDir;
   final int size;
   final DateTime? modified;
+  final DateTime? created;
   final String? thumbnailUrl;
 
   /// DLNA처럼 항목 자체가 재생 URL을 가진 경우

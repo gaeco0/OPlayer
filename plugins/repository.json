@@ -297,9 +297,9 @@
     {
       "id": "player.ai-upscale",
       "name": "경량 AI 업스케일 모델",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "kind": "player",
-      "pluginApi": 4,
+      "pluginApi": 5,
       "author": "OPlayer",
       "features": [
         "AI 업스케일 모델 3개",
@@ -308,21 +308,25 @@
       ],
       "description": "업스케일 SDK 필요 · Anime4K CNN S·Denoise S·FSRCNNX 8",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/player.ai-upscale.js",
-      "sha256": "67bb430b48eb0bfae6560621fa0bdbe30918ef5549e54744d95e30b908bfde68",
+      "sha256": "63d8d86585860ee0b1175f6ccaeeb11ddc11cc266fca6fb30c26b5ecd45e9811",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
       "platforms": [
         "android",
         "windows",
         "linux",
         "macos"
+      ],
+      "requiresHost": [
+        "playerOptions",
+        "frameProcessing"
       ]
     },
     {
       "id": "player.ai-interpolation",
       "name": "AI 보간 모델",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "kind": "player",
-      "pluginApi": 4,
+      "pluginApi": 5,
       "author": "OPlayer",
       "features": [
         "RIFE v4.6 모델 선택",
@@ -331,13 +335,17 @@
       ],
       "description": "AI 보간 모델 SDK 필요 · RIFE v4.6 · 1배속 SDR",
       "downloadUrl": "https://raw.githubusercontent.com/gaeco0/OPlayer/main/plugins/player.ai-interpolation.js",
-      "sha256": "5f9752aee5e2bf9c08a65556e0720b5fbb7917b066390bb09b795c3057cd251e",
+      "sha256": "355507ed845c59630a6dc4ef01282905f75960e4d9a8845e8e20f1822bdb3ba1",
       "homepage": "https://github.com/gaeco0/OPlayer/tree/main/plugins",
       "platforms": [
         "android",
         "windows",
         "linux",
         "macos"
+      ],
+      "requiresHost": [
+        "playerOptions",
+        "frameProcessing"
       ]
     },
     {

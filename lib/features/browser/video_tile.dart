@@ -17,6 +17,46 @@ import 'file_actions.dart';
 Color lastPlayedColor(BuildContext context) =>
     Theme.of(context).brightness == Brightness.dark ? const Color(0xFF64B5F6) : const Color(0xFF1565C0);
 
+bool isRecentEntry(DateTime? date, {DateTime? now}) {
+  if (date == null) return false;
+  final age = (now ?? DateTime.now()).difference(date);
+  return !age.isNegative && age < const Duration(days: 3);
+}
+
+class EntryName extends StatelessWidget {
+  const EntryName(
+    this.name, {
+    super.key,
+    this.recentAt,
+    this.maxLines = 2,
+    this.overflow = TextOverflow.ellipsis,
+    this.style,
+  });
+  final String name;
+  final DateTime? recentAt;
+  final int maxLines;
+  final TextOverflow overflow;
+  final TextStyle? style;
+
+  @override
+  Widget build(BuildContext context) => Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Flexible(
+        child: Text(name, maxLines: maxLines, overflow: overflow, style: style),
+      ),
+      if (isRecentEntry(recentAt))
+        Padding(
+          padding: const EdgeInsets.only(left: 6),
+          child: Semantics(
+            label: '최근 3일 이내 항목',
+            child: const Icon(Icons.circle, size: 6, color: Colors.red),
+          ),
+        ),
+    ],
+  );
+}
+
 /// 썸네일 (로컬: 프레임 추출 캐시 / 원격: 서버 제공 썸네일 URL) + 길이 + 이어보기 진행바
 class VideoThumb extends StatefulWidget {
   const VideoThumb({
@@ -266,6 +306,7 @@ class VideoListTile extends StatelessWidget {
     required this.onChanged,
     this.size = 0,
     this.lastPlayed = false,
+    this.recentAt,
     this.modified,
     this.localPath,
     this.thumbnailUrl,
@@ -281,6 +322,7 @@ class VideoListTile extends StatelessWidget {
 
   final String resumeKey;
   final bool lastPlayed;
+  final DateTime? recentAt;
   final String name;
   final int size;
   final DateTime? modified;
@@ -327,8 +369,9 @@ class VideoListTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  EntryName(
                     name,
+                    recentAt: recentAt ?? modified,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -392,6 +435,7 @@ class VideoGridTile extends StatelessWidget {
     required this.onChanged,
     this.size = 0,
     this.lastPlayed = false,
+    this.recentAt,
     this.localPath,
     this.thumbnailUrl,
     this.onDownload,
@@ -403,6 +447,7 @@ class VideoGridTile extends StatelessWidget {
   });
   final String resumeKey;
   final bool lastPlayed;
+  final DateTime? recentAt;
   final String name;
   final int size;
   final String? localPath;
@@ -471,8 +516,9 @@ class VideoGridTile extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Text(
+          EntryName(
             name,
+            recentAt: recentAt,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 13, color: lastPlayed ? lastPlayedColor(context) : null),
@@ -522,11 +568,13 @@ class FolderListTile extends StatelessWidget {
     this.subtitle,
     this.resource,
     this.lastPlayed = false,
+    this.recentAt,
     this.onAddToPlaylist,
     this.onSelect,
     this.onRemoveFromPlaylist,
   });
   final bool lastPlayed;
+  final DateTime? recentAt;
   final String name;
   final String? resource;
   final String? subtitle;
@@ -536,8 +584,9 @@ class FolderListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListTile(
     leading: const SizedBox(width: 96, child: Icon(Icons.folder_rounded, color: Color(0xFFF2B84B), size: 40)),
-    title: Text(
+    title: EntryName(
       name,
+      recentAt: recentAt,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: lastPlayed ? TextStyle(color: lastPlayedColor(context)) : null,
@@ -566,10 +615,12 @@ class FolderGridTile extends StatelessWidget {
     required this.onTap,
     this.resource,
     this.lastPlayed = false,
+    this.recentAt,
     this.onAddToPlaylist,
     this.onSelect,
   });
   final bool lastPlayed;
+  final DateTime? recentAt;
   final String name;
   final String? resource;
   final VoidCallback onTap;
@@ -602,8 +653,9 @@ class FolderGridTile extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          Text(
+          EntryName(
             name,
+            recentAt: recentAt,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(fontSize: 13, color: lastPlayed ? lastPlayedColor(context) : null),

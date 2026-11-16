@@ -1,15 +1,11 @@
 import 'dart:async';
 import 'dart:ffi';
-import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:ai_frame_engine/engine.dart' as rife;
-import 'package:crypto/crypto.dart';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 
 /// A small delayed display queue; mpv continues decoding and owns audio/seek.
 class AiInterpolation {
@@ -17,7 +13,6 @@ class AiInterpolation {
   final void Function() changed;
   final frame = ValueNotifier<ui.Image?>(null);
   static const delay = Duration(milliseconds: 250);
-  static Future<String>? _model;
   Pointer<Void> _engine = nullptr;
   Pointer<Uint8> _pixels = nullptr;
   Pointer<Int> _info = nullptr;
@@ -40,26 +35,12 @@ class AiInterpolation {
   bool get running => _engine != nullptr;
   bool get applied => frame.value != null;
 
-  static Future<String> _prepareModel() async {
-    final dir = Directory('${(await getApplicationSupportDirectory()).path}/ai-interpolation/rife-v4.6');
-    await dir.create(recursive: true);
-    const hashes = {
-      'flownet.param': '724569596bcd1e7b9fa50455c604777ebed99746d2ef40aa86e31b5725f1053c',
-      'flownet-npu.param': '517561e5affe42e39c6c8328675139104228cc8454c2dfd54d06a6f6bf74106c',
-      'flownet.bin': 'f334ed2260149ce0188a6dcf049844e8b0cdd912e01cbcfb63553157d2508958',
-    };
-    for (final entry in hashes.entries) {
-      final file = File('${dir.path}/${entry.key}');
-      if (await file.exists() && sha256.convert(await file.readAsBytes()).toString() == entry.value) continue;
-      final asset = await rootBundle.load('assets/models/rife-v4.6/${entry.key}');
-      final bytes = asset.buffer.asUint8List(asset.offsetInBytes, asset.lengthInBytes);
-      if (sha256.convert(bytes).toString() != entry.value) throw StateError('AI 보간 모델 검증 실패');
-      await file.writeAsBytes(bytes, flush: true);
-    }
-    return dir.path;
-  }
-
-  Future<void> start({required int handle, required String mpvLibrary, bool preferNpu = true}) async {
+  Future<void> start({
+    required int handle,
+    required String mpvLibrary,
+    required String modelPath,
+    bool preferNpu = true,
+  }) async {
     await stop();
     final generation = ++_generation;
     busy = true;
@@ -69,24 +50,20 @@ class AiInterpolation {
     issue = null;
     changed();
     try {
-      final path = await (_model ??= _prepareModel().catchError((Object e) {
-        _model = null;
-        throw e;
-      }));
       if (generation != _generation) return;
       final library = DynamicLibrary.open(mpvLibrary);
-      final modelPath = path.toNativeUtf8();
+      final path = modelPath.toNativeUtf8();
       try {
         _engine = rife.start(
-          modelPath.cast(),
+          path.cast(),
           Pointer.fromAddress(handle),
           library.lookup<Void>('mpv_get_property'),
           library.lookup<Void>('mpv_command_ret'),
           library.lookup<Void>('mpv_free_node_contents'),
-          Platform.isAndroid && preferNpu ? 1 : 0,
+          preferNpu ? 1 : 0,
         );
       } finally {
-        calloc.free(modelPath);
+        calloc.free(path);
       }
       if (_engine == nullptr) throw StateError('AI 보간 엔진 시작 실패');
       _pixels = calloc<Uint8>(320 * 320 * 4);

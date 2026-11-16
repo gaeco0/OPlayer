@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../network/network_service.dart';
 import 'plugin.dart';
+import 'frame_processor.dart';
 import 'upscale_network.dart';
 import 'plugin_runtime.dart';
 import 'plugin_store.dart';
@@ -242,7 +243,16 @@ class UpscaleModels {
     final provider = model.provider;
     if (provider == null) throw StateError('모델 파일이 없거나 손상됐습니다. URL로 다시 추가해 주세요');
     store.require(provider.id);
-    final result = await callPlugin(provider, 'upscaleModel', {'id': model.id}, config: store.publicSettings(provider));
+    final program = await frameProcessor(provider, {
+      'id': model.id,
+      'operation': 'upscaling',
+    }, config: store.publicSettings(provider));
+    if (program != null && (program['engine'] != 'mpv-glsl' || program['inputFrames'] != 1)) {
+      throw const FormatException('지원하지 않는 업스케일 프레임 프로그램');
+    }
+    final result = program == null
+        ? await callPlugin(provider, 'upscaleModel', {'id': model.id}, config: store.publicSettings(provider))
+        : {'format': 'mpv-glsl', 'shader': program['shader']};
     if (result is! Map || result['format'] != 'mpv-glsl' || result['shader'] is! String) {
       throw const FormatException('모델 응답은 mpv GLSL 셰이더여야 합니다');
     }
@@ -252,6 +262,29 @@ class UpscaleModels {
     await file.parent.create(recursive: true);
     await file.writeAsString(shader, flush: true);
     return file;
+  }
+
+  Future<Map<String, dynamic>?> playbackOptions(String key, Map<String, dynamic> context) async {
+    final model = (await catalog()).where((m) => m.key == key).firstOrNull;
+    if (model == null) throw StateError('선택한 모델 확장앱을 켜 주세요');
+    final provider = model.provider ?? store.enabled.where((p) => p.supports('upscaling')).firstOrNull;
+    if (provider == null) throw StateError('모델 확장앱을 켜 주세요');
+    final result = await callPlugin(provider, 'playbackOptions', {
+      'model': key,
+      'id': model.id,
+      ...context,
+    }, config: store.publicSettings(provider));
+    if (result == null) return null; // Existing providers continue with GPU shaders.
+    if (result is! Map ||
+        result['ai'] is! bool ||
+        result['npu'] is! bool ||
+        result['resolution'] is! int ||
+        (result['resolution'] as int) < 0 ||
+        (result['resolution'] as int) > 4096 ||
+        result['issue'] != null && result['issue'] is! String) {
+      throw const FormatException('잘못된 확장앱 재생 옵션 응답');
+    }
+    return result.cast<String, dynamic>();
   }
 
   Future<String> resolve(String key) async {

@@ -3,6 +3,7 @@ import 'plugin_compatibility.dart';
 import '../../sources/server_store.dart';
 import '../../sources/source_registry.dart';
 import 'upscale_models.dart';
+import 'frame_processor.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -69,7 +70,11 @@ class PluginStore extends ChangeNotifier {
   String oauthClientId(OPlugin plugin) =>
       _prefs?.getString('pluginOAuthClientId:${plugin.id}') ??
       plugin.oauth['clientId'] as String? ??
-      (plugin.oauth['clientIdSource'] == 'app.google' ? CloudConfig.googleClientId : '');
+      (plugin.oauth['clientIdSource'] == 'app.google'
+          ? CloudConfig.googleClientId
+          : (_prefs?.getBool('pluginDataDeleted:${plugin.id}') ?? false)
+          ? ''
+          : legacyPluginClientId(plugin.id));
 
   Future<void> setOAuthClientId(String id, String value) async {
     if (installed[id]?.cloud != true) throw StateError('설치된 클라우드 확장앱이 아닙니다');
@@ -213,6 +218,9 @@ class PluginStore extends ChangeNotifier {
       if (!await _prefs!.setBool('pluginDataDeleted:$id', true)) throw StateError('확장앱 데이터 삭제 기록 저장 실패');
       final models = identical(this, PluginStore.instance) ? UpscaleModels.instance : UpscaleModels(store: this);
       if (installed[id]?.supports('upscaling') == true) await models.removeProviderCache(id);
+      if ((installed[id]?.manifest['requiresHost'] as List? ?? []).contains('frameProcessing')) {
+        await removeFrameModelCache(id);
+      }
       final settings = AppSettings.instance;
       if (settings.upscalingModel.startsWith('$id/') ||
           settings.interpolationModel.startsWith('$id/') ||

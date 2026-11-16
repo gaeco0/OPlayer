@@ -1,3 +1,6 @@
+import '../core/plugins/plugin_store.dart';
+import '../core/plugins/plugin_updates.dart';
+import '../features/settings/plugins_page.dart';
 import '../core/resource_locks.dart';
 import 'dart:io';
 import 'package:desktop_drop/desktop_drop.dart';
@@ -27,6 +30,7 @@ class _MediaShellState extends State<MediaShell> with WidgetsBindingObserver {
   final _external = <List<ExternalFile>>[];
   bool _openingExternal = false;
   final _updateNotices = <String>{};
+  final _pluginUpdateNotices = <String>{};
 
   @override
   void initState() {
@@ -35,6 +39,11 @@ class _MediaShellState extends State<MediaShell> with WidgetsBindingObserver {
     AppUpdater.instance.addListener(_noticeUpdate);
     ResourceLocks.instance.addListener(_noticeUpdate);
     AppUpdater.instance.check();
+    PluginUpdates.instance.addListener(_noticePluginUpdates);
+    PluginStore.instance.addListener(_noticePluginUpdates);
+    ResourceLocks.instance.addListener(_noticePluginUpdates);
+    PluginUpdates.instance.check();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _noticePluginUpdates());
     externalFilesChannel.setMethodCallHandler((call) async {
       if (call.method == 'open') _receiveExternal(call.arguments);
     });
@@ -49,6 +58,8 @@ class _MediaShellState extends State<MediaShell> with WidgetsBindingObserver {
       _openInitialFiles();
       AppUpdater.instance.check();
       _noticeUpdate();
+      PluginUpdates.instance.check();
+      _noticePluginUpdates();
     }
   }
 
@@ -93,6 +104,40 @@ class _MediaShellState extends State<MediaShell> with WidgetsBindingObserver {
             onPressed: () {
               MouseNav.navigatorKey.currentState?.push(MaterialPageRoute<void>(builder: (_) => const AppUpdatePage()));
             },
+          ),
+        ),
+      );
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  void _noticePluginUpdates() {
+    final locks = ResourceLocks.instance;
+    if (!mounted || locks.shielded || locks.unavailable || locks.inBackground) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || locks.shielded || locks.unavailable || locks.inBackground) return;
+      final updates = PluginUpdates.instance.available
+          .where((p) => !_pluginUpdateNotices.contains('${p.id}:${p.version}'))
+          .toList();
+      if (updates.isEmpty) return;
+      final context = MouseNav.navigatorKey.currentContext;
+      if (context == null) return;
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      if (messenger == null) return;
+      _pluginUpdateNotices.addAll(updates.map((p) => '${p.id}:${p.version}'));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            updates.length == 1
+                ? '${updates.single.name} ${updates.single.version} 업데이트가 있습니다'
+                : '확장앱 ${updates.length}개에 업데이트가 있습니다',
+          ),
+          duration: const Duration(seconds: 12),
+          action: SnackBarAction(
+            label: '업데이트 보기',
+            onPressed: () => MouseNav.navigatorKey.currentState?.push(
+              MaterialPageRoute<void>(builder: (_) => const PluginsPage(updatesOnly: true)),
+            ),
           ),
         ),
       );
@@ -155,6 +200,9 @@ class _MediaShellState extends State<MediaShell> with WidgetsBindingObserver {
   @override
   void dispose() {
     AppUpdater.instance.removeListener(_noticeUpdate);
+    PluginUpdates.instance.removeListener(_noticePluginUpdates);
+    PluginStore.instance.removeListener(_noticePluginUpdates);
+    ResourceLocks.instance.removeListener(_noticePluginUpdates);
     ResourceLocks.instance.removeListener(_noticeUpdate);
     WidgetsBinding.instance.removeObserver(this);
     externalFilesChannel.setMethodCallHandler(null);

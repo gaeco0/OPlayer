@@ -1,4 +1,4 @@
-import 'dart:io';
+import '../../settings/plugin_settings_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:file_picker/file_picker.dart';
@@ -384,7 +384,7 @@ class _QualityControls extends StatelessWidget {
       children: [
         const _Section('업스케일'),
         SwitchListTile(
-          title: const Text('고화질 업스케일', style: _white),
+          title: Text(AppSettings.instance.aiUpscalingSelected ? 'AI 업스케일' : '일반 업스케일', style: _white),
           subtitle: Text(c.audioOnly ? '오디오 전용 재생에는 적용하지 않습니다' : '화면에 맞춰 선명하게 확대 · 설정 자동 저장', style: _label),
           value: AppSettings.instance.videoUpscaling,
           onChanged: (c.upscalingBusy && !AppSettings.instance.videoUpscaling) || c.audioOnly
@@ -394,19 +394,13 @@ class _QualityControls extends StatelessWidget {
         ListTile(
           title: const Text('업스케일 모델', style: _white),
           subtitle: Text(
-            AppSettings.instance.upscalingModel == 'lanczos' ? 'Lanczos · AI 모델은 확장앱 설치 필요' : 'AI 모델 선택됨 · 변경·URL 추가',
+            AppSettings.instance.upscalingModel == 'lanczos' ? 'Lanczos · AI 사용 안 함' : 'AI 모델 선택됨 · 변경·URL 추가',
             style: _label,
           ),
           trailing: const Icon(Icons.chevron_right, color: Colors.white70),
           onTap: () => Navigator.push(context, MaterialPageRoute<void>(builder: (_) => const UpscaleModelsPage())),
         ),
-        if (Platform.isAndroid)
-          SwitchListTile(
-            title: const Text('AI 업스케일 NPU 가속', style: _white),
-            subtitle: const Text('Snapdragon·Exynos 지원 NPU · 미지원 시 GPU 복귀', style: _label),
-            value: AppSettings.instance.upscalingNpu,
-            onChanged: (v) => AppSettings.instance.update((s) => s.upscalingNpu = v),
-          ),
+        PlayerPluginOptions(capability: 'upscaling', model: AppSettings.instance.upscalingModel, color: Colors.white),
         if (c.aiUpscaling.applied)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -415,7 +409,7 @@ class _QualityControls extends StatelessWidget {
               style: _label,
             ),
           ),
-        const UpscaleTargetTile(color: Colors.white),
+        if (!AppSettings.instance.aiUpscalingSelected) const UpscaleTargetTile(color: Colors.white),
         if (c.upscalingBusy) const LinearProgressIndicator(),
         if (c.upscalingIssue != null)
           Padding(
@@ -458,13 +452,11 @@ class _QualityControls extends StatelessWidget {
               ? null
               : (v) => AppSettings.instance.update((s) => s.frameInterpolation = v),
         ),
-        if (Platform.isAndroid && AppSettings.instance.interpolationMode == 'rife')
-          SwitchListTile(
-            title: const Text('AI 보간 NPU 가속', style: _white),
-            subtitle: const Text('Snapdragon·Exynos 지원 NPU · 미지원·속도 부족 시 GPU 복귀', style: _label),
-            value: AppSettings.instance.interpolationNpu,
-            onChanged: (v) => AppSettings.instance.update((s) => s.interpolationNpu = v),
-          ),
+        PlayerPluginOptions(
+          capability: 'interpolation',
+          model: AppSettings.instance.interpolationModel,
+          color: Colors.white,
+        ),
         if (c.interpolationBusy) const LinearProgressIndicator(),
         if (c.interpolationIssue != null)
           Padding(

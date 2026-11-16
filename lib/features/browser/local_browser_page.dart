@@ -465,6 +465,7 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
                   name: it.name,
                   resource: it.path,
                   lastPlayed: _highlighted(it.path, folder: true),
+                  recentAt: it.stat.modified,
                   onTap: () => _enter(it.path),
                   onAddToPlaylist: () => runFileAction(
                     context,
@@ -478,6 +479,7 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
               : VideoGridTile(
                   resumeKey: it.path,
                   lastPlayed: _highlighted(it.path),
+                  recentAt: it.stat.modified,
                   name: it.name,
                   localPath: it.path,
                   size: it.stat.size,
@@ -511,6 +513,7 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
                 name: it.name,
                 resource: it.path,
                 lastPlayed: _highlighted(it.path, folder: true),
+                recentAt: it.stat.modified,
                 onTap: () => _enter(it.path),
                 onAddToPlaylist: () => runFileAction(
                   context,
@@ -524,6 +527,7 @@ class _LocalBrowserPageState extends State<LocalBrowserPage> {
             : VideoListTile(
                 resumeKey: it.path,
                 lastPlayed: _highlighted(it.path),
+                recentAt: it.stat.modified,
                 name: it.name,
                 localPath: it.path,
                 size: it.stat.size,
