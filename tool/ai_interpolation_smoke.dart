@@ -10,6 +10,9 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit/src/player/native/core/native_library.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:oplayer/features/player/ai_interpolation.dart';
+import 'package:oplayer/core/plugins/plugin.dart';
+import 'package:oplayer/core/plugins/plugin_runtime.dart';
+import 'package:oplayer/core/plugins/frame_processor.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -53,9 +56,24 @@ Future<void> main() async {
     await Future<void>.delayed(const Duration(seconds: 2));
     final native = player.platform as NativePlayer;
     await native.setProperty('audio-delay', '.250');
+    final provider = OPlugin.parse(await File('plugins/player.ai-interpolation.js').readAsString());
+    final program = (await frameProcessor(provider, {'id': 'rife-v4-6'}))!;
+    final modelPath = await prepareFrameModel(provider, program);
+    final options =
+        await callPlugin(provider, 'playbackOptions', {
+              'platform': Platform.operatingSystem,
+              'visible': true,
+              'bitmapSubtitles': false,
+              'rate': 1,
+              'fastForwarding': false,
+              'casting': false,
+              'gamma': 'srgb',
+            }, config: provider.publicConfig({}))
+            as Map;
+    final preferNpu = options['npu'] == true;
     await step('start');
     await engine
-        .start(handle: await player.handle, mpvLibrary: NativeLibrary.path)
+        .start(handle: await player.handle, mpvLibrary: NativeLibrary.path, modelPath: modelPath, preferNpu: preferNpu)
         .timeout(const Duration(seconds: 30));
     await step('started');
     final deadline = DateTime.now().add(const Duration(seconds: 30));
@@ -86,7 +104,12 @@ Future<void> main() async {
       throw StateError('Original output/timing not restored');
     }
     results['stop'] = true;
-    await engine.start(handle: await player.handle, mpvLibrary: NativeLibrary.path);
+    await engine.start(
+      handle: await player.handle,
+      mpvLibrary: NativeLibrary.path,
+      modelPath: modelPath,
+      preferNpu: preferNpu,
+    );
     await player.setRate(2);
     await Future<void>.delayed(const Duration(seconds: 2));
     if (engine.running || engine.issue == null) throw StateError('Unsupported speed did not fall back');
