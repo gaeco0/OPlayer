@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+- Linux CI에서 x64 Ubuntu 패키지 미러를 공식 HTTPS 주소로 전환하고, 패키지 다운로드 재시도·시간 제한과 필수 패키지만 설치하는 옵션을 적용했습니다.
+
 ## [0.1.9-nightly.20261126.2]
 
 - `.1`은 Android·TV·Linux·macOS 빌드는 성공했으나, Windows 두 아키텍처에서 외부 mpv 배포 파일이 삭제되어 HTTP 404로 실패했고 전체 배포가 게시되지 않았습니다.
