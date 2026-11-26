@@ -8,12 +8,12 @@ GPLv3 text are included here and in the app's open-source licenses screen.
 ## Windows x64 / ARM64
 
 - Distributor/build recipe: https://github.com/zhongfly/mpv-winbuild
-- Pinned release: https://github.com/zhongfly/mpv-winbuild/releases/tag/2026-10-25-baa3e11d42
-- Use `mpv-dev-lgpl-x86_64-20261025-git-baa3e11d42.7z` and
-  `mpv-dev-lgpl-aarch64-20261025-git-baa3e11d42.7z` (baseline x64, not x64-v3).
-- mpv source: https://github.com/mpv-player/mpv/tree/baa3e11d42
+- Pinned release: https://github.com/zhongfly/mpv-winbuild/releases/tag/2026-11-24-35efcf53d5
+- Use `mpv-dev-lgpl-x86_64-20261124-git-35efcf53d5.7z` and
+  `mpv-dev-lgpl-aarch64-20261124-git-35efcf53d5.7z` (baseline x64, not x64-v3).
+- mpv source: https://github.com/mpv-player/mpv/tree/35efcf53d5
 - Build sources/configuration: the pinned release's source archive and
-  https://github.com/zhongfly/mpv-winbuild/tree/2026-10-25-baa3e11d42
+  https://github.com/zhongfly/mpv-winbuild/tree/2026-11-24-35efcf53d5
 - SHA-256 hashes are pinned in `windows/mpv-libraries.cmake` and verified before extraction.
 - The build extracts with official 7-Zip 25.01 (`7zr.exe`), pinned and SHA-256 checked,
   to support ARM64 BCJ compression: https://github.com/ip7z/7zip/releases/tag/25.01.

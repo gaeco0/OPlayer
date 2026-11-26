@@ -5,6 +5,12 @@
 
 ## [Unreleased]
 
+## [0.1.9-nightly.20261126.2]
+
+- `.1`은 Android·TV·Linux·macOS 빌드는 성공했으나, Windows 두 아키텍처에서 외부 mpv 배포 파일이 삭제되어 HTTP 404로 실패했고 전체 배포가 게시되지 않았습니다.
+- Windows x64·ARM64의 LGPL mpv를 두 아키텍처가 제공되는 2026-11-24 배포로 갱신하고 SHA-256 검증과 소스·라이선스 고지를 갱신했습니다. Android 빌드 번호는 5입니다.
+- Google 기본 인증정보 제거·WebDAV 동기화·길게 누르기 선택모드 변경은 그대로 포함합니다.
+
 ## [0.1.9-nightly.20261126.1]
 
 - Google OAuth Client ID·Secret의 기본 탑재와 배포 빌드 주입을 제거했습니다. Google 확장앱은 직접 등록한 인증정보를 입력해 선택적으로 사용할 수 있으며 기존 사용자 설정과 기록은 유지합니다.

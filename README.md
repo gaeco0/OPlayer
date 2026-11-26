@@ -19,7 +19,7 @@ nPlayer의 UI/UX를 기준으로, 로컬·네트워크·클라우드 재생과 �
 
 - 현재 공개 베타: [0.1.8-beta.2](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.8-beta.2). 최근 재생 다중 선택을 포함한다. 앱의 업데이트 채널을 **beta**로 선택하면 확인할 수 있다. 정식 Latest·업데이트 확인 기본값은 stable v0.1.7로 유지한다.
 - 플랫폼별 실기기 검증을 모두 마친 베타는 아니다. 전체 플랫폼 빌드·자동 검증은 유지하며, 다양한 기기의 성능·호환성 문제는 사용자 제보를 모아 재현 후 수정한다. 설정 → **진단 정보 보내기**로 GitHub Issues에 신고할 수 있다.
-- 현재 nightly: [0.1.9-nightly.20261126.1](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.9-nightly.20261126.1). Google 기본 인증정보를 제거하고 WebDAV·NAS 동기화를 추가했습니다. 파일·폴더를 길게 누르면 선택모드로 전환하며 잠금은 각 항목의 컨텍스트 메뉴에서 설정합니다. Android 빌드 번호는 `+4`이며 stable v0.1.7 Latest는 유지합니다.
+- 현재 nightly: [0.1.9-nightly.20261126.2](https://github.com/gaeco0/OPlayer/releases/tag/v0.1.9-nightly.20261126.2). Windows mpv 다운로드 404로 게시되지 않은 `.1`을 수정한 빌드입니다. Google 기본 인증정보 제거·WebDAV·NAS 동기화·길게 누르기 선택모드를 포함합니다. Android 빌드 번호는 `+5`이며 stable v0.1.7 Latest는 유지합니다.
 
 ## 파일·재생목록 관리 (v0.1.7)
 
