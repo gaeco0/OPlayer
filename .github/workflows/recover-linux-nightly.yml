@@ -1,0 +1,98 @@
+name: Recover Linux x64 nightly 20261126.2
+
+on:
+  push:
+    branches: ['recovery/linux-nightly-20261126']
+
+permissions:
+  contents: read
+
+env:
+  RELEASE_COMMIT: 13ffac12851a9d9562584e5c79052319d59f1b1b
+  RELEASE_TAG: v0.1.9-nightly.20261126.2
+  SOURCE_RUN: '45788166392'
+  OPLAYER_UPDATE_CHANNEL: nightly
+  GITHUB_TOKEN: ${{ github.token }}
+
+jobs:
+  linux:
+    name: Recover Linux x64
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.RELEASE_COMMIT }}
+          persist-credentials: false
+      - name: Install required packages from official HTTPS mirrors
+        run: |
+          sudo sed -i -E 's|https?://[^ /]*archive.ubuntu.com/ubuntu/?|https://archive.ubuntu.com/ubuntu/|g; s|http://security.ubuntu.com/ubuntu/?|https://security.ubuntu.com/ubuntu/|g' /etc/apt/sources.list.d/ubuntu.sources
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::https::Timeout=30 install -y --no-install-recommends clang cmake ninja-build pkg-config libgtk-3-dev libstdc++-12-dev libsecret-1-dev libjsoncpp-dev libmpv-dev libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libjpeg-dev libpulse-dev libasound2-dev libepoxy-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - run: python .github/scripts/prepare-native-deps.py
+      - run: flutter pub get
+      - run: flutter build linux --target-platform linux-x64 --release --no-pub --dart-define=OPLAYER_UPDATE_CHANNEL=nightly
+      - name: Verify native runtime and extension compatibility
+        run: |
+          cmake -S packages/quickjs_engine/native -B build/plugin-runtime -DCMAKE_BUILD_TYPE=Release
+          cmake --build build/plugin-runtime --parallel 2
+          flutter test --no-pub test/plugin_compatibility_test.dart test/plugin_platform_smoke_test.dart
+          python .github/scripts/verify-architecture.py linux-x64
+      - run: python .github/scripts/package-release.py linux-x64
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-linux-x64
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+
+  publish:
+    name: Publish recovered nightly
+    needs: linux
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ env.RELEASE_COMMIT }}
+          persist-credentials: false
+      - name: Verify the original tagged source and six successful platforms
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: |
+            const repo = {owner: context.repo.owner, repo: context.repo.repo};
+            const tag = (await github.rest.git.getRef({...repo, ref: `tags/${process.env.RELEASE_TAG}`})).data;
+            if (tag.object.sha !== process.env.RELEASE_COMMIT) throw new Error('Release tag changed');
+            const run = (await github.rest.actions.getWorkflowRun({...repo, run_id: Number(process.env.SOURCE_RUN)})).data;
+            if (run.head_sha !== process.env.RELEASE_COMMIT || run.status !== 'completed') throw new Error('Source run mismatch or still active');
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {...repo, run_id: run.id, filter: 'latest'});
+            for (const name of ['Windows x64 build', 'Windows arm64 build', 'Android build', 'Android TV build', 'Linux arm64 build', 'macOS build']) {
+              if (!jobs.some(job => job.name === name && job.conclusion === 'success')) throw new Error(`Missing successful platform: ${name}`);
+            }
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          run-id: ${{ env.SOURCE_RUN }}
+          github-token: ${{ github.token }}
+          pattern: release-*
+          merge-multiple: true
+          path: release-assets
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: release-linux-x64
+          path: release-assets
+      - name: Publish all verified platform files with the existing release checks
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: |
+            // Recovery builds the unchanged, verified tag and reuses its successful jobs.
+            const releaseContext = {eventName: 'push', ref: `refs/tags/${process.env.RELEASE_TAG}`, sha: process.env.RELEASE_COMMIT, repo: context.repo, serverUrl: context.serverUrl, runId: context.runId};
+            await require('./.github/scripts/publish-release.cjs')({github, context: releaseContext, core});
