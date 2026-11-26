@@ -6,7 +6,6 @@ import '../../core/plugins/plugin_runtime.dart';
 import '../../core/plugins/plugin_store.dart';
 import '../../core/secure_store.dart';
 import '../../sources/cloud/oauth.dart';
-import '../../sources/cloud/cloud_config.dart';
 
 /// The extension owns the schema; the app only renders standard controls.
 Future<bool> showPluginSettingsDialog(
@@ -26,10 +25,6 @@ Future<bool> showPluginSettingsDialog(
     values[idKey] = store.oauthClientId(plugin);
   }
   final secretKey = plugin.oauth['clientSecretSetting'] as String? ?? 'clientSecret';
-  bool usesBundledGoogleSecret() =>
-      plugin.oauth['tokenEndpoint'] == 'https://oauth2.googleapis.com/token' &&
-      plugin.oauth['authEndpoint'] == 'https://accounts.google.com/o/oauth2/v2/auth' &&
-      (CloudConfig.googleBundledSecret('${values[idKey] ?? ''}')?.isNotEmpty ?? false);
   if (plugin.authType == 'oauth' && '${values[secretKey] ?? ''}'.isEmpty && '${values[idKey] ?? ''}'.isNotEmpty) {
     values[secretKey] =
         await SecureStore.instance.readRequired(PluginStore.oauthSecretKey(plugin.id, values[idKey] as String)) ?? '';
@@ -99,9 +94,7 @@ Future<bool> showPluginSettingsDialog(
                             enableSuggestions: false,
                             decoration: InputDecoration(
                               labelText: field['label'] as String,
-                              helperText: field['key'] == secretKey && usesBundledGoogleSecret()
-                                  ? '비워 두면 앱에 포함된 Client Secret을 자동 사용합니다.'
-                                  : field['description'] as String?,
+                              helperText: field['description'] as String?,
                               helperMaxLines: 3,
                             ),
                             onChanged: (v) {
@@ -110,9 +103,6 @@ Future<bool> showPluginSettingsDialog(
                             },
                             validator: (v) {
                               final text = (v ?? '').trim();
-                              if (field['key'] == secretKey && text.isEmpty && usesBundledGoogleSecret()) {
-                                return null;
-                              }
                               if (field['required'] == true && text.isEmpty) return '${field['label']} 값을 입력해 주세요';
                               if (field['type'] == 'url' && text.isNotEmpty) {
                                 try {

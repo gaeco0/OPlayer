@@ -358,7 +358,8 @@ class VideoListTile extends StatelessWidget {
     );
     return InkWell(
       onTap: onTap,
-      onLongPress: menu,
+      onLongPress: onSelect ?? menu,
+      onSecondaryTap: menu,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Row(
@@ -474,7 +475,8 @@ class VideoGridTile extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(6),
       onTap: onTap,
-      onLongPress: menu,
+      onLongPress: onSelect ?? menu,
+      onSecondaryTap: menu,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -555,7 +557,8 @@ class _FolderMenu extends StatelessWidget {
       if (onAdd != null) const PopupMenuItem(value: 'add', child: Text('재생목록에 추가')),
       if (onSelect != null) const PopupMenuItem(value: 'select', child: Text('선택모드')),
       if (onRemove != null) const PopupMenuItem(value: 'remove', child: Text('재생목록에서 삭제')),
-      if (resource != null) const PopupMenuItem(value: 'lock', child: Text('폴더 잠금 설정')),
+      if (resource != null)
+        PopupMenuItem(value: 'lock', child: Text(ResourceLocks.instance.hasExact(resource!) ? '폴더 잠금 해제' : '폴더 잠금 설정')),
     ],
   );
 }
@@ -594,7 +597,7 @@ class FolderListTile extends StatelessWidget {
     subtitle: subtitle == null
         ? null
         : Text(subtitle!, style: TextStyle(fontSize: 12, color: OColors.of(context).textSecondary)),
-    trailing: onAddToPlaylist == null && onSelect == null && onRemoveFromPlaylist == null
+    trailing: resource == null && onAddToPlaylist == null && onSelect == null && onRemoveFromPlaylist == null
         ? Icon(Icons.chevron_right, color: OColors.of(context).textSecondary)
         : _FolderMenu(
             name: name,
@@ -604,7 +607,7 @@ class FolderListTile extends StatelessWidget {
             onRemove: onRemoveFromPlaylist,
           ),
     onTap: onTap,
-    onLongPress: resource == null ? null : () => toggleResourceLock(context, resource!, name),
+    onLongPress: onSelect,
   );
 }
 
@@ -631,7 +634,7 @@ class FolderGridTile extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(6),
       onTap: onTap,
-      onLongPress: resource == null ? null : () => toggleResourceLock(context, resource!, name),
+      onLongPress: onSelect,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -642,7 +645,7 @@ class FolderGridTile extends StatelessWidget {
               child: Stack(
                 children: [
                   const Center(child: Icon(Icons.folder_rounded, color: Color(0xFFF2B84B), size: 44)),
-                  if (onAddToPlaylist != null || onSelect != null)
+                  if (resource != null || onAddToPlaylist != null || onSelect != null)
                     Positioned(
                       top: 0,
                       right: 0,

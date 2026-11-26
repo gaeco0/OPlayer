@@ -1,16 +1,13 @@
 import '../settings/resource_access_view.dart';
-
+import '../settings/privacy_settings.dart' show toggleResourceLock;
 import 'package:flutter/material.dart';
-
 import '../../core/resource_locks.dart';
 
 import '../../app/theme.dart';
 import '../../core/media_utils.dart';
 import '../../core/settings.dart';
-
 import 'dart:convert';
 import 'dart:async';
-
 import '../../sources/media_source.dart';
 import '../browser/home_screen.dart';
 import '../browser/local_browser_page.dart' show ErrorView, ScrollablePlaceholder;
@@ -326,8 +323,9 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
   Future<void> _play(RemoteEntry e) async {
     if (e.isPhoto) {
       final photos = _items.where((x) => x.isPhoto).toList();
-      await Navigator.of(context)
-          .push(PhotoViewer.route(photos.map((x) => widget.source.itemFor(x, _all)).toList(), photos.indexOf(e)));
+      await Navigator.of(
+        context,
+      ).push(PhotoViewer.route(photos.map((x) => widget.source.itemFor(x, _all)).toList(), photos.indexOf(e)));
       return;
     }
     final videos = _items.where((x) => x.isPlayableMedia).toList();
@@ -557,12 +555,16 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
         // Non-media files keep their original extension and bytes, too.
         return ListTile(
           leading: SizedBox(
-            width: 96,
+            width: grid ? 32 : 96,
             child: Icon(Icons.insert_drive_file_outlined, color: OColors.of(context).textSecondary),
           ),
           title: EntryName(e.name, recentAt: e.created ?? e.modified, maxLines: 1),
           subtitle: Text(formatSize(e.size), style: TextStyle(fontSize: 12, color: OColors.of(context).textSecondary)),
           onTap: _selecting ? () => _toggle(e.path) : null,
+          onLongPress: () => setState(() {
+            _selecting = true;
+            _selected.add(e.path);
+          }),
           trailing: PopupMenuButton<String>(
             onSelected: (v) {
               switch (v) {
@@ -577,11 +579,17 @@ class _RemoteBrowserPageState extends State<RemoteBrowserPage> {
                   _rename(e);
                 case 'delete':
                   _deleteFromMenu(e);
+                case 'lock':
+                  toggleResourceLock(context, src.keyFor(e.path), e.name);
               }
             },
             itemBuilder: (_) => [
               const PopupMenuItem(value: 'download', child: Text('기기에 다운로드')),
               const PopupMenuItem(value: 'select', child: Text('선택모드')),
+              PopupMenuItem(
+                value: 'lock',
+                child: Text(ResourceLocks.instance.hasExact(src.keyFor(e.path)) ? '잠금 설정 해제' : '이 항목 잠금'),
+              ),
               PopupMenuItem(value: 'rename', enabled: src.canRenameEntry(e), child: const Text('이름변경')),
               PopupMenuItem(value: 'delete', enabled: src.canDeleteEntry(e), child: const Text('파일 삭제')),
             ],

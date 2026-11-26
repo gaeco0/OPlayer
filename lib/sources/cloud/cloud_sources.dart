@@ -56,11 +56,6 @@ OAuthClient oauthClientFor(CloudProvider provider, {String? clientId, String? ac
     authEndpoint: oauth['authEndpoint'] as String,
     tokenEndpoint: oauth['tokenEndpoint'] as String,
     clientId: id,
-    clientSecret:
-        oauth['tokenEndpoint'] == 'https://oauth2.googleapis.com/token' &&
-            oauth['authEndpoint'] == 'https://accounts.google.com/o/oauth2/v2/auth'
-        ? CloudConfig.googleBundledSecret(id)
-        : null,
     clientSecretKey: isGoogleOAuth || oauth['requiresClientSecret'] == true
         ? PluginStore.oauthSecretKey(definition.id, id)
         : null,
@@ -269,7 +264,7 @@ class CloudSource extends MediaSource {
         allowsRequest: s3?.allows ?? (url) => plugin.allowsConfigured(url, config),
         request: (url, options) async {
           final verb = options['method'] as String? ?? 'GET';
-          if (!['GET', 'POST', 'HEAD', 'PUT', 'PATCH', 'DELETE'].contains(verb) ||
+          if (!['GET', 'POST', 'HEAD', 'PUT', 'PATCH', 'DELETE', 'PROPFIND'].contains(verb) ||
               (s3 != null && !['GET', 'HEAD', 'PUT'].contains(verb))) {
             throw StateError('지원하지 않는 클라우드 요청 방식');
           }
@@ -594,6 +589,7 @@ class CloudSource extends MediaSource {
     if (!(s3?.allows(url) ?? definition.allowsConfigured(url, config))) throw StateError('허용되지 않은 확장앱 도메인');
     final auth = definition.authType != 'script' && definition.authType != 's3' && options['authenticated'] != false;
     final protected =
+        options.containsKey('basicAuth') ||
         usesPluginSecret(options) ||
         (options['headers'] as Map? ?? {}).keys.any((k) => ['authorization', 'cookie'].contains('$k'.toLowerCase()));
     if ((auth || protected) && !definition.allowsConfigured(url, config, auth: true)) {

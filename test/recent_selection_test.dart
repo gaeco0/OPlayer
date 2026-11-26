@@ -106,8 +106,6 @@ void main() {
 
     await t.longPress(find.text('Missing'));
     await t.pumpAndSettle();
-    await t.tap(find.text('선택모드'));
-    await t.pumpAndSettle();
     expect(find.text('1개 선택'), findsOneWidget);
     await t.tap(find.byTooltip('전체 선택/해제'));
     await t.pumpAndSettle();

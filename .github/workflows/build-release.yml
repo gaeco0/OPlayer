@@ -35,12 +35,6 @@ jobs:
           persist-credentials: false
       - name: Resolve update channel
         run: node .github/scripts/release-metadata.cjs
-      - name: Prepare Google OAuth registration
-        env:
-          OPLAYER_GOOGLE_ANDROID_CLIENT_ID: ${{ secrets.OPLAYER_GOOGLE_ANDROID_CLIENT_ID }}
-          OPLAYER_GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.OPLAYER_GOOGLE_DESKTOP_CLIENT_ID }}
-          OPLAYER_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.OPLAYER_GOOGLE_DESKTOP_CLIENT_SECRET }}
-        run: node .github/scripts/google-oauth-defines.cjs desktop
       - if: matrix.arch == 'x64'
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
@@ -79,8 +73,6 @@ jobs:
       - if: matrix.arch == 'x64'
         run: node .github/scripts/publish-release.test.cjs
       - if: matrix.arch == 'x64'
-        run: node .github/scripts/google-oauth-defines.test.cjs
-      - if: matrix.arch == 'x64'
         run: node .github/scripts/release-metadata.test.cjs
       - if: matrix.arch == 'x64'
         run: python test/windows_update_test.py
@@ -90,7 +82,7 @@ jobs:
         run: python .github/scripts/github_asset.test.py
       - if: matrix.arch == 'x64'
         run: python .github/scripts/verify-architecture.test.py
-      - run: flutter build windows --release --no-pub --dart-define-from-file=.dart_tool/google-oauth-defines.json --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
+      - run: flutter build windows --release --no-pub --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
       - name: Verify native subtitles and common frame pipeline
         if: matrix.arch == 'x64'
         env:
@@ -142,12 +134,6 @@ jobs:
           log-accepted-android-sdk-licenses: false
       - name: Resolve update channel
         run: node .github/scripts/release-metadata.cjs
-      - name: Prepare Google OAuth registration
-        env:
-          OPLAYER_GOOGLE_ANDROID_CLIENT_ID: ${{ secrets.OPLAYER_GOOGLE_ANDROID_CLIENT_ID }}
-          OPLAYER_GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.OPLAYER_GOOGLE_DESKTOP_CLIENT_ID }}
-          OPLAYER_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.OPLAYER_GOOGLE_DESKTOP_CLIENT_SECRET }}
-        run: node .github/scripts/google-oauth-defines.cjs android
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -192,7 +178,7 @@ jobs:
           PY
       - name: Build signed release APKs
         if: github.event_name != 'pull_request'
-        run: flutter build apk --release --flavor "${{ matrix.flavor }}" --split-per-abi --no-pub --dart-define-from-file=.dart_tool/google-oauth-defines.json --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
+        run: flutter build apk --release --flavor "${{ matrix.flavor }}" --split-per-abi --no-pub --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
       - name: Verify APK signatures
         if: github.event_name != 'pull_request'
         run: |
@@ -201,7 +187,7 @@ jobs:
           done
       - name: Build pull request without signing secrets
         if: github.event_name == 'pull_request'
-        run: flutter build apk --debug --flavor "${{ matrix.flavor }}" --no-pub --dart-define-from-file=.dart_tool/google-oauth-defines.json --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
+        run: flutter build apk --debug --flavor "${{ matrix.flavor }}" --no-pub --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
       - name: Package signed APKs
         if: github.event_name != 'pull_request'
         run: python3 .github/scripts/package-release.py "${{ matrix.flavor }}"
@@ -239,12 +225,6 @@ jobs:
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev libstdc++-12-dev libsecret-1-dev libjsoncpp-dev libmpv-dev libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libjpeg-dev libpulse-dev libasound2-dev libepoxy-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev
       - name: Resolve update channel
         run: node .github/scripts/release-metadata.cjs
-      - name: Prepare Google OAuth registration
-        env:
-          OPLAYER_GOOGLE_ANDROID_CLIENT_ID: ${{ secrets.OPLAYER_GOOGLE_ANDROID_CLIENT_ID }}
-          OPLAYER_GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.OPLAYER_GOOGLE_DESKTOP_CLIENT_ID }}
-          OPLAYER_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.OPLAYER_GOOGLE_DESKTOP_CLIENT_SECRET }}
-        run: node .github/scripts/google-oauth-defines.cjs desktop
       - if: matrix.arch == 'x64'
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
@@ -260,7 +240,7 @@ jobs:
       - name: Prepare verified native sources before isolated build hooks
         run: python .github/scripts/prepare-native-deps.py
       - run: flutter pub get
-      - run: flutter build linux --target-platform linux-${{ matrix.arch }} --release --no-pub --dart-define-from-file=.dart_tool/google-oauth-defines.json --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
+      - run: flutter build linux --target-platform linux-${{ matrix.arch }} --release --no-pub --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
       - name: Verify extension runtime and compatibility on Linux
         run: |
           cmake -S packages/quickjs_engine/native -B build/plugin-runtime -DCMAKE_BUILD_TYPE=Release
@@ -289,12 +269,6 @@ jobs:
           persist-credentials: false
       - name: Resolve update channel
         run: node .github/scripts/release-metadata.cjs
-      - name: Prepare Google OAuth registration
-        env:
-          OPLAYER_GOOGLE_ANDROID_CLIENT_ID: ${{ secrets.OPLAYER_GOOGLE_ANDROID_CLIENT_ID }}
-          OPLAYER_GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.OPLAYER_GOOGLE_DESKTOP_CLIENT_ID }}
-          OPLAYER_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.OPLAYER_GOOGLE_DESKTOP_CLIENT_SECRET }}
-        run: node .github/scripts/google-oauth-defines.cjs desktop
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -306,7 +280,7 @@ jobs:
       - run: flutter pub get
       - name: Prepare verified macOS media frameworks
         run: python3 .github/scripts/prepare-macos-mpv.py
-      - run: flutter build macos --release --no-pub --dart-define-from-file=.dart_tool/google-oauth-defines.json --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
+      - run: flutter build macos --release --no-pub --dart-define=OPLAYER_UPDATE_CHANNEL=${{ env.OPLAYER_UPDATE_CHANNEL }}
       - name: Verify extension runtime and compatibility on macOS
         run: |
           cmake -S packages/quickjs_engine/native -B build/plugin-runtime -DCMAKE_BUILD_TYPE=Release

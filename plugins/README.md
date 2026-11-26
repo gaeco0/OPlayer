@@ -232,21 +232,21 @@ Android는 WebView 요청 콜백, Windows는 DevTools 요청 차단, Apple WebVi
 
 ### 클라우드 기능
 
-앱에 등록된 Google OAuth ID는 모든 네이티브 JS 확장앱의 훅에서 동기적으로 조회할 수 있습니다.
+사용자가 직접 등록한 Google OAuth ID는 모든 네이티브 JS 확장앱의 훅에서 동기적으로 조회할 수 있습니다.
 
 ```js
 const {clientId, platform} = OPlayer.app.googleOAuth;
-// clientId: 현재 플랫폼 ID (미등록 빌드는 빈 문자열)
+// clientId: 현재 플랫폼 ID (사용자 미등록 시 빈 문자열)
 // platform: android / windows / linux / macos
 ```
 
 `OPlayer.app`과 `googleOAuth`는 읽기 전용입니다. Client Secret·사용자 계정·로그인 토큰은 노출하지 않습니다.
 페이지에 주입되는 스크립트에는 이 네이티브 SDK 객체를 자동 제공하지 않습니다.
 Google OAuth 리소스 확장앱은 매니페스트의 `oauth.clientIdSource: "app.google"`로 앱의 ID를 기본값으로
-선택할 수 있습니다. 자체 `clientId`·사용자 설정·기존 계정의 ID가 우선합니다. 배포용 데스크톱 Secret은
-등록 ID와 Google 인증·토큰 엔드포인트가 모두 일치할 때만 네이티브에서 사용합니다.
+선택할 수 있습니다. 자체 `clientId`·사용자 설정·기존 계정의 ID가 우선합니다.
+Google Client ID·Secret은 배포본에 포함하지 않으며 빌드 정의로 주입하지 않습니다.
 인증 범위·호스트 권한은 그대로 선언해야 하며 ID 조회만으로 인증·API 호출 권한이 생기지 않습니다.
-Actions Secret 이름과 운영자 등록 절차는 [Google 등록 안내](../docs/google-sync.md#운영자-등록값을-actions에서-주입하기)를 참고하세요.
+직접 등록하는 방법은 [동기화 안내](../docs/google-sync.md)를 참고하세요.
 
 공식 `cloud.*.js`를 참고하세요. 계정 연결 UI에는 설치·활성화된 클라우드 확장앱이 표시됩니다.
 `oauth`를 선언한 클라우드 확장앱에는 자체 설정 화면을 제공합니다. 추가 공급자의 Client ID도 그 화면에
@@ -761,3 +761,8 @@ cool/neutral/warm balance and grayscale, including simultaneous combinations.
 Old scalar-only `videoFilter()` providers remain supported through the legacy
 adapter. The new provider declares `requiresHost: ["pixelPrograms"]` so earlier
 apps reject it instead of pretending to apply unsupported processing.
+
+
+### WebDAV 동기화
+
+`sync.webdav`는 `requiresHost: ["syncStorage", "webdavSync"]`를 선언합니다. 사용자 입력 `endpoint`를 `networkSettings`·`authSettings`에 지정해 해당 HTTPS 폴더 안에서만 요청합니다. 호스트는 `PROPFIND`와 `basicAuth: {username: OPlayer.secret('username'), password: OPlayer.secret('password')}`를 지원합니다. Basic 헤더는 네이티브에서 UTF-8/Base64로 구성하며 리다이렉트를 따라 인증 정보를 전달하지 않습니다. 비밀번호를 JS에 노출할 필요가 없습니다.

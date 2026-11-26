@@ -11,7 +11,9 @@ http.Request pluginHttpRequest(
   Uri Function(Uri)? sign,
   Map<String, String> authHeaders = const {},
 }) {
-  if (!['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'].contains(method)) throw StateError('지원하지 않는 요청 방식');
+  if (!['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'PROPFIND'].contains(method)) {
+    throw StateError('지원하지 않는 요청 방식');
+  }
   final resolved = resolvePluginValue(options, credentials) as Map;
   var uri = Uri.parse(url);
   if (resolved['query'] is Map) {
@@ -27,6 +29,14 @@ http.Request pluginHttpRequest(
       throw StateError('허용되지 않은 요청 헤더');
     }
     request.headers['${e.key}'] = '${e.value}';
+  }
+  if (resolved['basicAuth'] case final Map basic) {
+    final username = basic['username'];
+    final password = basic['password'];
+    if (username is! String || password is! String || username.contains(':')) {
+      throw StateError('Basic 인증 정보를 확인해 주세요');
+    }
+    request.headers['Authorization'] = 'Basic ${base64Encode(utf8.encode('$username:$password'))}';
   }
   if (resolved['bodyFields'] is Map) {
     request.bodyFields = (resolved['bodyFields'] as Map).cast<String, String>();

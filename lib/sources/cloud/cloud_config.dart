@@ -22,20 +22,10 @@ import '../../core/settings.dart';
 ///     com.oplayer.oplayer://oauth/onedrive 를 custom redirect URI로 등록
 ///   · API 권한: Files.Read, User.Read, offline_access
 class CloudConfig {
-  static const bundledGoogleAndroidClientId = String.fromEnvironment('OPLAYER_GOOGLE_ANDROID_CLIENT_ID');
-  static const bundledGoogleDesktopClientId = String.fromEnvironment('OPLAYER_GOOGLE_DESKTOP_CLIENT_ID');
-  static const _bundledGoogleDesktopSecret = String.fromEnvironment('OPLAYER_GOOGLE_DESKTOP_CLIENT_SECRET');
-  static String get googleDesktopClientId => AppSettings.instance.googleDesktopClientId.isNotEmpty
-      ? AppSettings.instance.googleDesktopClientId
-      : bundledGoogleDesktopClientId;
-  static String get googleAndroidClientId => AppSettings.instance.googleAndroidClientId.isNotEmpty
-      ? AppSettings.instance.googleAndroidClientId
-      : bundledGoogleAndroidClientId;
+  // Google registration is supplied by the user, never embedded in a release.
+  static String get googleDesktopClientId => AppSettings.instance.googleDesktopClientId;
+  static String get googleAndroidClientId => AppSettings.instance.googleAndroidClientId;
   static String get googleClientId => Platform.isAndroid ? googleAndroidClientId : googleDesktopClientId;
-  // A desktop application's registration secret is extractable from its binary.
-  // Never expose it to JS or use it with a different client ID.
-  static String? googleBundledSecret(String id) =>
-      id.isNotEmpty && id == bundledGoogleDesktopClientId ? _bundledGoogleDesktopSecret : null;
   static String googleSecretKey(String clientId) => 'google_oauth_secret_$clientId';
 
   static String get dropboxAppKey => AppSettings.instance.dropboxAppKey.isNotEmpty

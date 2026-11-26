@@ -60,28 +60,33 @@ void main() {
     expect(PluginStore.instance.oauthClientId(PluginStore.instance.installed['cloud.dropbox']!), 'testappkey123');
   });
 
-  testWidgets('official Google extensions use app registration without exposing registration settings', (tester) async {
+  testWidgets('Google extensions expose user registration settings', (tester) async {
     final settings = AppSettings.instance;
     final previousId = settings.googleDesktopClientId;
-    settings.googleDesktopClientId = 'bundled-test.apps.googleusercontent.com';
+    settings.googleDesktopClientId = 'user-test.apps.googleusercontent.com';
     addTearDown(() => settings.googleDesktopClientId = previousId);
     final store = PluginStore.instance;
     for (final id in ['cloud.gdrive', 'sync.gdrive']) {
       final plugin = store.installed[id]!;
-      expect(plugin.settings, isEmpty); // Explicit [] must not generate legacy registration fields.
+      expect(plugin.settings.map((f) => f['key']), containsAll(['clientId', 'clientSecret']));
       expect(plugin.oauth['clientIdSource'], 'app.google');
       expect(oauthClientFor(CloudProvider.plugin, pluginId: id).clientId, settings.googleDesktopClientId);
       await tester.pumpWidget(MaterialApp(home: CloudPluginSettingsPage(pluginId: id)));
       await tester.pumpAndSettle();
-      expect(find.text('앱 등록 정보'), findsNothing);
+      expect(find.text('앱 등록 정보'), findsOneWidget);
       expect(find.byType(TextFormField), findsNothing);
       expect(find.text('발급·등록 안내'), findsNothing);
     }
     await tester.pumpWidget(const MaterialApp(home: PluginsPage()));
     await tester.pumpAndSettle();
-    expect(find.byTooltip('Google Drive 설정'), findsNothing);
-    expect(find.byTooltip('Google Drive 동기화 설정'), findsNothing);
+    expect(find.byTooltip('Google Drive 설정'), findsOneWidget);
     expect(find.byTooltip('Dropbox 설정'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.byTooltip('Google Drive 동기화 설정'),
+      250,
+      scrollable: find.descendant(of: find.byType(ListView), matching: find.byType(Scrollable)).first,
+    );
+    expect(find.byTooltip('Google Drive 동기화 설정'), findsOneWidget);
   });
 
   testWidgets('cloud registration belongs only to its extension, including when disabled', (tester) async {

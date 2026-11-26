@@ -142,8 +142,16 @@ void main() {
     }
 
     await waitFor(find.byType(FolderListTile));
+    await tester.longPress(find.text('Movies'));
+    await tester.pumpAndSettle();
+    expect(find.text('1개 선택'), findsOneWidget);
+    expect(find.byType(PopupMenuItem<String>), findsNothing);
+    expect(ResourceLocks.instance.hasExact(folder.path), false);
+    await tester.tap(find.byTooltip('선택 취소'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('폴더 메뉴'));
     await tester.pumpAndSettle();
+    expect(find.text('폴더 잠금 설정'), findsOneWidget);
     await tester.tap(find.text('재생목록에 추가'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Folder destination'));
@@ -312,9 +320,7 @@ void main() {
     }
 
     await waitFor('choose.mp4');
-    await tester.tap(find.byTooltip('선택모드'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byType(Checkbox).first);
+    await tester.longPress(find.text('choose.mp4'));
     await tester.pumpAndSettle();
     expect(find.text('1개 선택'), findsOneWidget);
     await tester.tap(find.byTooltip('선택 메뉴'));
@@ -361,6 +367,40 @@ void main() {
     await tester.pumpAndSettle();
     expect(source.entries.single.isDir, true);
   });
+
+  for (final grid in [false, true]) {
+    testWidgets('remote ${grid ? "grid" : "list"} long press selects folders, media and ordinary files', (
+      tester,
+    ) async {
+      final source = _Source();
+      source.entries.add(const RemoteEntry(name: 'notes.txt', path: '/media/notes.txt', isDir: false));
+      await tester.pumpWidget(MaterialApp(home: RemoteBrowserPage(source: source)));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('정렬'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(CheckedPopupMenuItem<Object>, '미디어만 표시'));
+      await tester.pumpAndSettle();
+      if (grid) {
+        await tester.tap(find.byTooltip('격자 보기'));
+        await tester.pumpAndSettle();
+      }
+      for (final name in ['folder', 'one.mp4', 'notes.txt']) {
+        await tester.longPress(find.text(name));
+        await tester.pumpAndSettle();
+        expect(find.text('1개 선택'), findsOneWidget);
+        expect(find.byType(Checkbox), findsNWidgets(4));
+        expect(ResourceLocks.instance.hasExact(source.keyFor('/media/$name')), false);
+        await tester.tap(find.byTooltip('선택 취소'));
+        await tester.pumpAndSettle();
+      }
+      final notes = find.ancestor(of: find.text('notes.txt'), matching: find.byType(ListTile));
+      await tester.tap(find.descendant(of: notes, matching: find.byType(PopupMenuButton<String>)));
+      await tester.pumpAndSettle();
+      expect(find.text('이 항목 잠금'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpAndSettle();
+    });
+  }
 
   testWidgets('remote folder menu stores its reference and folder view refreshes current contents', (tester) async {
     final source = _Source();

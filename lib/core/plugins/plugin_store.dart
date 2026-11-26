@@ -129,7 +129,8 @@ class PluginStore extends ChangeNotifier {
   }
 
   Future<OPlugin> _settingsDefinition(OPlugin plugin) async {
-    if (plugin.manifest.containsKey('settings')) return plugin;
+    final legacyGoogle = plugin.oauth['clientIdSource'] == 'app.google' && plugin.settings.isEmpty;
+    if (plugin.manifest.containsKey('settings') && !legacyGoogle) return plugin;
     // Old installed scripts keep their executable code and permissions. Only
     // trusted bundled UI metadata fills in their pre-schema settings screen.
     try {

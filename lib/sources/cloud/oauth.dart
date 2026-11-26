@@ -260,6 +260,7 @@ class GoogleAndroidOAuthClient extends OAuthClient {
   static const channel = MethodChannel('oplayer/google-drive');
 
   Future<OAuthTokens> _authorizeNative(bool interactive, [String? invalidateToken]) async {
+    if (clientId.isEmpty) throw StateError('확장앱 설정에 직접 발급한 Google OAuth Client ID를 입력해 주세요');
     final result = await channel.invokeMapMethod<String, dynamic>('authorize', {
       'interactive': interactive,
       if (extraAuthParams.containsKey('include_granted_scopes'))

@@ -1,80 +1,30 @@
-# Google 계정 동기화
+# 재생 기록 동기화
 
-Google 제출용 촬영 순서·영문 자막·답장 초안은 [권한 심사 동영상 시나리오](google-oauth-review-video.md)를 참고하세요.
-
-Google Drive의 숨겨진 `appDataFolder`에 재생목록·최근 재생·이어보기 위치를 저장한다.
-별도 OPlayer 서버나 Apple·삼성 계정 연동은 사용하지 않는다. 일반 파일 탐색용 Google Drive 확장앱과
-별개의 `Google Drive 동기화` 리소스 확장앱(`sync.gdrive`)으로 제공된다. 앱의 병합·이어보기 엔진은 저장소 제공자와 독립적이다.
+Google 계정이나 공통 인증키 없이 동기화 확장앱을 선택한다. Dropbox·OneDrive·Box·S3 호환 저장소·네이버 MYBOX·WebDAV를 지원하며, 같은 sync 계약을 구현한 별도 확장앱도 사용할 수 있다. 원본 파일 대신 재생목록·최근 재생·이어보기 JSON을 공유한다.
 
 ## 설정
 
-설정 → 확장앱에서 **Google Drive 동기화**를 설치·활성화한 뒤 설정 → **재생 동기화**에서 제공자를 선택하고 계정을 연결한다. 운영자가 등록값을 포함한 배포본은 별도 ID 입력이 필요 없다.
-공식 Google Drive 1.6.1·Google Drive 동기화 1.0.1부터 Client ID·Secret 입력과 발급 안내를 제공하지 않는다.
-등록값이 없는 자체 빌드는 아래 Actions Secret 또는 같은 이름의 `--dart-define`으로 등록값을 포함해야 한다.
-연결 시 기기에 있던 동기화 대상 기록과 해당 계정의 기록을 병합한다. 자동 동기화는 계정 연결 후 켜진다.
-앱 시작·복귀와 사용 중 최대 분당 한 번 확인한다. 꺼 두어도 기기의 변경 사항은 보관하며 **지금 동기화**로 반영한다.
-자동 동기화는 앱이 앞에 있고 앱 잠금·최근 재생 잠금이 해제된 때 수행한다. OS가 앱을 종료한 뒤 실행되는 별도 작업은 아니다.
+1. 설정 → 확장앱에서 원하는 동기화 확장앱을 설치·활성화한다.
+2. 설정 → 재생 동기화에서 제공자를 선택하고 **선택한 확장앱 설정**에 인증 정보를 입력한다.
+3. 계정을 연결한다. 같은 기록을 공유할 기기는 동일한 제공자·계정·저장 폴더를 사용한다.
+4. 아래 안내에 따라 미디어 폴더·서버·계정의 동기화 이름을 기기마다 맞춘다.
 
-같은 Google 계정을 사용하고 Android·데스크톱 OAuth 클라이언트를 **같은 Google Cloud 프로젝트**에 등록한다.
-현재 Android/Android TV(Google Play 서비스 필요), Windows·Linux·macOS를 지원한다.
-iOS는 Google 로그인 콜백 등록·네이티브 설정을 추가한 뒤 지원할 예정이다.
+기존 기기 기록과 저장소 기록을 병합하며, 자동 동기화는 연결 후 켜진다. 앱 시작·복귀 및 사용 중 최대 분당 한 번 확인한다. 앱이 앞에 있고 앱·최근 재생 잠금이 해제된 때 수행한다. 자동 동기화를 꺼도 변경은 기기에 보관하며 **지금 동기화**로 반영할 수 있다.
 
-## Google Cloud 등록
+## WebDAV·NAS·개인 서버
 
-1. Google Cloud 프로젝트에서 Google Drive API를 켠다.
-2. Google Auth Platform의 앱 정보·대상 사용자·데이터 액세스를 설정한다.
-   동기화는 비민감 범위 `https://www.googleapis.com/auth/drive.appdata`만 요청한다.
-3. Android는 Android OAuth 클라이언트에 **패키지명과 실제 배포 서명의 SHA-1**을 등록한다.
-   아래 패키지와 빌드 서명을 사용한다. 테스트 APK와 배포 APK의 서명이 다르면 각각 등록한다.
-   Android 등록값은 빌드에 포함하며 Play 서비스가 패키지·서명으로 등록 앱을 확인한다.
-   휴대폰 패키지는 `com.oplayer.oplayer`, TV는 `com.oplayer.oplayer.tv`이므로 같은 프로젝트에 Android 유형
-   클라이언트를 각각 등록한다. 현재 배포 서명의 SHA-1은 두 패키지 모두
-   `7A:28:AC:9F:55:62:98:99:A8:C8:B5:2D:82:46:7A:13:63:AB:80:AD`이다.
-   Actions의 Android ID에는 휴대폰용 ID를 넣는다. TV 네이티브 인증은 별도로 등록한 TV 패키지·서명을 사용한다.
-4. Windows·Linux·macOS는 **데스크톱 앱** OAuth 클라이언트를 만들고 Client ID와 발급된 Client Secret을
-   아래 Actions Secret으로 빌드에 포함한다. 사용자에게 등록 정보를 입력받지 않으며 토큰은 기기 보안 저장소에 보관한다. 브라우저 로그인은 PKCE와
-   `http://127.0.0.1:53682/callback` 루프백을 사용한다.
-5. 테스트 상태는 등록한 테스트 사용자 최대 100명이며 `drive.appdata` 요청의 테스트 인증은 7일 후 만료될 수 있다.
-   공개 사용은 Cloud 콘솔에서 프로덕션으로 전환하고 해당 앱 정보·요청 권한에 필요한 검증을 진행한다.
-   OAuth 프로덕션 전환은 Play 스토어 출시와 별개이며 GitHub APK 배포를 유지할 수 있다.
+`WebDAV 동기화`를 설치한 뒤 NAS·Nextcloud·ownCloud 등의 **이미 만든 전용 폴더 HTTPS URL**과 사용자 이름·비밀번호(앱 비밀번호)를 입력한다. Basic 인증 및 폴더 목록 조회(PROPFIND)·읽기(GET)·쓰기(PUT)가 필요하다. 별도 Google 등록·OAuth 심사는 필요하지 않다. 다른 기기에도 정확히 같은 폴더 URL을 지정한다.
 
-동기화 권한·토큰은 Drive 리소스와 분리한다. 공식 Drive 확장앱 1.6.0은 일반 폴더 탐색용 `https://www.googleapis.com/auth/drive.readonly`와 앱 전용 업로드용 `https://www.googleapis.com/auth/drive.file`을 요청한다. 같은 Cloud 프로젝트 데이터 액세스에 두 범위를 등록하고 전체 `drive`는 제거한다. 동기화의 `drive.appdata`는 유지한다. `drive.readonly`는 제한된 범위 심사 대상이며, API 5의 `oauthScopes`·`fixedUploadRoot` 지원 앱이 필요하다(0.1.9-nightly.20261103.3부터 지원). 기존 연결은 앱에서 범위 차이만으로 거부하지 않으며, 추가 권한이 필요한 기능은 확장앱이 안내한다. Picker는 사용하지 않는다.
-등록 정보가 없는 배포본은 직접 등록이 필요하다. 실제 공통 배포용 OAuth 프로젝트·클라이언트는 운영자가 별도로 준비해야 한다.
+예: `https://nas.example/remote.php/dav/files/user/OPlayerSync/`.
+새 폴더는 서버에서 먼저 만든다. 자동 폴더 생성·Digest 인증·자체 서명 인증서 우회는 지원하지 않는다. 비밀번호는 기기 보안 저장소에 보관하고 JS에는 비밀 참조로만 전달한다. 기존 앱은 `webdavSync` 기능이 포함된 버전으로 업데이트해야 한다.
 
-## 운영자 등록값을 Actions에서 주입하기
+## Google Drive를 직접 등록해 사용하는 경우
 
-GitHub 저장소 → Settings → Secrets and variables → Actions → Repository secrets에 다음 값을 등록한다.
-Google Cloud의 프로젝트 번호·API Key가 아니라 **OAuth Client ID**를 사용한다.
+Google 인증 기본값과 Actions Secret 주입은 제거했다. 예전 `OPLAYER_GOOGLE_*` 빌드 정의를 전달해도 앱에서 사용하지 않는다. 기존에 사용자가 입력한 등록값과 계정 기록은 유지한다.
 
-| Secret 이름 | 값 | 적용 대상 |
-| --- | --- | --- |
-| `OPLAYER_GOOGLE_ANDROID_CLIENT_ID` | Android 유형 OAuth Client ID | Android·Android TV |
-| `OPLAYER_GOOGLE_DESKTOP_CLIENT_ID` | 데스크톱 앱 유형 OAuth Client ID | Windows·Linux·macOS |
-| `OPLAYER_GOOGLE_DESKTOP_CLIENT_SECRET` | 위 데스크톱 클라이언트의 Client Secret | Windows·Linux·macOS 네이티브 토큰 교환 |
+Google Drive는 선택 설치 확장앱이다. 사용하려면 직접 Google Cloud 프로젝트에서 Drive API·OAuth 앱을 등록하고 확장앱 설정에 Client ID를 입력한다. 데스크톱은 Client Secret도 입력하며 `http://127.0.0.1:53682/callback` 루프백을 사용한다. Android는 같은 프로젝트에 실제 앱 패키지·배포 서명 SHA-1을 등록해야 한다. 설정에 패키지·서명을 표시한다. 기기 간 appDataFolder 공유는 같은 Cloud 프로젝트가 필요하다.
 
-Android·데스크톱 클라이언트는 같은 Cloud 프로젝트에 만든다. Android는 기존 배포 서명 SHA-1과 패키지명을
-등록하며 Client Secret은 사용하지 않는다. 데스크톱 ID와 Secret은 둘 다 설정하거나 둘 다 비워 둔다.
-전부 비어 있으면 직접 등록 가능한 자체 빌드로 동작한다. 잘못된 ID 형식·데스크톱 값의 일부 누락은 빌드를 실패시킨다.
-
-태그 빌드가 JSON dart-define 파일을 만들어 모든 대상에 해당 플랫폼의 값만 포함한다. 값은 명령행에 직접
-치환하거나 로그로 출력하지 않으며 JSON 파일은 Git·배포 압축파일에 포함하지 않는다. Secret 등록 자체는 빌드를
-시작하지 않는다. 기존처럼 배포 지시 후 태그를 생성할 때 적용된다. 로컬 빌드도 같은 키의 JSON 파일을
-`--dart-define-from-file=<파일>`로 지정할 수 있다. 실제 등록값을 저장소에 커밋하지 않는다.
-
-Client ID는 공개 식별자다. **데스크톱 앱에 포함한 Client Secret도 배포 바이너리에서 추출할 수 있으므로
-서버 전용 비밀로 취급하면 안 된다.** 웹 앱용 Secret·서비스 계정 키·개인 액세스/갱신 토큰은 빌드에 넣지 않는다.
-Google의 [설치형 앱 OAuth 설명](https://developers.google.com/identity/protocols/oauth2/native-app)을 따른다.
-로그인은 사용자 동의와 PKCE로 처리하며 사용자 토큰은 기기 보안 저장소에만 보관한다.
-
-동기화와 Google Drive 확장앱은 배포 등록값을 기본으로 공유한다. 앱에서 직접 저장한 등록값과 계정별로
-연결 당시 저장한 Client ID가 우선하며, 다른 Client ID에는 배포 Secret을 사용하지 않는다.
-플러그인은 `OPlayer.app.googleOAuth`에서 현재 플랫폼의 공개 ID만 조회할 수 있다. Secret·계정 토큰은 제공하지 않는다.
-
-공식 자료:
-
-- [앱 전용 저장소·권한](https://developers.google.com/workspace/drive/api/guides/appdata)
-- [OAuth 대상 사용자·테스트·프로덕션](https://support.google.com/cloud/answer/15549945?hl=en)
-- [Android OAuth 등록과 선택적 소유권 확인](https://developer.android.com/identity/authorization)
+동기화(`sync.gdrive`)는 `drive.appdata`, 파일 탐색(`cloud.gdrive`)은 `drive.readonly`·`drive.file`을 요청한다. Google 확장앱을 설치하지 않아도 다른 제공자의 동기화에는 영향이 없다. Google의 이전 OAuth 심사 자료는 현재 배포 설정을 설명하는 안내가 아니다.
 
 ## 다른 기기의 같은 파일 연결
 
@@ -104,7 +54,7 @@ Android 기기 ID는 자동 백업에서 제외된 앱 저장소에 둬 새 기�
 
 전송 항목은 재생목록 ID·이름·순서·파일 참조·제목, 재생 위치·길이·수정 시각 및 삭제 정보다.
 공통 이름과 상대 경로/파일 ID만 전송하며 기기 절대 경로·서버 호스트·로그인 토큰·비밀번호·요청 헤더·
-PIN·패턴·생체인증 정보·미디어 파일은 전송하지 않는다. 앱 전용 저장소는 Google Drive의 앱 접근 제어를 사용하며
+PIN·패턴·생체인증 정보·미디어 파일은 전송하지 않는다. 기록은 선택한 저장소의 접근 제어를 사용하며
 별도의 종단간 암호화 기능은 아니다. 경로·파일명 자체는 기록에 포함된다.
 
 토큰 만료는 자동 갱신하고 HTTP 401은 한 번 재시도한다. 다른 계정이 응답하면 병합·쓰기를 중단한다.
@@ -116,7 +66,7 @@ PIN·패턴·생체인증 정보·미디어 파일은 전송하지 않는다. �
 
 ## 다른 제공자와 전환
 
-공식 저장소에 `sync.dropbox`, `sync.onedrive`, `sync.box`, `sync.s3`, `sync.mybox`도 제공한다. 기본 설치는 없으며 설치·활성화한 동기화 확장앱만 설정의 제공자 목록에 표시한다. 제공자를 바꾸면 이전 연결을 해제하고 새 저장소에 로그인한다. 로컬 재생 기록과 기존 클라우드 파일은 유지되며 새 저장소의 기록과 병합한다. 같은 기록을 동기화할 기기는 같은 제공자·계정·OAuth 앱 등록을 사용해야 한다.
+공식 저장소에 `sync.dropbox`, `sync.onedrive`, `sync.box`, `sync.s3`, `sync.mybox`, `sync.webdav`도 제공한다. 기본 설치는 없으며 설치·활성화한 동기화 확장앱만 설정의 제공자 목록에 표시한다. 제공자를 바꾸면 이전 연결을 해제하고 새 저장소에 로그인한다. 로컬 재생 기록과 기존 클라우드 파일은 유지되며 새 저장소의 기록과 병합한다. 같은 기록을 동기화할 기기는 같은 제공자·계정·OAuth 앱 등록을 사용해야 한다.
 
 - OneDrive: `Files.ReadWrite.AppFolder`, `User.Read`, `offline_access`를 요청하고 앱 전용 폴더에 JSON을 저장한다. [Microsoft 앱 폴더 설명](https://learn.microsoft.com/en-us/graph/onedrive-sharepoint-appfolder).
 - Box: OAuth 앱의 파일·폴더 읽기/쓰기가 필요하며 내 파일의 `OPlayer Sync` 폴더에 JSON을 저장한다. 업로드는 [Box 직접 업로드 API](https://developer.box.com/guides/uploads/direct/)를 사용한다.
@@ -128,3 +78,5 @@ PIN·패턴·생체인증 정보·미디어 파일은 전송하지 않는다. �
 - Dropbox: `files.metadata.read`, `files.content.read`, `files.content.write`, `account_info.read` 및 `OPlayer Sync` 폴더를 사용한다. App folder·Full Dropbox 등록 모두 지원한다.
 - S3: 버킷 목록 조회·객체 읽기·쓰기 권한이 필요하다. 기본 `oplayer-sync/` 접두사 아래에 JSON을 저장한다. S3·R2·MinIO·네이버 클라우드 Object Storage의 동일 API를 사용하고 ListObjects V1 선택도 지원한다.
 - 네이버 MYBOX: 파일 조회·다운로드·업로드·폴더 생성 가능한 PAT가 필요하다. `OPlayer Sync` 폴더와 [공식 업로드 API](https://developers.mybox.naver.com/docs/files_upload)를 사용한다. 서명된 업로드·다운로드 주소에는 PAT를 전송하지 않는다. 폴더 ID가 저장소 식별자이므로 폴더를 삭제·교체하면 다시 연결해야 한다.
+
+- WebDAV: NAS·Nextcloud·ownCloud 등의 HTTPS 폴더와 Basic 인증(앱 비밀번호)을 사용한다.

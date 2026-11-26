@@ -73,7 +73,9 @@ class _PlaybackSyncPageState extends State<PlaybackSyncPage> {
             if (sync.providers.isEmpty || !sync.available)
               ListTile(
                 title: const Text('동기화 확장앱 설치·활성화'),
-                subtitle: const Text('공식 저장소에서 Google Drive·Dropbox·OneDrive·Box·S3 호환 저장소·네이버 MYBOX 동기화 확장앱을 선택하세요.'),
+                subtitle: const Text(
+                  'Dropbox·OneDrive·Box·S3·MYBOX·WebDAV/NAS 등 원하는 동기화 확장앱을 설치하세요. Google 계정은 필요하지 않습니다.',
+                ),
                 trailing: const Icon(Icons.extension),
                 onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const PluginsPage())),
               ),

@@ -8,7 +8,12 @@ Set<String> pluginHostFeatures(String platform) => {
   'frameProcessing',
   'pixelPrograms',
   if (['android', 'windows', 'linux', 'macos'].contains(platform)) 'googlePicker',
-  if (['android', 'windows', 'linux', 'macos'].contains(platform)) ...['oauthScopes', 'fixedUploadRoot', 'syncStorage'],
+  if (['android', 'windows', 'linux', 'macos'].contains(platform)) ...[
+    'oauthScopes',
+    'fixedUploadRoot',
+    'syncStorage',
+    'webdavSync',
+  ],
   if (['android', 'ios', 'windows', 'macos'].contains(platform)) 'webBrowser',
 };
 
